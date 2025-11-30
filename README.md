@@ -58,9 +58,6 @@ In PowerShell, set these before running the app:
 # Database connection (adjust as needed)
 $env:DATABASE_URL="postgresql+psycopg2://username:password@localhost:5432/database_name"
 
-# OpenAI API key (required for entity intelligence)
-$env:OPENAI_API_KEY="sk-your-api-key-here"
-
 # Optional: Custom GPT model
 $env:GPT_ENTITY_MODEL="gpt-5.1"
 
