@@ -3,8 +3,9 @@ services:
     image: postgres:15
     restart: unless-stopped
     environment:
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-odoo}
-      - POSTGRES_USER=${DB_USER:-odoo}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-EJe5&fWgxt6gow}
+      - POSTGRES_USER=${DB_USER:-ucp_app}
+      - POSTGRES_DB=${DB_NAME:-ucp}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -18,90 +19,30 @@ services:
           memory: 512M
           cpus: '0.25'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-odoo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ucp_app}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
-  odoo:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    restart: unless-stopped
-    volumes:
-      - odoo_data:/var/lib/odoo
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      # Database Configuration
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-odoo}
-      - DB_PASSWORD=${DB_PASSWORD:-odoo}
-      - DB_NAME=${DB_NAME:-saas_prod}
-      # Odoo Configuration Override (simulate ECS behavior)
-      - ODOO_CONF=${ODOO_CONF:-/opt/odoo/odoo-dev.conf}
-      - SAAS_BASE_DOMAIN=${SAAS_BASE_DOMAIN:-biztrova.test}
-      - SAAS_SCHEME=${SAAS_SCHEME:-http}
-      - SAAS_PORT=${SAAS_PORT:-8069}
-      - SAAS_ADMIN_SUBDOMAIN=${SAAS_ADMIN_SUBDOMAIN:-}
-    ports:
-      - "8069:8069"
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
-    # No volume mounts - modules and configs are embedded in image (ECS behavior)
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8069/web/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  odoo-test:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    profiles: ["test"]
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      # Database Configuration
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-odoo}
-      - DB_PASSWORD=${DB_PASSWORD:-odoo}
-      - DB_NAME=${DB_NAME:-odoo_test}
-      # Odoo Configuration Override (test environment)
-      - ODOO_CONF=/opt/odoo/odoo-test.conf
-    # No volume mounts - modules and configs are embedded in image
-
-  metabase:
-    image: metabase/metabase:latest
-    container_name: metabase
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "3000:3000"
-    environment:
-      # Persist Metabase app data (users, dashboards) inside a named volume:
-      MB_DB_FILE: /metabase-data/metabase.db
-      # (Optional) increase JVM heap if your datasets are big:
-      # JAVA_TOOL_OPTIONS: "-Xms512m -Xmx1024m"
-    volumes:
-      - metabase_data:/metabase-data
-    restart: unless-stopped
+  # metabase:
+  #   image: metabase/metabase:latest
+  #   container_name: metabase
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     # Persist Metabase app data (users, dashboards) inside a named volume:
+  #     MB_DB_FILE: /metabase-data/metabase.db
+  #     # (Optional) increase JVM heap if your datasets are big:
+  #     # JAVA_TOOL_OPTIONS: "-Xms512m -Xmx1024m"
+  #   volumes:
+  #     - metabase_data:/metabase-data
+  #   restart: unless-stopped
     
 volumes:
   postgres_data: 
-  odoo_data:
-  metabase_data:  
+  # odoo_data:
+  # metabase_data:  
