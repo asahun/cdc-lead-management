@@ -1,0 +1,27 @@
+{# templates/base.html #}
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leads App</title>
+  <link rel="stylesheet" href="/static/css/styles.css?v=20241128">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">LeadFlow</div>
+    <nav class="top-nav">
+      <a
+        class="nav-link {% if request.url.path == '/' or request.url.path.startswith('/properties') %}active{% endif %}"
+        href="/properties"
+      >Properties</a>
+      <a
+        class="nav-link {% if request.url.path.startswith('/leads') %}active{% endif %}"
+        href="/leads"
+      >Leads</a>
+  </nav>
+  </header>
+
+  {% block content %}{% endblock %}
+
+  <script src="/static/js/local_time.js?v=20241128"></script>
+</body>
+</html>

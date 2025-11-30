@@ -1,0 +1,80 @@
+{# templates/properties.html #}
+{% extends "base.html" %}
+{% block content %}
+<h1>Properties</h1>
+
+<form class="page-actions" method="get" action="/properties">
+  <input type="text" name="q" placeholder="Search by Property ID or Owner" value="{{ q }}">
+  <button class="btn btn-secondary" type="submit">Search</button>
+</form>
+
+<p>Total: {{ total }}</p>
+
+<table class="data-table properties-table">
+  <thead>
+    <tr>
+      <th>Property ID</th>
+      <th>Owner Name</th>
+      <th>Amount</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in properties %}
+    <tr class="property-row{% if row.assigned_to_lead %} is-assigned{% endif %}"
+        data-property-id="{{ row.propertyid }}"
+        data-order-id="{{ row.order_id }}"
+        data-raw-hash="{{ row.raw_hash }}"
+        data-row-index="{{ loop.index0 }}"
+        data-assigned="{{ 'true' if row.assigned_to_lead else 'false' }}">
+      <td class="property-id">{{ row.propertyid }}</td>
+      <td>{{ row.ownername }}</td>
+      <td>{{ row.propertyamount|currency }}</td>
+      <td class="property-status">
+        {% if row.assigned_to_lead %}
+          <span class="status-pill status-pill-assigned">In Lead</span>
+        {% else %}
+          <span class="status-pill status-pill-available">Available</span>
+        {% endif %}
+      </td>
+      <td class="property-actions">
+        {% if row.assigned_to_lead %}
+          <span class="linked-pill" title="Already linked to a lead">Linked</span>
+        {% else %}
+          <a class="add-lead-link" href="/leads/new_from_property?property_id={{ row.propertyid }}">Add to Lead</a>
+        {% endif %}
+        <button class="detail-trigger" type="button" aria-label="Expand property" title="View details">&#x2795;</button>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="pager">
+  <div class="pager-info">
+    Page {{ page }} of {{ total_pages }}
+  </div>
+  <div class="pager-buttons">
+    {% if page > 1 %}
+      <a class="ghost-link" href="?page={{ page-1 }}&q={{ q }}">Prev</a>
+    {% endif %}
+    {% if page < total_pages %}
+      <a class="ghost-link" href="?page={{ page+1 }}&q={{ q }}">Next</a>
+    {% endif %}
+  </div>
+</div>
+
+<dialog id="property-detail-dialog" class="property-detail-modal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-body">
+      <!-- property detail fragment will be injected here -->
+    </div>
+  </div>
+</dialog>
+
+<script src="/static/js/property_detail.js?v=20241128"></script>
+<script src="/static/js/properties_state.js?v=20241128"></script>
+
+{% endblock %}

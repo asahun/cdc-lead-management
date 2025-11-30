@@ -1,0 +1,65 @@
+{# templates/leads.html #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Leads</h1>
+      <p class="page-subtitle">Total leads: {{ total }}</p>
+    </div>
+    <form class="page-actions" method="get" action="/leads">
+  <input type="text" name="q" placeholder="Search by Property ID or Owner" value="{{ q }}">
+      <button class="btn btn-secondary" type="submit">Search</button>
+</form>
+  </div>
+
+  <div class="card">
+    <table class="data-table leads-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Property ID</th>
+      <th>Owner</th>
+      <th>Amount</th>
+      <th>Status</th>
+      <th>Created</th>
+          <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for l in leads %}
+    <tr>
+      <td>{{ l.id }}</td>
+      <td>{{ l.property_id }}</td>
+      <td>{{ l.owner_name }}</td>
+          <td>{{ l.property_amount|currency }}</td>
+          <td><span class="status-pill">{{ l.status.value }}</span></td>
+      <td>
+            <time class="js-local-time" datetime="{{ l.created_at.isoformat() }}">{{ l.created_at }}</time>
+          </td>
+          <td class="cell-actions">
+        <a href="/leads/{{ l.id }}/edit">Edit</a>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+    <div class="pager">
+      <div class="pager-info">
+        Page {{ page }} of {{ total_pages }}
+      </div>
+      <div class="pager-buttons">
+  {% if page > 1 %}
+          <a class="ghost-link" href="?page={{ page-1 }}&q={{ q }}">Prev</a>
+  {% endif %}
+  {% if page < total_pages %}
+          <a class="ghost-link" href="?page={{ page+1 }}&q={{ q }}">Next</a>
+  {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

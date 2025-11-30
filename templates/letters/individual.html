@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Unclaimed Property Notice</title>
+  <style>
+    body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 11pt; color: #333; line-height: 1.4; margin: 0; padding: 0; }
+    .page { width: 100%; margin: 0; padding: 0; }
+    .header { border-bottom: 1px solid #555; padding-bottom: 6px; margin-bottom: 18px; }
+    .header-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+    .brand-left { display: flex; align-items: center; max-width: 60%; }
+    .logo { height: 55px; }
+    .brand-text { display: flex; flex-direction: column; }
+    .header-title { font-size: 16pt; font-weight: bold; letter-spacing: 0.5px; }
+    .header-subtitle { font-size: 10pt; color: #555; margin-top: 2px; }
+    .header-contact { font-size: 9pt; text-align: right; line-height: 1.4; color: #555; }
+    .header-contact-inline { font-size: 8.8pt; }
+    .date-line { margin-top: 4px; margin-bottom: 28px; font-size: 11pt; }
+    .meta-block { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .recipient-address { font-size: 10.5pt; line-height: 1.4; margin-left: 0.75in; }
+    .recipient-name { font-weight: bold; }
+    .meta-qr { width: 90px; height: auto; margin-left: 16px; }
+    .subject-line { font-weight: bold; margin-top: 8px; margin-bottom: 16px; color: #000; }
+    .record-block { border-left: 3px solid #666; background-color: #f3f3f3; padding: 8px 12px; margin: 10px 0 0 0; font-size: 10pt; line-height: 1.45; }
+    .record-line { margin-bottom: 3px; }
+    .label { font-weight: bold; display: inline-block; width: 150px; vertical-align: top; }
+    .section-title { font-weight: bold; margin-top: 14px; margin-bottom: 4px; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.05em; color: #333; }
+    .notice-box { border: 1px solid #888; padding: 6px; margin-top: 16px; font-size: 12pt; text-align: left; }
+    .signature-block { margin-top: 24px; font-size: 10.5pt; }
+    .signature-name { font-weight: bold; }
+    .highlight { border-left: 3px solid #444; background: #f5f5f5; padding: 8px 12px; margin-top: 10px; margin-bottom: 14px; font-size: 10pt; }
+    .page-2 ul { margin-top: 2px; margin-bottom: 10px; padding-left: 18px; }
+    .page-2 ul li { margin-bottom: 3px; }
+    .page-2 p { margin: 2px 0 4px 0; }
+  </style>
+</head>
+
+<body>
+<div class="page">
+  <div class="header">
+    <div class="header-top">
+      <div class="brand-left">
+        {% if logo_src %}
+          <img src="{{ logo_src }}" class="logo" alt="LoadRouter Logo" />
+        {% endif %}
+        <div class="brand-text">
+          <div class="header-title">{{ sender_company }}</div>
+          <div class="header-subtitle">{{ sender_subtitle }}</div>
+        </div>
+      </div>
+      <div class="header-contact">
+        <div>{{ sender_addr_line1 }}</div>
+        <div>{{ sender_addr_line2 }}</div>
+        <div class="header-contact-inline">
+          Tel: {{ sender_phone }} &nbsp;·&nbsp; Email: {{ sender_email }}
+        </div>
+        <div class="header-contact-inline">
+          Web: {{ sender_website }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="date-line">{{ today }}</div>
+
+  <div class="meta-block">
+    <div class="recipient-address">
+      <div class="recipient-name">{{ recipient_name }}</div>
+      <div>{{ street_address }}</div>
+      <div>{{ city_state_zip }}</div>
+    </div>
+    {% if qr_src %}
+      <img src="{{ qr_src }}" class="meta-qr" alt="QR Code" />
+    {% endif %}
+  </div>
+
+  <div class="subject-line">
+    Re: Unclaimed Property Reported Under Your Name
+  </div>
+
+  <p>Dear {{ salutation }},</p>
+
+  <p>
+    There is an unclaimed property item reported under your name that is currently held by the State of Georgia.
+    We are notifying you so you may review, verify, and recover this item if you are the rightful claimant.
+  </p>
+
+  <div class="record-block">
+    <div class="record-line"><span class="label">Reference:</span> {{ primary_reference }}</div>
+    <div class="record-line"><span class="label">Reported Holder:</span> {{ primary_holder }}</div>
+    <div class="record-line"><span class="label">Amount:</span> {{ primary_amount }}</div>
+    <div class="record-line"><span class="label">Report Year:</span> {{ primary_year }}</div>
+    <div class="record-line"><span class="label">Property Type:</span> {{ primary_type }}</div>
+  </div>
+
+  {% if total_properties and total_properties > 1 %}
+    <p style="font-size:9.5pt; color:#555; margin-top:4px;">
+      There are additional unclaimed property item(s) reported under your name, available upon request.
+    </p>
+  {% else %}
+    <p style="font-size:9.5pt; color:#555; margin-top:4px;">
+      This property was reported directly under your name. You may be eligible to file the claim.
+    </p>
+  {% endif %}
+
+  <p style="margin-top:6px;">
+    This notice is based solely on publicly available state records and can be independently validated at any time.
+    You may verify this item through the State of Georgia’s public unclaimed property search portal, and no sensitive documents
+    are required until ownership is confirmed.
+  </p>
+
+  <p style="margin-top:4px;">
+    No fee is owed unless funds are successfully recovered, and you may instead choose to file directly with the state.
+    A brief overview of filing options is included on the following page.
+  </p>
+
+  <div class="notice-box">
+    THIS IS A SOLICITATION. THIS IS NOT A BILL OR OFFICIAL GOVERNMENT DOCUMENT AND HAS NOT BEEN SENT BY THE STATE OF GEORGIA.
+    YOU ARE NOT REQUIRED TO USE THE SERVICES OFFERED IN THIS SOLICITATION.
+  </div>
+
+  <div class="signature-block">
+    Sincerely,<br/><br/>
+    {% if signature_src %}
+      <img src="{{ signature_src }}" alt="Signature" style="height: 70px; margin-top: 4px; margin-bottom: -4px;" /><br/>
+    {% endif %}
+    <span class="signature-name">{{ sender_first_name }} {{ sender_last_name }}</span><br/>
+    {{ sender_title }}<br/>
+    {{ sender_company }}<br/>
+    {{ sender_phone }} · {{ sender_email }}<br/>
+    {{ sender_website }}
+  </div>
+</div>
+
+<div class="page-2">
+  <div class="section-title">Filing Options</div>
+  <ul>
+    <li><strong>File directly with the State of Georgia:</strong> Use the public unclaimed property portal to submit a claim independently.</li>
+    <li><strong>Authorize Load Router, LLC as your representative:</strong> We prepare and submit the claim package on your behalf.</li>
+  </ul>
+
+  <div class="section-title">Fees and Payment</div>
+  <p>Our fee is a <strong>{{ fee_percent }}% contingency</strong> on funds successfully recovered. There are:</p>
+  <ul>
+    <li><strong>No upfront fees</strong></li>
+    <li><strong>No charges if no funds are recovered</strong></li>
+    <li><strong>No payment expected until funds are released</strong></li>
+  </ul>
+
+  <div class="section-title">If You Decide to Work With Us</div>
+  <div class="highlight">
+    <div style="margin-bottom:10px;"><strong>Step 1 — Verification</strong><br/>We confirm the property belongs to you.</div>
+    <div style="margin-bottom:10px;"><strong>Step 2 — Authorization</strong><br/>You review and sign the authorization documents.</div>
+    <div style="margin-bottom:10px;"><strong>Step 3 — Claim Preparation</strong><br/>We prepare and submit the claim package.</div>
+    <div><strong>Step 4 — Agency Processing</strong><br/>We handle correspondence with the state until funds are released.</div>
+  </div>
+
+  <div class="section-title">Security and Data Protection</div>
+  <p>We maintain strict security standards for all client information, using encrypted, access-controlled channels.</p>
+  <ul>
+    <li>Uploaded documents are stored in an encrypted environment.</li>
+    <li>Access is limited to authorized personnel directly involved in your claim.</li>
+    <li>Sensitive information is not requested unless required for verification.</li>
+  </ul>
+
+  <div class="section-title">Avoiding Scams and Misleading Notices</div>
+  <p>Unclaimed property notices can be imitated by fraudulent solicitations. A legitimate communication will allow you to:</p>
+  <ul>
+    <li>Verify the property through the official state website</li>
+    <li>Confirm the sender’s business registration</li>
+    <li>Independently validate contact information</li>
+    <li>Decline representation without obligation</li>
+    <li>Review all documents prior to signing</li>
+  </ul>
+  <p>We encourage you to validate any solicitation — including this one — using the State of Georgia’s public search portal and by confirming Load Router, LLC in the Georgia Secretary of State business registry.</p>
+</div>
+</body>
+</html>
+

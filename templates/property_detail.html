@@ -1,0 +1,114 @@
+{# templates/property_detail.html #}
+{% set meta_keys = ["ownername", "propertyamount", "reportyear"] %}
+{% set hidden_keys = ["_sa_instance_state"] %}
+{% set show_navigation = show_navigation if show_navigation is defined else True %}
+{% set show_add_to_lead = show_add_to_lead if show_add_to_lead is defined else True %}
+
+{% macro display_value(value) -%}
+  {%- if value is none or value == '' -%}
+    <span class="value-empty">—</span>
+  {%- elif value.__class__.__name__ == "decimal.Decimal" -%}
+    {{ "{:,.2f}".format(value) }}
+  {%- else -%}
+    {{ value }}
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="property-detail-card"
+     data-property-id="{{ property.propertyid }}"
+     data-raw-hash="{{ property.raw_hash }}"
+     data-order-id="{{ order_id or '' }}"
+     data-prev-order-id="{{ prev_order_id or '' }}"
+     data-next-order-id="{{ next_order_id or '' }}"
+     data-prev-raw-hash="{{ prev_raw_hash or '' }}"
+     data-next-raw-hash="{{ next_raw_hash or '' }}"
+     data-assigned="{{ 'true' if property.assigned_to_lead else 'false' }}">
+  <header>
+    <div>
+      <span class="detail-chip">Property</span>
+      <h2>{{ property.propertyid }}</h2>
+      <div class="assignment-meta">
+        {% if property.assigned_to_lead %}
+          <span class="assignment-pill assignment-pill-assigned">Linked to Lead</span>
+        {% else %}
+          <span class="assignment-pill assignment-pill-available">Available</span>
+        {% endif %}
+      </div>
+    </div>
+    <button class="detail-close" type="button" aria-label="Close detail">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </header>
+
+  <section class="detail-meta">
+    <div class="meta-block">
+      <span class="meta-label">Owner</span>
+      <span class="meta-value">{{ display_value(property.ownername) }}</span>
+    </div>
+    <div class="meta-block">
+      <span class="meta-label">Amount</span>
+      <span class="meta-value amount">
+        {{ property.propertyamount|currency }}
+      </span>
+    </div>
+    <div class="meta-block">
+      <span class="meta-label">Report Year</span>
+      <span class="meta-value">{{ display_value(property.reportyear if 'reportyear' in property.__dict__ else None) }}</span>
+    </div>
+  </section>
+
+  <section class="detail-grid">
+    <h3>Full Property Snapshot</h3>
+    <dl>
+
+      {% set field_order = [
+        ("holdername", property.holdername),
+        ("propertytypedescription", property.propertytypedescription),
+        ("owneraddress1", property.owneraddress1),
+        ("owneraddress2", property.owneraddress2),
+        ("ownercity", property.ownercity),
+        ("owneraddress3", property.owneraddress3),
+        ("ownerstate", property.ownerstate),
+        ("ownerrelation", property.ownerrelation),
+        ("ownerzipcode", property.ownerzipcode),
+        ("lastactivitydate", property.lastactivitydate),
+      ] %}
+      
+      {% for label, value in field_order %}
+        <div class="detail-field">
+          <dt>{{ label.replace('_', ' ') }}</dt>
+          <dd>{{ display_value(value) }}</dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  {% if show_navigation or show_add_to_lead or property.assigned_to_lead %}
+  <footer>
+    {% if show_navigation %}
+    <div class="action-cluster">
+      <button class="detail-prev ghost" type="button" aria-label="Previous property" {% if not prev_order_id %}disabled{% endif %}>
+        <span>Prev</span>
+      </button>
+      <button class="detail-next ghost" type="button" aria-label="Next property" {% if not next_order_id %}disabled{% endif %}>
+        <span>Next</span>
+      </button>
+    </div>
+    {% endif %}
+
+    {% if show_add_to_lead %}
+    <div class="action-cluster">
+      <span class="hint-text">Need to work this lead?</span>
+      <a class="detail-add-to-lead" href="/leads/new_from_property?property_id={{ property.propertyid }}">Add to Lead</a>
+    </div>
+    {% elif property.assigned_to_lead %}
+    <div class="action-cluster">
+      <span class="hint-text hint-text-assigned">
+        Already linked to a lead. Visit the lead workspace to continue.
+      </span>
+    </div>
+    {% endif %}
+  </footer>
+  {% endif %}
+</div>
+

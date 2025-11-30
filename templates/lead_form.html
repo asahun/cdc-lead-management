@@ -1,0 +1,541 @@
+{# templates/lead_form.html #}
+{% extends "base.html" %}
+{% block content %}
+
+{% set current_property_hash = property_raw_hash or (lead.property_raw_hash if lead else '') %}
+{% set current_property_id = property_id if mode == 'create' else (lead.property_id if lead else '') %}
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">
+{% if mode == "create" %}
+          Create Lead
+{% else %}
+          Lead #{{ lead.id }}
+        {% endif %}
+      </h1>
+      {% if mode != "create" %}
+        <p class="page-subtitle">Status: <span class="status-pill">{{ lead.status.value }}</span></p>
+{% endif %}
+    </div>
+    {% if current_property_hash or current_property_id %}
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn btn-secondary btn-inline"
+          data-action="open-property-detail"
+          data-property-hash="{{ current_property_hash }}"
+          data-property-id="{{ current_property_id }}"
+          title="View full property details">
+          View Property Detail
+        </button>
+      </div>
+    {% endif %}
+  </div>
+
+  <form class="card lead-overview" method="post" action="{% if mode == 'create' %}/leads/create{% else %}/leads/{{ lead.id }}/update{% endif %}">
+    <div class="grid two-column">
+  <div>
+    <label>Property ID</label>
+    <input name="property_id" value="{{ current_property_id }}" readonly>
+  </div>
+  <div>
+    <label>Owner Name</label>
+        <input name="owner_name" value="{{ owner_name if mode == 'create' else lead.owner_name }}" {% if mode != 'create' %}readonly{% endif %}>
+  </div>
+  <div>
+    <label>Property Amount</label>
+    <input name="property_amount" type="number" step="0.01"
+               value="{{ property_amount if mode == 'create' else lead.property_amount }}" {% if mode != 'create' %}readonly{% endif %}>
+  </div>
+  <div>
+    <label>Status</label>
+    <select name="status">
+      {% for s in statuses %}
+        <option value="{{ s.value }}"
+          {% if mode != 'create' and lead.status.value == s.value %}selected{% endif %}>
+          {{ s.value }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+    </div>
+
+    <div class="owner-metadata" data-default-owner-type="business">
+      <div class="owner-meta-row">
+        <div data-owner-section="all">
+          <label>Owner Type</label>
+          <select name="owner_type" id="owner_type_select">
+            {% for ot in owner_types %}
+              <option value="{{ ot.value }}"
+                {% if owner_type.value == ot.value %}selected{% endif %}>
+                {{ ot.value }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="owner-business" data-owner-section="business">
+          <label>Owner Status</label>
+          <select name="business_owner_status" id="business_owner_status_select">
+            {% for bos in business_owner_statuses %}
+              <option value="{{ bos.value }}"
+                {% if business_owner_status and business_owner_status.value == bos.value %}selected{% endif %}>
+                {{ bos.value }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="owner-business owner-size" data-owner-section="business">
+          <label>Owner Size</label>
+          <select name="owner_size">
+            <option value="">-- choose --</option>
+            {% for os in owner_sizes %}
+              <option value="{{ os.value }}"
+                {% if owner_size and owner_size.value == os.value %}selected{% endif %}>
+                {{ os.value }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="owner-business owner-new-name" data-owner-section="business">
+          <label>New Owner</label>
+          <input name="new_business_name" value="{{ new_business_name }}">
+        </div>
+        <div class="owner-individual" data-owner-section="individual">
+          <label>Owner Status</label>
+          <select name="individual_owner_status">
+            {% for ios in individual_owner_statuses %}
+              <option value="{{ ios.value }}"
+                {% if individual_owner_status and individual_owner_status.value == ios.value %}selected{% endif %}>
+                {{ ios.value }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <input type="hidden" name="property_raw_hash" value="{{ property_raw_hash or '' }}">
+    <input type="hidden" name="notes" value="{{ '' if mode == 'create' else lead.notes or '' }}">
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Save Lead</button>
+  </div>
+</form>
+
+{% if mode != 'create' %}
+    <section id="entity-intel" class="card insight-card">
+      <header>
+        <h2>Entity Intelligence</h2>
+        <p class="section-subtitle">Pull GPT-backed successor insights on demand.</p>
+      </header>
+
+      <div class="section-content">
+        <div class="intel-actions">
+          <button
+            id="run-entity-intel"
+            class="btn btn-secondary"
+            type="button"
+            data-endpoint="/leads/{{ lead.id }}/entity-intel"
+          >
+            Run Analysis
+          </button>
+          <span id="entity-intel-progress" class="inline-progress" hidden>Gathering data…</span>
+        </div>
+        <div id="entity-intel-result" class="intel-result empty-state">
+          Click “Run Analysis” to fetch the latest entity snapshot.
+        </div>
+      </div>
+    </section>
+
+    <section id="comments" class="card comment-card">
+      <header>
+        <h2>Comment Log</h2>
+        <p class="section-subtitle">Capture review notes without overwriting history.</p>
+      </header>
+
+      <div class="section-content">
+        <form class="stacked-form" method="post" action="/leads/{{ lead.id }}/comments/create">
+          <div class="two-column-inline">
+            <div>
+              <label>Author (optional)</label>
+              <input name="author" placeholder="e.g. Fisseha G.">
+            </div>
+          </div>
+          <div>
+            <label>Comment*</label>
+            <textarea name="body" rows="3" required placeholder="Add the latest insight or reminder"></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit">Add Comment</button>
+          </div>
+        </form>
+
+        <h3>History</h3>
+        {% if comments %}
+          <ul class="comment-feed">
+            {% for comment in comments %}
+              <li class="comment-item">
+                <div class="comment-meta">
+                  <span class="comment-author">{{ comment.author or "Anonymous" }}</span>
+                  <span class="comment-dot">•</span>
+                  <time class="js-local-time" datetime="{{ comment.created_at.isoformat() }}">{{ comment.created_at }}</time>
+                  <form method="post" action="/leads/{{ lead.id }}/comments/{{ comment.id }}/delete" onsubmit="return confirm('Delete this comment?')">
+                    <button class="btn btn-ghost" type="submit">Delete</button>
+                  </form>
+                </div>
+                <p class="comment-body">{{ comment.body }}</p>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty-state">No comments yet.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <div class="lead-sections two-column-layout">
+      <section id="contacts" class="lead-section card">
+        <header>
+          <h2>Contacts</h2>
+          <p class="section-subtitle">Capture everyone tied to this opportunity.</p>
+        </header>
+
+        <div class="section-content">
+          {% set editing_contact = contact_edit_target %}
+          {% set current_contact_type = (editing_contact.contact_type.value if editing_contact and editing_contact.contact_type else 'employee') %}
+          <form class="stacked-form" method="post" action="{% if editing_contact %}/leads/{{ lead.id }}/contacts/{{ editing_contact.id }}/update{% else %}/leads/{{ lead.id }}/contacts/create{% endif %}">
+            <div>
+              <label>Name*</label>
+              <input name="contact_name" value="{{ editing_contact.contact_name if editing_contact else '' }}" required>
+            </div>
+            <div>
+              <label>Title / Role</label>
+              <input name="title" value="{{ editing_contact.title if editing_contact else '' }}">
+            </div>
+            <div>
+              <label>Contact Type</label>
+              <select name="contact_type">
+                {% for ct in contact_types %}
+                  <option value="{{ ct.value }}"
+                    {% if current_contact_type == ct.value %}selected{% endif %}>
+                    {{ ct.value }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label>Email</label>
+              <input name="email" type="email" value="{{ editing_contact.email if editing_contact else '' }}">
+            </div>
+            <div>
+              <label>Phone</label>
+              <input name="phone" value="{{ editing_contact.phone if editing_contact else '' }}">
+            </div>
+            <div>
+              <label>LinkedIn</label>
+              <input name="linkedin_url" value="{{ editing_contact.linkedin_url if editing_contact else '' }}">
+            </div>
+            <div>
+              <label>Street</label>
+              <input name="address_street" value="{{ editing_contact.address_street if editing_contact else '' }}">
+            </div>
+            <div class="grid three-column">
+              <div>
+                <label>City</label>
+                <input name="address_city" value="{{ editing_contact.address_city if editing_contact else '' }}">
+              </div>
+              <div>
+                <label>State</label>
+                <select name="address_state">
+                  {% set states = [
+                    ('', '-- choose --'),
+                    ('AL', 'AL'), ('AK', 'AK'), ('AZ', 'AZ'), ('AR', 'AR'),
+                    ('CA', 'CA'), ('CO', 'CO'), ('CT', 'CT'), ('DE', 'DE'),
+                    ('DC', 'DC'), ('FL', 'FL'), ('GA', 'GA'), ('HI', 'HI'),
+                    ('ID', 'ID'), ('IL', 'IL'), ('IN', 'IN'), ('IA', 'IA'),
+                    ('KS', 'KS'), ('KY', 'KY'), ('LA', 'LA'), ('ME', 'ME'),
+                    ('MD', 'MD'), ('MA', 'MA'), ('MI', 'MI'), ('MN', 'MN'),
+                    ('MS', 'MS'), ('MO', 'MO'), ('MT', 'MT'), ('NE', 'NE'),
+                    ('NV', 'NV'), ('NH', 'NH'), ('NJ', 'NJ'), ('NM', 'NM'),
+                    ('NY', 'NY'), ('NC', 'NC'), ('ND', 'ND'), ('OH', 'OH'),
+                    ('OK', 'OK'), ('OR', 'OR'), ('PA', 'PA'), ('RI', 'RI'),
+                    ('SC', 'SC'), ('SD', 'SD'), ('TN', 'TN'), ('TX', 'TX'),
+                    ('UT', 'UT'), ('VT', 'VT'), ('VA', 'VA'), ('WA', 'WA'),
+                    ('WV', 'WV'), ('WI', 'WI'), ('WY', 'WY')
+                  ] %}
+                  {% for value, label in states %}
+                    <option value="{{ value }}" {% if (editing_contact.address_state if editing_contact else 'GA') == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label>ZIP</label>
+                <input name="address_zipcode" value="{{ editing_contact.address_zipcode if editing_contact else '' }}">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" type="submit">
+                {% if editing_contact %}Update Contact{% else %}Add Contact{% endif %}
+              </button>
+              {% if editing_contact %}
+                <a class="btn btn-secondary" href="/leads/{{ lead.id }}/edit#contacts">Cancel</a>
+              {% endif %}
+            </div>
+          </form>
+
+          <h3>Existing Contacts</h3>
+          {% set existing_contacts = contacts | default([]) %}
+          {% if existing_contacts %}
+            <div class="contact-card-list">
+              {% for c in existing_contacts %}
+                <article class="contact-card">
+                  <header>
+                    <div class="contact-name">{{ c.contact_name }}</div>
+                    <span class="contact-title">{{ c.title or '—' }}</span>
+                    <span class="contact-type-pill">
+                      {{ c.contact_type.value if c.contact_type else 'unspecified' }}
+                    </span>
+                  </header>
+                  <dl>
+                    <div>
+                      <dt>Email</dt>
+                      <dd>
+                        {% if c.email %}
+                          <a href="mailto:{{ c.email }}">{{ c.email }}</a>
+                        {% else %}
+                          <span class="value-empty">—</span>
+                        {% endif %}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Phone</dt>
+                      <dd>{{ c.phone or '—' }}</dd>
+                    </div>
+                    <div>
+                      <dt>LinkedIn</dt>
+                      <dd>
+                        {% if c.linkedin_url %}
+                          <a href="{{ c.linkedin_url }}" target="_blank">{{ c.linkedin_url }}</a>
+                        {% else %}
+                          <span class="value-empty">—</span>
+                        {% endif %}
+                      </dd>
+                    </div>
+                    <div class="address-block">
+                      <dt>Address</dt>
+                      <dd>
+                        {% if c.address_street or c.address_city or c.address_state or c.address_zipcode %}
+                          {% set parts = [] %}
+                          {% if c.address_street %}{% set _ = parts.append(c.address_street) %}{% endif %}
+                          {% if c.address_city %}{% set _ = parts.append(c.address_city) %}{% endif %}
+                          {% if c.address_state %}{% set _ = parts.append(c.address_state) %}{% endif %}
+                          {% if c.address_zipcode %}{% set _ = parts.append(c.address_zipcode) %}{% endif %}
+                          {{ parts|join(', ') }}
+                        {% else %}
+                          <span class="value-empty">—</span>
+                        {% endif %}
+                      </dd>
+                    </div>
+                  </dl>
+                  <footer>
+                    <div class="contact-actions">
+                      <a class="btn btn-ghost" href="/leads/{{ lead.id }}/edit?edit_contact_id={{ c.id }}#contacts">Edit</a>
+                      {% if can_generate_letters %}
+                        <form method="post" action="/leads/{{ lead.id }}/contacts/{{ c.id }}/letters" target="_blank">
+                          <button class="btn btn-secondary" type="submit">Generate Letter</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  </footer>
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="empty-state">No contacts yet.</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section id="attempts" class="lead-section card">
+        <header>
+          <h2>Outreach Attempts</h2>
+          <p class="section-subtitle">Track every touchpoint for this lead.</p>
+        </header>
+
+        <div class="section-content">
+          <form class="stacked-form" method="post" action="/leads/{{ lead.id }}/attempts/create">
+            <div>
+              <label>Channel*</label>
+              <select name="channel" required>
+                {% for ch in channels %}
+                  <option value="{{ ch.value }}">{{ ch.value }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label>Attempt #</label>
+              <input name="attempt_number" type="number" min="1" value="1">
+            </div>
+
+            <div>
+              <label>Contact (optional)</label>
+              <select name="contact_id">
+                <option value="">-- none --</option>
+                {% for c in existing_contacts %}
+                  <option value="{{ c.id }}">{{ c.contact_name }}{% if c.title %} ({{ c.title }}){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label>Outcome</label>
+              <input name="outcome" placeholder="e.g. left voicemail, no answer, spoke with CFO">
+            </div>
+
+            <div>
+              <label>Notes</label>
+              <textarea name="notes" rows="3"></textarea>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" type="submit">Save Attempt</button>
+            </div>
+          </form>
+
+          <h3>Previous Attempts</h3>
+          {% set existing_attempts = attempts | default([]) %}
+          {% if existing_attempts %}
+            <table class="data-table compact-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Channel</th>
+                  <th>#</th>
+                  <th>Contact</th>
+                  <th>Outcome</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in existing_attempts %}
+                <tr>
+                  <td>
+                    <time class="js-local-time" datetime="{{ a.created_at.isoformat() }}">{{ a.created_at }}</time>
+                  </td>
+                    <td>{{ a.channel.value }}</td>
+                    <td>{{ a.attempt_number }}</td>
+                    <td>
+                      {% if a.contact %}
+                        {{ a.contact.contact_name }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>{{ a.outcome or '' }}</td>
+                    <td>{{ a.notes or '' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="empty-state">No attempts logged yet.</p>
+          {% endif %}
+        </div>
+      </section>
+
+    </div>
+{% endif %}
+</div>
+
+<dialog id="property-detail-dialog" class="property-detail-modal">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-body">
+      <!-- property detail fragment will be injected here -->
+    </div>
+  </div>
+</dialog>
+
+<script src="/static/js/property_detail.js?v=20241128"></script>
+<script src="/static/js/entity_intel.js?v=20241129"></script>
+
+<script>
+  (function () {
+    const ownerTypeSelect = document.getElementById("owner_type_select");
+    if (!ownerTypeSelect) return;
+
+    const metadataContainer = document.querySelector(".owner-metadata");
+    const defaultOwnerType = metadataContainer?.dataset.defaultOwnerType || "business";
+    const businessSections = document.querySelectorAll('[data-owner-section="business"]');
+    const individualSections = document.querySelectorAll('[data-owner-section="individual"]');
+    const businessStatusSelect = document.getElementById("business_owner_status_select");
+    const newBusinessWrapper = document.querySelector(".owner-new-name");
+    const newBusinessInput = newBusinessWrapper ? newBusinessWrapper.querySelector('input[name="new_business_name"]') : null;
+
+    function toggleSections() {
+      const value = ownerTypeSelect.value;
+      businessSections.forEach((section) => {
+        section.style.display = value === "business" ? "" : "none";
+      });
+      individualSections.forEach((section) => {
+        section.style.display = value === "individual" ? "" : "none";
+      });
+    }
+
+    function toggleNewBusiness() {
+      if (!businessStatusSelect || !newBusinessWrapper) return;
+      const needsName = ["acquired_or_merged", "active_renamed"].includes(businessStatusSelect.value);
+      newBusinessWrapper.style.display = needsName ? "" : "none";
+      if (!needsName) {
+        if (newBusinessInput) {
+          newBusinessInput.value = "";
+        }
+      }
+    }
+
+    ownerTypeSelect.addEventListener("change", () => {
+      toggleSections();
+      toggleNewBusiness();
+    });
+
+    if (businessStatusSelect) {
+      businessStatusSelect.addEventListener("change", toggleNewBusiness);
+    }
+
+    ownerTypeSelect.value = ownerTypeSelect.value || defaultOwnerType;
+    toggleSections();
+    toggleNewBusiness();
+  })();
+</script>
+
+<script>
+  (function () {
+    const trigger = document.querySelector('[data-action="open-property-detail"]');
+    if (!trigger) {
+      return;
+    }
+
+    trigger.addEventListener("click", () => {
+      if (typeof window.openPropertyDetail !== "function") {
+        return;
+      }
+
+      const rawHash = trigger.dataset.propertyHash || "";
+      const propertyId = trigger.dataset.propertyId || "";
+
+      if (!rawHash && !propertyId) {
+        return;
+      }
+
+      window.openPropertyDetail({
+        rawHash: rawHash || undefined,
+        propertyId: rawHash ? undefined : propertyId,
+        context: "lead",
+      });
+    });
+  })();
+</script>
+
+{% endblock %}

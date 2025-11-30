@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Outreach Attempts</h1>
+      <p class="page-subtitle">Lead #{{ lead.id }} · {{ lead.property_id }} — {{ lead.owner_name }}</p>
+    </div>
+    <div class="page-actions">
+      <a class="ghost-link" href="/leads/{{ lead.id }}/edit">Back to Lead</a>
+    </div>
+  </div>
+
+  <div class="card">
+<h2>Log New Attempt</h2>
+    <form class="stacked-form" method="post" action="/leads/{{ lead.id }}/attempts/create">
+  <div>
+    <label>Channel*</label>
+    <select name="channel" required>
+      {% for ch in channels %}
+        <option value="{{ ch.value }}">{{ ch.value }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label>Attempt #</label>
+    <input name="attempt_number" type="number" min="1" value="1">
+  </div>
+
+  <div>
+    <label>Contact (optional)</label>
+    <select name="contact_id">
+      <option value="">-- none --</option>
+      {% for c in contacts %}
+            <option value="{{ c.id }}">{{ c.contact_name }}{% if c.title %} ({{ c.title }}){% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label>Outcome</label>
+    <input name="outcome" placeholder="e.g. left voicemail, no answer, spoke with CFO">
+  </div>
+
+  <div>
+        <label>Notes</label>
+        <textarea name="notes" rows="3"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Save Attempt</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+<h2>Previous Attempts</h2>
+{% if attempts %}
+      <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Channel</th>
+        <th>#</th>
+        <th>Contact</th>
+        <th>Outcome</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for a in attempts %}
+      <tr>
+            <td>
+              <time class="js-local-time" datetime="{{ a.created_at.isoformat() }}">{{ a.created_at }}</time>
+            </td>
+        <td>{{ a.channel.value }}</td>
+        <td>{{ a.attempt_number }}</td>
+        <td>
+          {% if a.contact %}
+            {{ a.contact.contact_name }}
+          {% else %}
+                —
+          {% endif %}
+        </td>
+        <td>{{ a.outcome or '' }}</td>
+        <td>{{ a.notes or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+      <p class="empty-state">No attempts logged yet.</p>
+{% endif %}
+  </div>
+</div>
+
+{% endblock %}

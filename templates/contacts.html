@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Contacts</h1>
+      <p class="page-subtitle">Lead #{{ lead.id }} · {{ lead.property_id }} — {{ lead.owner_name }}</p>
+    </div>
+    <div class="page-actions">
+      <a class="ghost-link" href="/leads/{{ lead.id }}/edit">Back to Lead</a>
+    </div>
+  </div>
+
+  <div class="card">
+<h2>Add Contact</h2>
+    <form class="stacked-form" method="post" action="/leads/{{ lead.id }}/contacts/create">
+  <div>
+    <label>Name*</label>
+    <input name="contact_name" required>
+  </div>
+  <div>
+        <label>Title / Role</label>
+    <input name="title">
+  </div>
+      <div>
+        <label>Contact Type</label>
+        <select name="contact_type">
+          <option value="employee">employee</option>
+          <option value="owner">owner</option>
+          <option value="agent">agent</option>
+          <option value="heir">heir</option>
+        </select>
+      </div>
+  <div>
+    <label>Email</label>
+    <input name="email" type="email">
+  </div>
+  <div>
+    <label>Phone</label>
+    <input name="phone">
+  </div>
+  <div>
+    <label>LinkedIn</label>
+    <input name="linkedin_url">
+  </div>
+  <div>
+        <label>Street</label>
+        <input name="address_street">
+      </div>
+      <div class="grid three-column">
+        <div>
+          <label>City</label>
+          <input name="address_city">
+        </div>
+        <div>
+          <label>State</label>
+          <select name="address_state" value="GA">
+            <option value="">-- choose --</option>
+            {% for value in ['AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'] %}
+              <option value="{{ value }}" {% if value == 'GA' %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>ZIP</label>
+          <input name="address_zipcode">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Add Contact</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+<h2>Existing Contacts</h2>
+{% if contacts %}
+      <table class="data-table compact-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Title</th>
+        <th>Type</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th>LinkedIn</th>
+        <th>Address</th>
+            <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in contacts %}
+      <tr>
+        <td>{{ c.contact_name }}</td>
+        <td>{{ c.title or '' }}</td>
+        <td>{{ c.contact_type.value }}</td>
+        <td>{{ c.email or '' }}</td>
+        <td>{{ c.phone or '' }}</td>
+        <td>{{ c.linkedin_url or '' }}</td>
+        <td>
+          {% set parts = [] %}
+          {% if c.address_street %}{% set _ = parts.append(c.address_street) %}{% endif %}
+          {% if c.address_city %}{% set _ = parts.append(c.address_city) %}{% endif %}
+          {% if c.address_state %}{% set _ = parts.append(c.address_state) %}{% endif %}
+          {% if c.address_zipcode %}{% set _ = parts.append(c.address_zipcode) %}{% endif %}
+          {{ parts|join(', ') }}
+        </td>
+            <td class="cell-actions">
+              <form method="post" action="/leads/{{ lead.id }}/contacts/{{ c.id }}/delete">
+            <button type="submit" onclick="return confirm('Delete contact?')">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+      <p class="empty-state">No contacts yet.</p>
+{% endif %}
+  </div>
+</div>
+
+{% endblock %}
