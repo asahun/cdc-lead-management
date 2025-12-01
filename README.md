@@ -7,7 +7,6 @@ FastAPI application for managing business leads and unclaimed property records.
 - Python 3.10 or higher
 - PostgreSQL database
 - OpenAI API key (for entity intelligence features)
-- DB name:ucp, u:ucp_app, p:EJe5&fWgxt6gow
 
 ## Installation (Windows)
 
@@ -72,6 +71,12 @@ $env:GPT_ENTITY_TIMEOUT_SECONDS="45"
 **To make environment variables permanent:**
 - Open "Environment Variables" in Windows Settings
 - Add them under "User variables" or "System variables"
+
+**DB setup
+- DB name:ucp, u:ucp_app, p:EJe5&fWgxt6gow
+- psql -U postgres -c "CREATE ROLE \"ucp_app\" WITH LOGIN PASSWORD 'EJe5&fWgxt6gow';"
+- psql -U postgres -c "CREATE DATABASE \"ucp\" OWNER \"ucp_app\";"
+- pg_restore -U ucp_app -d ucp /tmp/db.dump
 
 ### 7. Run the server
 
