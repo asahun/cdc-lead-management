@@ -341,6 +341,17 @@
                   <footer>
                     <div class="contact-actions">
                       <a class="btn btn-ghost" href="/leads/{{ lead.id }}/edit?edit_contact_id={{ c.id }}#contacts">Edit</a>
+                      {% if c.email %}
+                        <button 
+                          class="btn btn-primary prep-email-btn" 
+                          type="button"
+                          data-lead-id="{{ lead.id }}"
+                          data-contact-id="{{ c.id }}"
+                          data-contact-email="{{ c.email }}"
+                          data-contact-name="{{ c.contact_name }}">
+                          Prep Email
+                        </button>
+                      {% endif %}
                       {% if can_generate_letters %}
                         <form method="post" action="/leads/{{ lead.id }}/contacts/{{ c.id }}/letters" target="_blank">
                           <button class="btn btn-secondary" type="submit">Generate Letter</button>
@@ -446,6 +457,19 @@
       </section>
 
     </div>
+
+    <section id="scheduled-emails" class="lead-section card full-width">
+      <header>
+        <h2>Scheduled & Failed Emails</h2>
+        <p class="section-subtitle">Manage scheduled and failed email sends.</p>
+      </header>
+
+      <div class="section-content">
+        <div id="scheduled-emails-list" class="scheduled-emails-list">
+          <p class="text-muted">Loading scheduled emails...</p>
+        </div>
+      </div>
+    </section>
 {% endif %}
 </div>
 
@@ -538,4 +562,44 @@
   })();
 </script>
 
+<!-- Email Composition Modal -->
+<div id="email-modal" class="modal" style="display: none;">
+  <div class="modal-content email-modal-content">
+    <div class="modal-header">
+      <h2>Compose Email</h2>
+      <button type="button" class="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <form id="email-form" class="email-form">
+      <div class="form-group">
+        <label for="email-to">To:</label>
+        <input type="email" id="email-to" readonly>
+      </div>
+      <div class="form-group">
+        <label for="email-subject">Subject:</label>
+        <input type="text" id="email-subject" required>
+      </div>
+      <div class="form-group">
+        <label for="email-body">Body:</label>
+        <div id="email-body-editor" contenteditable="true" class="email-body-editor"></div>
+        <input type="hidden" id="email-body-hidden" name="body">
+      </div>
+      <div class="form-group" id="schedule-group" style="display: none;">
+        <label for="email-scheduled-date">Schedule for:</label>
+        <div class="datetime-inputs">
+          <input type="date" id="email-scheduled-date" class="email-date-input" required>
+          <input type="time" id="email-scheduled-time" class="email-time-input" required>
+        </div>
+        <small class="form-hint">Business hours: Monday-Friday, 7:00 AM - 5:00 PM (your timezone)</small>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="email-schedule-btn">Schedule</button>
+        <button type="submit" class="btn btn-primary" id="email-send-btn">Send</button>
+        <button type="button" class="btn btn-ghost modal-close" style="margin-left: auto;">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/static/js/email_compose.js?v=20241128"></script>
+<script src="/static/js/scheduled_emails.js?v=20241128"></script>
 {% endblock %}

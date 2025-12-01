@@ -163,3 +163,33 @@ class LeadComment(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     lead = relationship("BusinessLead", back_populates="comments")
+
+
+class ScheduledEmailStatus(str, enum.Enum):
+    pending = "pending"
+    sent = "sent"
+    failed = "failed"
+    cancelled = "cancelled"
+    missed = "missed"
+
+
+class ScheduledEmail(Base):
+    __tablename__ = "scheduled_email"
+
+    id = Column(BigInteger, primary_key=True)
+    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
+    
+    to_email = Column(Text, nullable=False)
+    subject = Column(Text, nullable=False)
+    body = Column(Text, nullable=False)
+    
+    scheduled_at = Column(DateTime(timezone=True), nullable=False)
+    status = Column(Enum(ScheduledEmailStatus, name="scheduled_email_status"), nullable=False, default=ScheduledEmailStatus.pending)
+    error_message = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    
+    lead = relationship("BusinessLead")
+    contact = relationship("LeadContact", foreign_keys=[contact_id])

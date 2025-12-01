@@ -1,5 +1,5 @@
 # main.py
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -25,6 +25,8 @@ from models import (
     OwnerSize,
     IndividualOwnerStatus,
     ContactType,
+    ScheduledEmail,
+    ScheduledEmailStatus,
 )
 
 from letters import (
@@ -33,6 +35,8 @@ from letters import (
     render_letter_pdf,
 )
 from gpt_api import fetch_entity_intelligence, GPTConfigError, GPTServiceError
+from email_service import prep_contact_email, send_email
+from email_scheduler import start_scheduler, stop_scheduler
 
 from fastapi.templating import Jinja2Templates
 
@@ -44,6 +48,7 @@ Base.metadata.create_all(
         LeadContact.__table__,
         LeadAttempt.__table__,
         LeadComment.__table__,
+        ScheduledEmail.__table__,
     ],
 )
 
@@ -56,6 +61,12 @@ templates = Jinja2Templates(directory="templates")
 @app.on_event("startup")
 def bootstrap_assignment_flags():
     _sync_existing_property_assignments()
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    stop_scheduler()
 
 
 def format_currency(value):
@@ -942,6 +953,334 @@ def generate_contact_letter(
         "Content-Disposition": f'attachment; filename="{filename}"'
     }
     return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
+
+
+@app.get("/leads/{lead_id}/contacts/{contact_id}/prep-email")
+def prep_email(
+    lead_id: int,
+    contact_id: int,
+    db: Session = Depends(get_db),
+):
+    """Prepare email content for a contact."""
+    try:
+        email_data = prep_contact_email(db, lead_id, contact_id)
+        return JSONResponse(content=email_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/leads/{lead_id}/contacts/{contact_id}/send-email")
+def send_contact_email(
+    lead_id: int,
+    contact_id: int,
+    subject: str = Form(...),
+    body: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Send email to a contact and create attempt record."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    contact = db.get(LeadContact, contact_id)
+    if not contact or contact.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    if not contact.email:
+        raise HTTPException(status_code=400, detail="Contact has no email address")
+    
+    try:
+        # Send email
+        send_email(
+            to_email=contact.email,
+            subject=subject,
+            html_body=body,
+        )
+        
+        # Get the next attempt number
+        last_attempt = db.scalar(
+            select(LeadAttempt)
+            .where(LeadAttempt.lead_id == lead_id)
+            .order_by(LeadAttempt.attempt_number.desc())
+            .limit(1)
+        )
+        next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+        
+        # Create attempt record
+        attempt = LeadAttempt(
+            lead_id=lead.id,
+            contact_id=contact.id,
+            channel=ContactChannel.email,
+            attempt_number=next_attempt_number,
+            outcome="Email sent",
+            notes=f"Subject: {subject[:100]}",
+        )
+        db.add(attempt)
+        db.commit()
+        
+        return JSONResponse(content={"status": "success", "message": "Email sent successfully"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+
+@app.post("/leads/{lead_id}/contacts/{contact_id}/schedule-email")
+def schedule_contact_email(
+    lead_id: int,
+    contact_id: int,
+    subject: str = Form(...),
+    body: str = Form(...),
+    scheduled_at: str = Form(...),  # ISO format datetime string
+    db: Session = Depends(get_db),
+):
+    """Schedule an email to be sent later."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    contact = db.get(LeadContact, contact_id)
+    if not contact or contact.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    if not contact.email:
+        raise HTTPException(status_code=400, detail="Contact has no email address")
+    
+    try:
+        # Parse scheduled_at (expecting ISO format from frontend)
+        scheduled_datetime = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+        if scheduled_datetime.tzinfo is None:
+            # Assume UTC if no timezone
+            scheduled_datetime = scheduled_datetime.replace(tzinfo=timezone.utc)
+        
+        # Validate scheduled time is in the future
+        if scheduled_datetime <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+        
+        # Create scheduled email record
+        scheduled_email = ScheduledEmail(
+            lead_id=lead.id,
+            contact_id=contact.id,
+            to_email=contact.email,
+            subject=subject,
+            body=body,
+            scheduled_at=scheduled_datetime,
+            status=ScheduledEmailStatus.pending,
+        )
+        db.add(scheduled_email)
+        db.commit()
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": "Email scheduled successfully",
+            "scheduled_id": scheduled_email.id,
+        })
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to schedule email: {str(e)}")
+
+
+@app.get("/leads/{lead_id}/scheduled-emails")
+def get_scheduled_emails(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get all scheduled emails for a lead."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    scheduled_emails = db.query(ScheduledEmail).filter(
+        ScheduledEmail.lead_id == lead_id
+    ).order_by(ScheduledEmail.scheduled_at.desc()).all()
+    
+    result = []
+    for email in scheduled_emails:
+        contact_name = None
+        contact_title = None
+        if email.contact_id:
+            contact = db.get(LeadContact, email.contact_id)
+            if contact:
+                contact_name = contact.contact_name
+                contact_title = contact.title
+        
+        result.append({
+            "id": email.id,
+            "contact_id": email.contact_id,
+            "contact_name": contact_name,
+            "contact_title": contact_title,
+            "to_email": email.to_email,
+            "subject": email.subject,
+            "body": email.body,
+            "scheduled_at": email.scheduled_at.isoformat(),
+            "status": email.status.value,
+            "error_message": email.error_message,
+            "created_at": email.created_at.isoformat(),
+            "sent_at": email.sent_at.isoformat() if email.sent_at else None,
+        })
+    
+    return JSONResponse(content=result)
+
+
+@app.get("/leads/{lead_id}/scheduled-emails/{scheduled_id}")
+def get_scheduled_email(
+    lead_id: int,
+    scheduled_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get a single scheduled email for editing."""
+    scheduled_email = db.get(ScheduledEmail, scheduled_id)
+    if not scheduled_email or scheduled_email.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Scheduled email not found")
+    
+    contact_name = None
+    contact_title = None
+    if scheduled_email.contact_id:
+        contact = db.get(LeadContact, scheduled_email.contact_id)
+        if contact:
+            contact_name = contact.contact_name
+            contact_title = contact.title
+    
+    return JSONResponse(content={
+        "id": scheduled_email.id,
+        "contact_id": scheduled_email.contact_id,
+        "contact_name": contact_name,
+        "contact_title": contact_title,
+        "to_email": scheduled_email.to_email,
+        "subject": scheduled_email.subject,
+        "body": scheduled_email.body,
+        "scheduled_at": scheduled_email.scheduled_at.isoformat(),
+        "status": scheduled_email.status.value,
+        "error_message": scheduled_email.error_message,
+        "created_at": scheduled_email.created_at.isoformat(),
+        "sent_at": scheduled_email.sent_at.isoformat() if scheduled_email.sent_at else None,
+    })
+
+
+@app.post("/leads/{lead_id}/scheduled-emails/{scheduled_id}/send-now")
+def send_scheduled_email_now(
+    lead_id: int,
+    scheduled_id: int,
+    db: Session = Depends(get_db),
+):
+    """Send a scheduled email immediately."""
+    scheduled_email = db.get(ScheduledEmail, scheduled_id)
+    if not scheduled_email or scheduled_email.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Scheduled email not found")
+    
+    if scheduled_email.status not in [ScheduledEmailStatus.pending, ScheduledEmailStatus.missed]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot send email with status: {scheduled_email.status.value}",
+        )
+    
+    try:
+        # Send email
+        send_email(
+            to_email=scheduled_email.to_email,
+            subject=scheduled_email.subject,
+            html_body=scheduled_email.body,
+        )
+        
+        # Mark as sent
+        scheduled_email.status = ScheduledEmailStatus.sent
+        scheduled_email.sent_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        # Create attempt record
+        last_attempt = db.scalar(
+            select(LeadAttempt)
+            .where(LeadAttempt.lead_id == lead_id)
+            .order_by(LeadAttempt.attempt_number.desc())
+            .limit(1)
+        )
+        next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+        
+        attempt = LeadAttempt(
+            lead_id=lead_id,
+            contact_id=scheduled_email.contact_id,
+            channel=ContactChannel.email,
+            attempt_number=next_attempt_number,
+            outcome="Email sent (scheduled, sent now)",
+            notes=f"Originally scheduled for {scheduled_email.scheduled_at.isoformat()}. Subject: {scheduled_email.subject[:100]}",
+        )
+        db.add(attempt)
+        db.commit()
+        
+        return JSONResponse(content={"status": "success", "message": "Email sent successfully"})
+    except Exception as e:
+        db.rollback()
+        scheduled_email.status = ScheduledEmailStatus.failed
+        scheduled_email.error_message = str(e)[:500]
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+
+@app.put("/leads/{lead_id}/scheduled-emails/{scheduled_id}")
+def update_scheduled_email(
+    lead_id: int,
+    scheduled_id: int,
+    subject: str = Form(None),
+    body: str = Form(None),
+    scheduled_at: str = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Update a scheduled email (subject, body, or scheduled time)."""
+    scheduled_email = db.get(ScheduledEmail, scheduled_id)
+    if not scheduled_email or scheduled_email.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Scheduled email not found")
+    
+    if scheduled_email.status not in [ScheduledEmailStatus.pending, ScheduledEmailStatus.missed, ScheduledEmailStatus.failed]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot edit email with status: {scheduled_email.status.value}",
+        )
+    
+    try:
+        if subject is not None:
+            scheduled_email.subject = subject
+        if body is not None:
+            scheduled_email.body = body
+        if scheduled_at is not None:
+            scheduled_datetime = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+            if scheduled_datetime.tzinfo is None:
+                scheduled_datetime = scheduled_datetime.replace(tzinfo=timezone.utc)
+            
+            if scheduled_datetime <= datetime.now(timezone.utc):
+                raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+            
+            scheduled_email.scheduled_at = scheduled_datetime
+        
+        db.commit()
+        return JSONResponse(content={"status": "success", "message": "Scheduled email updated"})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update scheduled email: {str(e)}")
+
+
+@app.delete("/leads/{lead_id}/scheduled-emails/{scheduled_id}")
+def cancel_scheduled_email(
+    lead_id: int,
+    scheduled_id: int,
+    db: Session = Depends(get_db),
+):
+    """Cancel a scheduled email."""
+    scheduled_email = db.get(ScheduledEmail, scheduled_id)
+    if not scheduled_email or scheduled_email.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Scheduled email not found")
+    
+    if scheduled_email.status != ScheduledEmailStatus.pending:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel email with status: {scheduled_email.status.value}",
+        )
+    
+    scheduled_email.status = ScheduledEmailStatus.cancelled
+    db.commit()
+    
+    return JSONResponse(content={"status": "success", "message": "Scheduled email cancelled"})
 
 # ---------- ATTEMPTS / ACTIONS FOR A LEAD ----------
 

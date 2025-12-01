@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Mac / IDE artifacts
+.DS_Store
+.idea/
+.vscode/
+
+# Python build metadata
+build/
+dist/
+*.egg-info/
+
+# Generated print artifacts
+print/_tmp_letter.html
+
+# Misc version marker files
+=*
+
