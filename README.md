@@ -7,6 +7,7 @@ FastAPI application for managing business leads and unclaimed property records.
 - Python 3.10 or higher
 - PostgreSQL database
 - OpenAI API key (for entity intelligence features)
+- DB name:ucp, u:ucp_app, p:EJe5&fWgxt6gow
 
 ## Installation (Windows)
 
@@ -59,7 +60,7 @@ In PowerShell, set these before running the app:
 $env:DATABASE_URL="postgresql+psycopg2://username:password@localhost:5432/database_name"
 
 # OpenAI API key (required for entity intelligence)
-$env:OPENAI_API_KEY="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"
+$env:OPENAI_API_KEY="key"
 
 # Optional: Custom GPT model
 $env:GPT_ENTITY_MODEL="gpt-5.1"
