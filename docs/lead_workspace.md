@@ -60,6 +60,11 @@ to the combined workspace, so old bookmarks continue to work.
   on the lead’s owner type/status and saves the PDF into `lead_app/print/`.
 - `static/local_time.js` converts ISO timestamps to the viewer’s locale so
   activity history (attempts, comments) is easy to read.
+- The global header contains a **Profile** switcher (Fisseha vs Abby). The choice
+  is stored in `localStorage`, drives comment authorship, and passes through every
+  email action so the correct signature and SMTP sender (e.g. `abby@loadrouter.com`)
+  are applied automatically (scheduled emails embed the profile marker so the
+  scheduler can send with the right identity).
 
 ## Follow-up Ideas
 

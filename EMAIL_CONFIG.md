@@ -75,6 +75,30 @@ SMTP_REPLY_TO = os.getenv("SMTP_REPLY_TO", "fisseha@loadrouter.com")
 
 **⚠️ Warning:** Hardcoding passwords in code is not recommended for production. Use environment variables instead.
 
+## Profile Overrides
+
+The UI now supports multiple sender profiles (Fisseha, Abby). Each profile can
+have a custom From name, From email, reply-to, and signature template. Optional
+environment variables:
+
+```bash
+# Default profile (fisseha or abby)
+EMAIL_PROFILE_DEFAULT=fisseha
+
+# Fisseha profile overrides
+EMAIL_PROFILE_FISSEHA_FROM=fisseha@loadrouter.com
+EMAIL_PROFILE_FISSEHA_NAME="Fisseha Gebresilasie"
+EMAIL_PROFILE_FISSEHA_REPLY_TO=fisseha@loadrouter.com
+
+# Abby profile overrides
+EMAIL_PROFILE_ABBY_FROM=abby@loadrouter.com
+EMAIL_PROFILE_ABBY_NAME="Abby Tezera"
+EMAIL_PROFILE_ABBY_REPLY_TO=abby@loadrouter.com
+```
+
+If a profile-specific variable is not provided the app falls back to the global
+`SMTP_FROM_*` values.
+
 ## Testing Email Configuration
 
 1. Start the application

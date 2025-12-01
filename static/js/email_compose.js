@@ -34,6 +34,16 @@
     },
   };
 
+  function getActiveProfileKey() {
+    if (typeof window.getCurrentProfile === 'function') {
+      const profile = window.getCurrentProfile();
+      if (profile && profile.key) {
+        return profile.key;
+      }
+    }
+    return 'fisseha';
+  }
+
   // Helper to reset modal
   function resetModal() {
     modal.style.display = 'none';
@@ -100,8 +110,9 @@
     toInput.value = `${contactName} <${contactEmail}>`;
 
     try {
+      const profileKey = getActiveProfileKey();
       // Fetch email content
-      const response = await fetch(`/leads/${leadId}/contacts/${contactId}/prep-email`);
+      const response = await fetch(`/leads/${leadId}/contacts/${contactId}/prep-email?profile=${encodeURIComponent(profileKey)}`);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to load email template');
@@ -141,6 +152,7 @@
 
     const subject = subjectInput.value.trim();
     const body = bodyHidden.value || bodyEditor.innerHTML;
+    const profileKey = getActiveProfileKey();
 
     if (!subject) {
       alert('Subject is required');
@@ -164,6 +176,7 @@
         const updateFormData = new FormData();
         updateFormData.append('subject', subject);
         updateFormData.append('body', body);
+        updateFormData.append('profile', profileKey);
 
         const updateResponse = await fetch(`/leads/${currentLeadId}/scheduled-emails/${window.currentScheduledEmailId}`, {
           method: 'PUT',
@@ -214,6 +227,8 @@
       const formData = new FormData();
       formData.append('subject', subject);
       formData.append('body', body);
+
+      formData.append('profile', profileKey);
 
       const response = await fetch(`/leads/${currentLeadId}/contacts/${currentContactId}/send-email`, {
         method: 'POST',
@@ -356,6 +371,7 @@
       const body = bodyHidden.value || bodyEditor.innerHTML;
       const scheduledDate = scheduledDateInput.value;
       const scheduledTime = scheduledTimeInput.value;
+      const profileKey = getActiveProfileKey();
 
       if (!subject) {
         alert('Subject is required');
@@ -388,6 +404,7 @@
           formData.append('subject', subject);
           formData.append('body', body);
           formData.append('scheduled_at', isoString);
+          formData.append('profile', profileKey);
 
           const response = await fetch(`/leads/${currentLeadId}/scheduled-emails/${window.currentScheduledEmailId}`, {
             method: 'PUT',
@@ -428,6 +445,7 @@
         formData.append('subject', subject);
         formData.append('body', body);
         formData.append('scheduled_at', isoString);
+        formData.append('profile', profileKey);
 
         const response = await fetch(`/leads/${currentLeadId}/contacts/${currentContactId}/schedule-email`, {
           method: 'POST',

@@ -4,7 +4,7 @@ from io import BytesIO
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from fastapi import FastAPI, Depends, Request, Form, HTTPException
+from fastapi import FastAPI, Depends, Request, Form, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,7 +35,13 @@ from letters import (
     render_letter_pdf,
 )
 from gpt_api import fetch_entity_intelligence, GPTConfigError, GPTServiceError
-from email_service import prep_contact_email, send_email
+from email_service import (
+    prep_contact_email,
+    send_email,
+    resolve_profile,
+    embed_profile_marker,
+    extract_profile_marker,
+)
 from email_scheduler import start_scheduler, stop_scheduler
 
 from fastapi.templating import Jinja2Templates
@@ -959,11 +965,12 @@ def generate_contact_letter(
 def prep_email(
     lead_id: int,
     contact_id: int,
+    profile: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     """Prepare email content for a contact."""
     try:
-        email_data = prep_contact_email(db, lead_id, contact_id)
+        email_data = prep_contact_email(db, lead_id, contact_id, profile_key=profile)
         return JSONResponse(content=email_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -975,6 +982,7 @@ def send_contact_email(
     contact_id: int,
     subject: str = Form(...),
     body: str = Form(...),
+    profile: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Send email to a contact and create attempt record."""
@@ -990,11 +998,15 @@ def send_contact_email(
         raise HTTPException(status_code=400, detail="Contact has no email address")
     
     try:
+        profile_config = resolve_profile(profile)
         # Send email
         send_email(
             to_email=contact.email,
             subject=subject,
             html_body=body,
+            from_email=profile_config["from_email"],
+            from_name=profile_config["from_name"],
+            reply_to=profile_config["reply_to"],
         )
         
         # Get the next attempt number
@@ -1030,6 +1042,7 @@ def schedule_contact_email(
     subject: str = Form(...),
     body: str = Form(...),
     scheduled_at: str = Form(...),  # ISO format datetime string
+    profile: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Schedule an email to be sent later."""
@@ -1055,13 +1068,16 @@ def schedule_contact_email(
         if scheduled_datetime <= datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
         
+        profile_config = resolve_profile(profile)
+        body_with_marker = embed_profile_marker(body, profile_config["key"])
+        
         # Create scheduled email record
         scheduled_email = ScheduledEmail(
             lead_id=lead.id,
             contact_id=contact.id,
             to_email=contact.email,
             subject=subject,
-            body=body,
+            body=body_with_marker,
             scheduled_at=scheduled_datetime,
             status=ScheduledEmailStatus.pending,
         )
@@ -1104,6 +1120,8 @@ def get_scheduled_emails(
                 contact_name = contact.contact_name
                 contact_title = contact.title
         
+        profile_key, clean_body = extract_profile_marker(email.body)
+        
         result.append({
             "id": email.id,
             "contact_id": email.contact_id,
@@ -1111,12 +1129,13 @@ def get_scheduled_emails(
             "contact_title": contact_title,
             "to_email": email.to_email,
             "subject": email.subject,
-            "body": email.body,
+            "body": clean_body,
             "scheduled_at": email.scheduled_at.isoformat(),
             "status": email.status.value,
             "error_message": email.error_message,
             "created_at": email.created_at.isoformat(),
             "sent_at": email.sent_at.isoformat() if email.sent_at else None,
+            "profile": profile_key,
         })
     
     return JSONResponse(content=result)
@@ -1141,6 +1160,8 @@ def get_scheduled_email(
             contact_name = contact.contact_name
             contact_title = contact.title
     
+    profile_key, clean_body = extract_profile_marker(scheduled_email.body)
+    
     return JSONResponse(content={
         "id": scheduled_email.id,
         "contact_id": scheduled_email.contact_id,
@@ -1148,12 +1169,13 @@ def get_scheduled_email(
         "contact_title": contact_title,
         "to_email": scheduled_email.to_email,
         "subject": scheduled_email.subject,
-        "body": scheduled_email.body,
+        "body": clean_body,
         "scheduled_at": scheduled_email.scheduled_at.isoformat(),
         "status": scheduled_email.status.value,
         "error_message": scheduled_email.error_message,
         "created_at": scheduled_email.created_at.isoformat(),
         "sent_at": scheduled_email.sent_at.isoformat() if scheduled_email.sent_at else None,
+        "profile": profile_key,
     })
 
 
@@ -1175,11 +1197,17 @@ def send_scheduled_email_now(
         )
     
     try:
+        profile_key, clean_body = extract_profile_marker(scheduled_email.body)
+        profile_config = resolve_profile(profile_key)
+        
         # Send email
         send_email(
             to_email=scheduled_email.to_email,
             subject=scheduled_email.subject,
-            html_body=scheduled_email.body,
+            html_body=clean_body,
+            from_email=profile_config["from_email"],
+            from_name=profile_config["from_name"],
+            reply_to=profile_config["reply_to"],
         )
         
         # Mark as sent
@@ -1223,6 +1251,7 @@ def update_scheduled_email(
     subject: str = Form(None),
     body: str = Form(None),
     scheduled_at: str = Form(None),
+    profile: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Update a scheduled email (subject, body, or scheduled time)."""
@@ -1237,10 +1266,12 @@ def update_scheduled_email(
         )
     
     try:
+        target_profile_key = profile or extract_profile_marker(scheduled_email.body)[0]
+        
         if subject is not None:
             scheduled_email.subject = subject
         if body is not None:
-            scheduled_email.body = body
+            scheduled_email.body = embed_profile_marker(body, target_profile_key)
         if scheduled_at is not None:
             scheduled_datetime = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
             if scheduled_datetime.tzinfo is None:
@@ -1250,6 +1281,11 @@ def update_scheduled_email(
                 raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
             
             scheduled_email.scheduled_at = scheduled_datetime
+        
+        # If profile changed but body not updated, ensure marker reflects new profile
+        if profile is not None and body is None:
+            _, current_body = extract_profile_marker(scheduled_email.body)
+            scheduled_email.body = embed_profile_marker(current_body, target_profile_key)
         
         db.commit()
         return JSONResponse(content={"status": "success", "message": "Scheduled email updated"})

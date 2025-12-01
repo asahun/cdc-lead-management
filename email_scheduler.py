@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from db import SessionLocal
 from models import ScheduledEmail, ScheduledEmailStatus, LeadAttempt, ContactChannel
-from email_service import send_email
+from email_service import send_email, resolve_profile, extract_profile_marker
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +33,18 @@ def _process_scheduled_emails():
         
         for scheduled_email in due_emails:
             try:
+                # Extract profile info and clean body
+                profile_key, clean_body = extract_profile_marker(scheduled_email.body)
+                profile_config = resolve_profile(profile_key)
+                
                 # Send the email
                 send_email(
                     to_email=scheduled_email.to_email,
                     subject=scheduled_email.subject,
-                    html_body=scheduled_email.body,
+                    html_body=clean_body,
+                    from_email=profile_config["from_email"],
+                    from_name=profile_config["from_name"],
+                    reply_to=profile_config["reply_to"],
                 )
                 
                 # Mark as sent

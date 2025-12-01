@@ -4,6 +4,7 @@
 <head>
   <title>Leads App</title>
   <link rel="stylesheet" href="/static/css/styles.css?v=20241128">
+  <script src="/static/js/profile_selector.js?v=20241128" defer></script>
 </head>
 <body>
   <header class="app-header">
@@ -18,10 +19,17 @@
         href="/leads"
       >Leads</a>
   </nav>
+    <div class="profile-switcher">
+      <label for="profile-select">Profile</label>
+      <select id="profile-select">
+        <option value="abby">Abby</option>
+        <option value="fisseha">Fisseha</option>
+      </select>
+    </div>
   </header>
 
   {% block content %}{% endblock %}
 
-  <script src="/static/js/local_time.js?v=20241128"></script>
+  <script src="/static/js/local_time.js?v=20241128" defer></script>
 </body>
 </html>

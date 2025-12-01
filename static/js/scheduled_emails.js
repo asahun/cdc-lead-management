@@ -17,9 +17,15 @@
           return;
         }
 
+        const PROFILE_LABELS = {
+          fisseha: 'Fisseha',
+          abby: 'Abby',
+        };
+
         const html = emails.map(email => {
           const scheduledDate = new Date(email.scheduled_at);
           const formattedDate = scheduledDate.toLocaleString();
+          const profileLabel = PROFILE_LABELS[email.profile] || (email.profile ? email.profile : 'Fisseha');
           
           let statusClass = 'status-pending';
           let statusText = email.status;
@@ -67,6 +73,7 @@
               <div class="scheduled-email-details">
                 <div><strong>To:</strong> ${contactInfo} <span class="text-muted">(${email.to_email})</span></div>
                 <div><strong>Scheduled for:</strong> ${formattedDate}</div>
+                <div><strong>Profile:</strong> ${profileLabel}</div>
                 ${email.sent_at ? `<div><strong>Sent at:</strong> ${new Date(email.sent_at).toLocaleString()}</div>` : ''}
                 ${email.error_message ? `<div class="error-message"><strong>Error:</strong> ${email.error_message}</div>` : ''}
               </div>

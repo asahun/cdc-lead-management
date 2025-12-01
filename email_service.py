@@ -27,7 +27,29 @@ SMTP_REPLY_TO = os.getenv("SMTP_REPLY_TO", "fisseha@loadrouter.com")
 
 # Template directory
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "email"
-SIGNATURE_TEMPLATE = "fisseha_signature.html"
+
+# Profile configuration
+PROFILE_REGISTRY = {
+    "fisseha": {
+        "label": "Fisseha",
+        "from_email": os.getenv("EMAIL_PROFILE_FISSEHA_FROM", "fisseha@loadrouter.com"),
+        "from_name": os.getenv("EMAIL_PROFILE_FISSEHA_NAME", "Fisseha Gebresilasie"),
+        "reply_to": os.getenv("EMAIL_PROFILE_FISSEHA_REPLY_TO", "fisseha@loadrouter.com"),
+        "signature_template": "fisseha_signature.html",
+    },
+    "abby": {
+        "label": "Abby",
+        "from_email": os.getenv("EMAIL_PROFILE_ABBY_FROM", "abby@loadrouter.com"),
+        "from_name": os.getenv("EMAIL_PROFILE_ABBY_NAME", "Abby Tezera"),
+        "reply_to": os.getenv("EMAIL_PROFILE_ABBY_REPLY_TO", "abby@loadrouter.com"),
+        "signature_template": "abby_signature.html",
+    },
+}
+
+DEFAULT_PROFILE_KEY = os.getenv("EMAIL_PROFILE_DEFAULT", "abby").lower()
+
+PROFILE_MARKER_PREFIX = "<!--PROFILE:"
+PROFILE_MARKER_SUFFIX = "-->"
 
 # Template mapping based on lead status
 TEMPLATE_MAP = {
@@ -118,9 +140,45 @@ def _render_template(template_name: str, context: Dict[str, Any]) -> str:
     return content
 
 
-def _render_signature() -> str:
+def resolve_profile(profile_key: Optional[str]) -> Dict[str, str]:
+    """Return profile configuration (with key) for the requested sender."""
+    key = (profile_key or DEFAULT_PROFILE_KEY).lower()
+    profile = PROFILE_REGISTRY.get(key, PROFILE_REGISTRY[DEFAULT_PROFILE_KEY])
+    return {**profile, "key": key}
+
+
+def embed_profile_marker(body: str, profile_key: str) -> str:
+    """Embed profile marker at the beginning of the body for scheduled emails."""
+    if not body:
+        return f"{PROFILE_MARKER_PREFIX}{profile_key}{PROFILE_MARKER_SUFFIX}"
+    
+    clean_body = body
+    if clean_body.startswith(PROFILE_MARKER_PREFIX):
+        _, clean_body = extract_profile_marker(clean_body)
+    
+    return f"{PROFILE_MARKER_PREFIX}{profile_key}{PROFILE_MARKER_SUFFIX}{clean_body}"
+
+
+def extract_profile_marker(body: str | None) -> tuple[str, str]:
+    """Extract profile marker from stored email body."""
+    if not body:
+        return DEFAULT_PROFILE_KEY, ""
+    
+    if body.startswith(PROFILE_MARKER_PREFIX):
+        marker_end = body.find(PROFILE_MARKER_SUFFIX)
+        if marker_end != -1:
+            profile_key = body[len(PROFILE_MARKER_PREFIX):marker_end].strip().lower()
+            clean_body = body[marker_end + len(PROFILE_MARKER_SUFFIX):]
+            if profile_key not in PROFILE_REGISTRY:
+                profile_key = DEFAULT_PROFILE_KEY
+            return profile_key, clean_body
+    
+    return DEFAULT_PROFILE_KEY, body
+
+
+def _render_signature(signature_template: str) -> str:
     """Render email signature template."""
-    template_path = TEMPLATE_DIR / SIGNATURE_TEMPLATE
+    template_path = TEMPLATE_DIR / signature_template
     if not template_path.exists():
         return ""
     
@@ -128,7 +186,12 @@ def _render_signature() -> str:
         return f.read()
 
 
-def build_email_body(lead: BusinessLead, contact: LeadContact, property_details: Optional[PropertyView]) -> str:
+def build_email_body(
+    lead: BusinessLead,
+    contact: LeadContact,
+    property_details: Optional[PropertyView],
+    profile_key: Optional[str] = None,
+) -> str:
     """
     Build complete email body by rendering template and appending signature.
     Returns empty string if no matching template found.
@@ -137,9 +200,10 @@ def build_email_body(lead: BusinessLead, contact: LeadContact, property_details:
     if not template_name:
         return ""
     
+    profile = resolve_profile(profile_key)
     context = _build_template_context(lead, contact, property_details)
     body_content = _render_template(template_name, context)
-    signature = _render_signature()
+    signature = _render_signature(profile["signature_template"])
     
     return f"{body_content}\n{signature}"
 
@@ -227,6 +291,7 @@ def prep_contact_email(
     db: Session,
     lead_id: int,
     contact_id: int,
+    profile_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Prepare email content for a contact.
@@ -262,12 +327,14 @@ def prep_contact_email(
         )
     
     subject = build_email_subject(lead)
-    body = build_email_body(lead, contact, property_details)
+    body = build_email_body(lead, contact, property_details, profile_key=profile_key)
+    profile = resolve_profile(profile_key)
     
     return {
         "to_email": contact.email,
         "to_name": contact.contact_name,
         "subject": subject,
         "body": body,
+        "profile": profile["key"],
     }
 
