@@ -42,6 +42,7 @@
     const scheduleGroup = document.getElementById('schedule-group');
     if (scheduleGroup) {
       scheduleGroup.style.display = 'none';
+      setScheduleRequired(false);
     }
     if (scheduleBtn) {
       toggleScheduleMode(false);
@@ -243,6 +244,22 @@
   const scheduleGroup = document.getElementById('schedule-group');
   const scheduledDateInput = document.getElementById('email-scheduled-date');
   const scheduledTimeInput = document.getElementById('email-scheduled-time');
+
+  function setScheduleRequired(isRequired) {
+    if (!scheduledDateInput || !scheduledTimeInput) {
+      return;
+    }
+    if (isRequired) {
+      scheduledDateInput.setAttribute('required', 'required');
+      scheduledTimeInput.setAttribute('required', 'required');
+    } else {
+      scheduledDateInput.removeAttribute('required');
+      scheduledTimeInput.removeAttribute('required');
+    }
+  }
+
+  // hidden by default, so ensure not required initially
+  setScheduleRequired(false);
   
   // Combine date and time into datetime string
   function combineDateTime(dateStr, timeStr) {
@@ -309,6 +326,7 @@
       // Show schedule input
       scheduleGroup.style.display = 'block';
       toggleScheduleMode(true);
+      setScheduleRequired(true);
       
       // Set default to next business day at 9 AM
       const now = new Date();
@@ -429,6 +447,7 @@
         toggleScheduleMode(false);
         scheduledDateInput.value = '';
         scheduledTimeInput.value = '';
+        setScheduleRequired(false);
         window.emailComposeModule.clearContext();
 
         // Reload page to show scheduled email
