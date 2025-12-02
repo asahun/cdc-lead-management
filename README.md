@@ -73,8 +73,8 @@ $env:GPT_ENTITY_TIMEOUT_SECONDS="45"
 - Add them under "User variables" or "System variables"
 
 **DB setup
-- DB name:ucp, u:ucp_app, p:EJe5&fWgxt6gow
-- psql -U postgres -c "CREATE ROLE \"ucp_app\" WITH LOGIN PASSWORD 'EJe5&fWgxt6gow';"
+- DB name:ucp, u:ucp_app, p:DBPASSWORD
+- psql -U postgres -c "CREATE ROLE \"ucp_app\" WITH LOGIN PASSWORD 'DBPASSWORD';"
 - psql -U postgres -c "CREATE DATABASE \"ucp\" OWNER \"ucp_app\";"
 - pg_restore -U ucp_app -d ucp /tmp/db.dump
 
