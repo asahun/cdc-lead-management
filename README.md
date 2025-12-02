@@ -104,3 +104,5 @@ The app will be available at `http://localhost:8000`
 - PDF letter generation for contacts
 - Responsive UI with localStorage state persistence
 
+
+
