@@ -14,6 +14,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from models import BusinessLead, LeadContact, PropertyView, BusinessOwnerStatus, OwnerType
+from utils.name_utils import format_first_name
 
 
 # SMTP Configuration (IONIO)
@@ -87,10 +88,8 @@ def _get_template_name(lead: BusinessLead) -> Optional[str]:
 
 
 def _extract_first_name(contact_name: str) -> str:
-    """Extract first name from contact name (first word)."""
-    if not contact_name:
-        return ""
-    return contact_name.split()[0] if contact_name.split() else ""
+    """Extract normalized first name from a contact."""
+    return format_first_name(contact_name)
 
 
 def _format_amount(amount: Optional[Decimal]) -> str:

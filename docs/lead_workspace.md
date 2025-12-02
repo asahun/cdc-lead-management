@@ -67,6 +67,7 @@ to the combined workspace, so old bookmarks continue to work.
   scheduler can send with the right identity).
 - Each lead header now includes a subtle delete icon that opens a confirmation modal before permanently deleting the lead (and clearing the property assignment flag).
 - A “Phone Scripts” card at the bottom of the lead view surfaces registered-agent, decision-maker, and gatekeeper scripts with placeholders automatically populated from the current profile and lead/property data (plus a copy-to-clipboard action).
+- Contact names are normalized before rendering outbound communications: email greetings always use a capitalized first name, while letters print a properly cased full name in the address block and a first-name salutation even when the CRM data arrives in all caps.
 
 ## Follow-up Ideas
 

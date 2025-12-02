@@ -15,6 +15,7 @@ from models import (
     OwnerType,
     PropertyView,
 )
+from utils.name_utils import normalize_name, split_name, format_first_name
 
 
 class LetterGenerationError(Exception):
@@ -90,14 +91,15 @@ def render_letter_pdf(
         raise LetterGenerationError(f"Unable to load template '{template_path}': {exc}") from exc
 
     contact_name = (contact.contact_name or "").strip()
-    name_parts = contact_name.split(None, 1)
-    raw_first_name = name_parts[0] if name_parts else ""
-    raw_last_name = name_parts[1] if len(name_parts) > 1 else ""
+    formatted_contact_name = normalize_name(contact_name)
+    raw_first_name, raw_last_name = split_name(contact_name)
 
     street, city_state_zip = _build_address_lines(contact)
 
     new_owner_name = (lead.new_business_name or "").strip()
     original_owner_name = (lead.owner_name or "").strip()
+    formatted_owner_name = normalize_name(original_owner_name)
+    owner_first_name = format_first_name(original_owner_name)
 
     if lead.owner_type == OwnerType.business:
         company_for_body = original_owner_name
@@ -117,15 +119,18 @@ def render_letter_pdf(
     total_properties = 1
     fee_percent = "12"
 
+    recipient_display_name = formatted_contact_name or formatted_owner_name or (lead.owner_name or "").strip()
+    salutation_name = raw_first_name or owner_first_name or "Sir or Madam"
+
     context = {
         "today": date.today().strftime("%B %d, %Y"),
-        "recipient_name": (contact_name or lead.owner_name or "").upper(),
+        "recipient_name": recipient_display_name,
         "title": (contact.title or "").upper() or None,
         "company_name": company_for_body.upper() if company_for_body else None,
         "street_address": street,
         "city_state_zip": city_state_zip,
-        "subject_name": original_owner_name or contact_name or "you",
-        "salutation": contact_name or lead.owner_name or "Sir or Madam",
+        "subject_name": formatted_owner_name or formatted_contact_name or "you",
+        "salutation": salutation_name,
         "raw_first_name": raw_first_name,
         "raw_last_name": raw_last_name,
         "raw_company_name": company_for_body,
