@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 from io import BytesIO
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from pathlib import Path
+import json
+import re
 
 from fastapi import FastAPI, Depends, Request, Form, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -10,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, cast, String, update
+from markupsafe import Markup, escape
 
 from db import Base, SessionLocal, engine
 from models import (
@@ -41,6 +45,7 @@ from email_service import (
     resolve_profile,
     embed_profile_marker,
     extract_profile_marker,
+    PROFILE_REGISTRY,
 )
 from email_scheduler import start_scheduler, stop_scheduler
 
@@ -109,24 +114,172 @@ PROPERTY_ORDERING = (
     PropertyView.raw_hash.asc(),
 )
 
+PHONE_SCRIPTS_DIR = Path("templates") / "phone"
+PHONE_SCRIPT_SOURCES = [
+    ("registered_agent", "Registered Agent", PHONE_SCRIPTS_DIR / "registered_agent.html"),
+    ("decision_maker", "Decision Maker", PHONE_SCRIPTS_DIR / "decision_maker.html"),
+    ("gatekeeper_contact", "Gatekeeper Contact Discovery", PHONE_SCRIPTS_DIR / "gatekeeper_contact_discovery_call.html"),
+]
+
+STYLE_TAG_RE = re.compile(r"<style.*?>.*?</style>", re.S | re.I)
+SCRIPT_TAG_RE = re.compile(r"<script.*?>.*?</script>", re.S | re.I)
+TAG_RE = re.compile(r"<[^>]+>")
+WHITESPACE_RE = re.compile(r"\n\s*\n+", re.S)
+HTML_SNIPPET_RE = re.compile(
+    r"<\s*(?:!doctype|html|head|body|section|div|article|main|header|footer|p|h[1-6]|ul|ol|li|table|tr|td)\b",
+    re.I,
+)
+
+
+def _plain_text_to_html(text: str) -> str:
+    paragraphs = [para.strip() for para in text.split("\n\n") if para.strip()]
+    if not paragraphs:
+        return str(Markup("<p>No script available.</p>"))
+    
+    html_parts = []
+    for para in paragraphs:
+        lines = [line.strip() for line in para.splitlines()]
+        escaped_lines = [escape(line) for line in lines if line]
+        if escaped_lines:
+            html_parts.append(f"<p>{'<br>'.join(escaped_lines)}</p>")
+    
+    if not html_parts:
+        html_parts.append("<p>No script available.</p>")
+    
+    return str(Markup("".join(html_parts)))
+
+
+def _looks_like_html(text: str) -> bool:
+    snippet = text.strip()
+    if not snippet:
+        return False
+
+    lower = snippet.lower()
+    if lower.startswith("<!doctype") or lower.startswith("<html") or "<body" in lower:
+        return True
+
+    return bool(HTML_SNIPPET_RE.search(lower))
+
+
+def _extract_body_fragment(text: str) -> str:
+    lower = text.lower()
+    body_start = lower.find("<body")
+    if body_start != -1:
+        start_tag_end = text.find(">", body_start)
+        body_end = lower.rfind("</body>")
+        if start_tag_end != -1 and body_end != -1:
+            return text[start_tag_end + 1 : body_end]
+    return text
+
+
+def _strip_tags_to_text(html_text: str) -> str:
+    stripped = TAG_RE.sub("\n", html_text)
+    stripped = WHITESPACE_RE.sub("\n\n", stripped)
+    return stripped.strip()
+
+
+def _prepare_script_content(raw_text: str) -> tuple[str, str]:
+    if not raw_text:
+        return str(Markup("<p>No script available.</p>")), ""
+    
+    if _looks_like_html(raw_text):
+        content = STYLE_TAG_RE.sub("", raw_text)
+        content = SCRIPT_TAG_RE.sub("", content)
+        content = _extract_body_fragment(content).strip()
+        if not content:
+            return str(Markup("<p>No script available.</p>")), ""
+        plain = _strip_tags_to_text(content)
+        return str(Markup(content)), plain
+    
+    plain_text = raw_text.strip()
+    html_value = _plain_text_to_html(plain_text)
+    return html_value, plain_text
+
+
+def _load_phone_scripts():
+    scripts = []
+    for key, label, path in PHONE_SCRIPT_SOURCES:
+        try:
+            raw_text = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            raw_text = ""
+        else:
+            raw_text = raw_text.replace("\r\n", "\n")
+        html_value, plain_value = _prepare_script_content(raw_text)
+        scripts.append(
+            {
+                "key": key,
+                "label": label,
+                "text": plain_value,
+                "html": html_value,
+            }
+        )
+    return scripts
+
+
+PHONE_SCRIPTS = _load_phone_scripts()
+PHONE_SCRIPTS_JSON = json.dumps(PHONE_SCRIPTS)
+
+PROFILE_UI_DATA = {
+    key: {
+        "key": key,
+        "label": profile.get("label") or key.title(),
+        "firstName": profile.get("first_name") or profile.get("label") or key.title(),
+        "lastName": profile.get("last_name") or "",
+        "fullName": profile.get("full_name") or profile.get("label") or key.title(),
+        "email": profile.get("from_email") or "",
+        "phone": profile.get("phone") or "",
+    }
+    for key, profile in PROFILE_REGISTRY.items()
+}
+PROFILE_UI_JSON = json.dumps(PROFILE_UI_DATA)
+templates.env.globals["profile_registry_json"] = PROFILE_UI_JSON
+
 
 def _mark_property_assigned(db: Session, property_raw_hash: str | None, property_id: str | None):
+    _set_property_assignment(db, property_raw_hash, property_id, True)
+
+
+def _set_property_assignment(
+    db: Session, property_raw_hash: str | None, property_id: str | None, assigned: bool = True
+):
     update_stmt = None
     if property_raw_hash:
         update_stmt = (
             update(PropertyView)
             .where(PropertyView.raw_hash == property_raw_hash)
-            .values(assigned_to_lead=True)
+            .values(assigned_to_lead=assigned)
         )
     elif property_id:
         update_stmt = (
             update(PropertyView)
             .where(PropertyView.propertyid == property_id)
-            .values(assigned_to_lead=True)
+            .values(assigned_to_lead=assigned)
         )
 
     if update_stmt is not None:
         db.execute(update_stmt)
+
+
+def _unmark_property_if_unused(db: Session, property_raw_hash: str | None, property_id: str | None):
+    if property_raw_hash:
+        still_used = db.scalar(
+            select(BusinessLead.id)
+            .where(BusinessLead.property_raw_hash == property_raw_hash)
+            .limit(1)
+        )
+        if not still_used:
+            _set_property_assignment(db, property_raw_hash, None, False)
+            return
+
+    if property_id:
+        still_used = db.scalar(
+            select(BusinessLead.id)
+            .where(BusinessLead.property_id == property_id)
+            .limit(1)
+        )
+        if not still_used:
+            _set_property_assignment(db, None, property_id, False)
 
 
 def _sync_existing_property_assignments():
@@ -211,6 +364,41 @@ def _ranked_navigation_row(db: Session, raw_hash: str):
             ranked.c.next_hash,
         ).where(ranked.c.raw_hash == raw_hash)
     ).one_or_none()
+
+
+def _get_property_details_for_lead(db: Session, lead: BusinessLead) -> PropertyView | None:
+    if lead.property_raw_hash:
+        prop = _get_property_by_raw_hash(db, lead.property_raw_hash)
+        if prop:
+            return prop
+    if lead.property_id:
+        return _get_property_by_id(db, lead.property_id)
+    return None
+
+
+def _build_phone_script_context(
+    owner_name: str | None,
+    property_id: str | None,
+    property_amount,
+    property_details: PropertyView | None,
+):
+    amount_value = None
+    if property_details and property_details.propertyamount not in (None, ""):
+        amount_value = property_details.propertyamount
+    elif property_amount not in (None, ""):
+        amount_value = property_amount
+
+    formatted_amount = format_currency(amount_value) if amount_value not in (None, "") else ""
+
+    return {
+        "OwnerName": owner_name or "",
+        "PropertyID": property_id or "",
+        "PropertyAmount": formatted_amount,
+        "PropertyAmountValue": str(amount_value) if amount_value not in (None, "") else "",
+        "HolderName": (property_details.holdername if property_details else "") or "",
+        "ReportYear": (property_details.reportyear if property_details else "") or "",
+        "PropertyType": (property_details.propertytypedescription if property_details else "") or "",
+    }
 
 
 def _property_navigation_info(db: Session, raw_hash: str):
@@ -404,6 +592,13 @@ def new_lead_from_property(
         )
 
     # 3) Pass the 3 fields to the template
+    phone_script_context = _build_phone_script_context(
+        prop.ownername if prop else None,
+        prop.propertyid if prop else None,
+        prop.propertyamount if prop else None,
+        prop,
+    )
+
     return templates.TemplateResponse(
         "lead_form.html",
         {
@@ -431,6 +626,9 @@ def new_lead_from_property(
             "contact_edit_target": None,
             "property_raw_hash": getattr(prop, "raw_hash", None),
             "can_generate_letters": False,
+            "phone_scripts": PHONE_SCRIPTS,
+            "phone_scripts_json": PHONE_SCRIPTS_JSON,
+            "phone_script_context_json": json.dumps(phone_script_context, default=str),
         },
     )
 
@@ -713,6 +911,14 @@ def edit_lead(
         reverse=True,
     )
 
+    property_details = _get_property_details_for_lead(db, lead)
+    phone_script_context = _build_phone_script_context(
+        lead.owner_name,
+        lead.property_id,
+        lead.property_amount,
+        property_details,
+    )
+
     contact_edit_target = None
     if edit_contact_id:
         contact_edit_target = next(
@@ -747,6 +953,9 @@ def edit_lead(
             "individual_owner_status": lead.individual_owner_status,
             "property_raw_hash": lead.property_raw_hash,
             "can_generate_letters": bool(lead.property_raw_hash or lead.property_id),
+            "phone_scripts": PHONE_SCRIPTS,
+            "phone_scripts_json": PHONE_SCRIPTS_JSON,
+            "phone_script_context_json": json.dumps(phone_script_context, default=str),
         },
     )
 
@@ -812,6 +1021,26 @@ def update_lead(
     _mark_property_assigned(db, property_raw_hash, property_id)
     db.commit()
     return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
+
+@app.post("/leads/{lead_id}/delete")
+def delete_lead(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    property_raw_hash = lead.property_raw_hash
+    property_id = lead.property_id
+    
+    db.delete(lead)
+    db.flush()
+    _unmark_property_if_unused(db, property_raw_hash, property_id)
+    db.commit()
+    
+    return RedirectResponse(url="/leads", status_code=303)
+
 
 # ---------- CONTACTS FOR A LEAD ----------
 

@@ -2,30 +2,82 @@
   'use strict';
 
   const STORAGE_KEY = 'lead_app.profile';
-  const PROFILES = {
-    fisseha: { key: 'fisseha', label: 'Fisseha', email: 'fisseha@loadrouter.com' },
-    abby: { key: 'abby', label: 'Abby', email: 'abby@loadrouter.com' },
+
+  const DEFAULT_PROFILES = {
+    abby: {
+      key: 'abby',
+      label: 'Abby',
+      firstName: 'Abby',
+      lastName: 'Tezera',
+      fullName: 'Abby Tezera',
+      email: 'abby@loadrouter.com',
+      phone: '(404) 000-0000',
+    },
+    fisseha: {
+      key: 'fisseha',
+      label: 'Fisseha',
+      firstName: 'Fisseha',
+      lastName: 'Gebresilasie',
+      fullName: 'Fisseha Gebresilasie',
+      email: 'fisseha@loadrouter.com',
+      phone: '(404) 000-0000',
+    },
   };
 
-  let currentKey = 'abby';
+  function normalizeProfiles(registry) {
+    const normalized = {};
+    Object.entries(registry || {}).forEach(([key, value]) => {
+      if (!value) return;
+      normalized[key] = {
+        key,
+        label: value.label || value.firstName || key,
+        firstName: value.firstName || value.label || key,
+        lastName: value.lastName || '',
+        fullName: value.fullName || value.label || key,
+        email: value.email || '',
+        phone: value.phone || '',
+      };
+    });
+    return normalized;
+  }
+
+  const registrySource =
+    (typeof window.profileRegistry === 'object' && window.profileRegistry)
+      ? window.profileRegistry
+      : DEFAULT_PROFILES;
+
+  const PROFILES = normalizeProfiles(registrySource);
+  const profileKeys = Object.keys(PROFILES);
+  const defaultKey = profileKeys.includes('abby')
+    ? 'abby'
+    : profileKeys[0] || 'fisseha';
+  let currentKey = defaultKey;
 
   function getConfig(key) {
-    return PROFILES[key] || PROFILES.fisseha;
+    return PROFILES[key] || PROFILES[defaultKey] || Object.values(PROFILES)[0];
   }
 
   function getCurrentProfile() {
     const config = getConfig(currentKey);
-    return { key: config.key, label: config.label, email: config.email };
+    return {
+      key: config.key,
+      label: config.label,
+      firstName: config.firstName,
+      lastName: config.lastName,
+      fullName: config.fullName,
+      email: config.email,
+      phone: config.phone,
+    };
   }
 
   function updateUI(profile) {
     document.querySelectorAll('[data-profile-label]').forEach((el) => {
-      el.textContent = profile.label;
+      el.textContent = profile.firstName || profile.label || '';
     });
 
     const authorInput = document.getElementById('comment-author-input');
     if (authorInput) {
-      authorInput.value = profile.label;
+      authorInput.value = profile.fullName || profile.label || '';
     }
   }
 
@@ -39,7 +91,7 @@
 
   function setProfile(key) {
     if (!PROFILES[key]) {
-      key = 'fisseha';
+      key = defaultKey;
     }
 
     currentKey = key;
@@ -50,12 +102,12 @@
       select.value = key;
     }
 
-    const profile = getConfig(key);
+    const profile = getCurrentProfile();
     updateUI(profile);
 
     document.dispatchEvent(
       new CustomEvent('profile:change', {
-        detail: getCurrentProfile(),
+        detail: profile,
       })
     );
   }

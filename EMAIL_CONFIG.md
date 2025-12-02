@@ -88,12 +88,18 @@ EMAIL_PROFILE_DEFAULT=fisseha
 # Fisseha profile overrides
 EMAIL_PROFILE_FISSEHA_FROM=fisseha@loadrouter.com
 EMAIL_PROFILE_FISSEHA_NAME="Fisseha Gebresilasie"
+EMAIL_PROFILE_FISSEHA_FIRST="Fisseha"
+EMAIL_PROFILE_FISSEHA_LAST="Gebresilasie"
 EMAIL_PROFILE_FISSEHA_REPLY_TO=fisseha@loadrouter.com
+EMAIL_PROFILE_FISSEHA_PHONE="(404) 000-0000"
 
 # Abby profile overrides
 EMAIL_PROFILE_ABBY_FROM=abby@loadrouter.com
 EMAIL_PROFILE_ABBY_NAME="Abby Tezera"
+EMAIL_PROFILE_ABBY_FIRST="Abby"
+EMAIL_PROFILE_ABBY_LAST="Tezera"
 EMAIL_PROFILE_ABBY_REPLY_TO=abby@loadrouter.com
+EMAIL_PROFILE_ABBY_PHONE="(404) 000-0000"
 ```
 
 If a profile-specific variable is not provided the app falls back to the global

@@ -65,6 +65,8 @@ to the combined workspace, so old bookmarks continue to work.
   email action so the correct signature and SMTP sender (e.g. `abby@loadrouter.com`)
   are applied automatically (scheduled emails embed the profile marker so the
   scheduler can send with the right identity).
+- Each lead header now includes a subtle delete icon that opens a confirmation modal before permanently deleting the lead (and clearing the property assignment flag).
+- A “Phone Scripts” card at the bottom of the lead view surfaces registered-agent, decision-maker, and gatekeeper scripts with placeholders automatically populated from the current profile and lead/property data (plus a copy-to-clipboard action).
 
 ## Follow-up Ideas
 

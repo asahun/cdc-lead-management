@@ -19,8 +19,8 @@
         <p class="page-subtitle">Status: <span class="status-pill">{{ lead.status.value }}</span></p>
 {% endif %}
     </div>
-    {% if current_property_hash or current_property_id %}
-      <div class="header-actions">
+    <div class="header-actions">
+{% if current_property_hash or current_property_id %}
         <button
           type="button"
           class="btn btn-secondary btn-inline"
@@ -30,8 +30,18 @@
           title="View full property details">
           View Property Detail
         </button>
-      </div>
-    {% endif %}
+{% endif %}
+{% if mode != "create" %}
+        <button
+          type="button"
+          class="icon-button danger"
+          id="delete-lead-button"
+          title="Delete lead">
+          <span aria-hidden="true">🗑</span>
+          <span class="sr-only">Delete lead</span>
+        </button>
+{% endif %}
+    </div>
   </div>
 
   <form class="card lead-overview" method="post" action="{% if mode == 'create' %}/leads/create{% else %}/leads/{{ lead.id }}/update{% endif %}">
@@ -470,6 +480,67 @@
         </div>
       </div>
     </section>
+
+    <section
+      id="phone-scripts"
+      class="lead-section card full-width phone-scripts-card"
+      data-phone-scripts="{{ phone_scripts_json | e }}"
+      data-phone-context="{{ phone_script_context_json | e }}">
+      <header class="phone-scripts-header">
+        <div>
+          <h2>Phone Scripts</h2>
+          <p class="section-subtitle">Keep talking points handy during live calls.</p>
+        </div>
+        <button
+          type="button"
+          class="btn btn-ghost phone-scripts-toggle"
+          id="phone-script-toggle"
+          aria-expanded="false">
+          Show Scripts
+        </button>
+      </header>
+
+      <div class="section-content">
+        <div class="phone-scripts-controls">
+          <label for="phone-script-select" class="sr-only">Select script</label>
+          <select id="phone-script-select" class="phone-script-select">
+            {% for script in phone_scripts %}
+              <option value="{{ script.key }}" {% if loop.first %}selected{% endif %}>
+                {{ script.label }}
+              </option>
+            {% endfor %}
+          </select>
+          <button type="button" class="btn btn-secondary btn-inline" id="copy-phone-script" data-current-key="{{ phone_scripts[0].key if phone_scripts else '' }}" {% if not phone_scripts %}disabled{% endif %}>
+            Copy Script
+          </button>
+        </div>
+        <div id="phone-script-display" class="phone-script-body">
+          {% if phone_scripts and phone_scripts[0].html %}
+            {{ phone_scripts[0].html | safe }}
+          {% else %}
+            <p class="empty-state">Scripts will appear here once configured.</p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <form id="delete-lead-form" method="post" action="/leads/{{ lead.id }}/delete"></form>
+
+    <div id="delete-lead-modal" class="modal confirm-modal" style="display: none;">
+      <div class="modal-content confirm-modal-content">
+        <div class="modal-header">
+          <h2>Delete Lead</h2>
+          <button type="button" class="modal-close" data-close-delete aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Deleting this lead will remove all associated contacts, attempts, comments, and scheduled emails. This action cannot be undone.</p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close-delete>Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirm-delete-lead">Delete Lead</button>
+        </div>
+      </div>
+    </div>
 {% endif %}
 </div>
 
@@ -484,6 +555,8 @@
 
 <script src="/static/js/property_detail.js?v=20241128"></script>
 <script src="/static/js/entity_intel.js?v=20241129"></script>
+<script src="/static/js/lead_actions.js?v=20241128" defer></script>
+<script src="/static/js/phone_scripts.js?v=20241128" defer></script>
 
 <script>
   (function () {

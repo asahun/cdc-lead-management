@@ -4,6 +4,9 @@
 <head>
   <title>Leads App</title>
   <link rel="stylesheet" href="/static/css/styles.css?v=20241128">
+  <script>
+    window.profileRegistry = {{ profile_registry_json | safe }};
+  </script>
   <script src="/static/js/profile_selector.js?v=20241128" defer></script>
 </head>
 <body>

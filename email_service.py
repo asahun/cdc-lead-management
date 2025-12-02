@@ -29,21 +29,35 @@ SMTP_REPLY_TO = os.getenv("SMTP_REPLY_TO", "fisseha@loadrouter.com")
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "email"
 
 # Profile configuration
-PROFILE_REGISTRY = {
+PROFILES_ENV_DEFAULTS = {
     "fisseha": {
         "label": "Fisseha",
+        "first_name": os.getenv("EMAIL_PROFILE_FISSEHA_FIRST", "Fisseha"),
+        "last_name": os.getenv("EMAIL_PROFILE_FISSEHA_LAST", "Gebresilasie"),
+        "full_name": os.getenv("EMAIL_PROFILE_FISSEHA_NAME", "Fisseha Gebresilasie"),
         "from_email": os.getenv("EMAIL_PROFILE_FISSEHA_FROM", "fisseha@loadrouter.com"),
-        "from_name": os.getenv("EMAIL_PROFILE_FISSEHA_NAME", "Fisseha Gebresilasie"),
         "reply_to": os.getenv("EMAIL_PROFILE_FISSEHA_REPLY_TO", "fisseha@loadrouter.com"),
+        "phone": os.getenv("EMAIL_PROFILE_FISSEHA_PHONE", "(404) 000-0000"),
         "signature_template": "fisseha_signature.html",
     },
     "abby": {
         "label": "Abby",
+        "first_name": os.getenv("EMAIL_PROFILE_ABBY_FIRST", "Abby"),
+        "last_name": os.getenv("EMAIL_PROFILE_ABBY_LAST", "Tezera"),
+        "full_name": os.getenv("EMAIL_PROFILE_ABBY_NAME", "Abby Tezera"),
         "from_email": os.getenv("EMAIL_PROFILE_ABBY_FROM", "abby@loadrouter.com"),
-        "from_name": os.getenv("EMAIL_PROFILE_ABBY_NAME", "Abby Tezera"),
         "reply_to": os.getenv("EMAIL_PROFILE_ABBY_REPLY_TO", "abby@loadrouter.com"),
+        "phone": os.getenv("EMAIL_PROFILE_ABBY_PHONE", "(404) 000-0000"),
         "signature_template": "abby_signature.html",
     },
+}
+
+PROFILE_REGISTRY = {
+    key: {
+        **value,
+        "from_name": value["full_name"],
+    }
+    for key, value in PROFILES_ENV_DEFAULTS.items()
 }
 
 DEFAULT_PROFILE_KEY = os.getenv("EMAIL_PROFILE_DEFAULT", "abby").lower()
