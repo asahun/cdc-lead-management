@@ -25,3 +25,5 @@ print/_tmp_letter.html
 # Misc version marker files
 =*
 
+# Mac OS artifacts
+.DS_Store

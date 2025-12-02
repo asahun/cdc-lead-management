@@ -426,6 +426,62 @@ body {
     box-shadow: 0 16px 28px rgba(220, 38, 38, 0.35);
   }
 
+  .generate-letter-btn[disabled] {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .generate-letter-btn.loading {
+    position: relative;
+    padding-right: 40px;
+  }
+
+  .generate-letter-btn.loading::after {
+    content: "";
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    border-radius: 50%;
+    border: 2px solid rgba(67, 56, 202, 0.25);
+    border-top-color: #4338ca;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .generate-letter-btn.success {
+    background: #16a34a;
+    color: #fff;
+    box-shadow: 0 12px 24px rgba(16, 185, 129, 0.25);
+  }
+
+  .generate-letter-btn.success:hover {
+    background: #15803d;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .collapse-toggle {
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .collapsible-panel[data-collapsed="true"] {
+    display: none;
+  }
+
+  .collapsible-panel {
+    margin-bottom: 16px;
+  }
+
   .btn-ghost {
     background: transparent;
     color: #4338ca;
@@ -454,6 +510,12 @@ body {
 
   .lead-sections.two-column-layout {
     grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  }
+
+  .lead-sections.full-width-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
   }
 
   .lead-section {
@@ -747,8 +809,8 @@ body {
 
   .contact-card dl {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
     margin: 0;
   }
 
@@ -782,8 +844,13 @@ body {
     text-decoration: underline;
   }
 
-  .contact-card .address-block {
-    grid-column: 1 / -1;
+  .contact-card .contact-address-inline {
+    grid-column: span 2;
+  }
+
+  .contact-card .contact-address-inline dd {
+    color: #475569;
+    font-size: 13px;
   }
 
   .contact-card footer {
@@ -1637,6 +1704,116 @@ body {
     text-transform: uppercase;
     font-size: 12px;
     letter-spacing: 0.04em;
+  }
+
+  .print-log-card .section-content {
+    margin-top: 16px;
+  }
+
+  .print-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .print-log-item {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #fafafa, #ffffff);
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.05);
+  }
+
+  .print-log-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .print-log-contact p {
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0;
+    color: #0f172a;
+  }
+
+  .print-log-title {
+    font-weight: 500;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+  }
+
+  .print-log-address {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6b7280;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .print-log-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #4b5563;
+  }
+
+  .print-log-time {
+    font-weight: 600;
+    color: #4338ca;
+  }
+
+  .print-log-path {
+    display: block;
+    margin: 8px 0 0 0;
+    font-size: 12px;
+    color: #312e81;
+    background: #eef2ff;
+    padding: 4px 8px;
+    border-radius: 6px;
+    word-break: break-all;
+  }
+
+  .print-log-controls {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .print-log-mail-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  .print-log-mail-control input {
+    width: 18px;
+    height: 18px;
+    accent-color: #16a34a;
+  }
+
+  .print-log-mail-control.mailed {
+    color: #16a34a;
+  }
+
+  .print-log-delete {
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+  }
+
+  .print-log-delete:hover {
+    color: #dc2626;
   }
 
   .phone-scripts-card .section-content {

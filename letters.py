@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
+import os
 from pathlib import Path
 from typing import Optional, Tuple
+import tempfile
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -46,8 +48,15 @@ LOGO_PATH = (IMG_ASSETS_DIR / "favicon.ico").resolve()
 QR_PATH = (IMG_ASSETS_DIR / "qr.png").resolve()
 SIGNATURE_PATH = (IMG_ASSETS_DIR / "signature_fish.png").resolve()
 
-PRINT_DIR = BASE_DIR / "print"
-PRINT_DIR.mkdir(exist_ok=True)
+DOWNLOAD_ROOT = Path.home() / "Downloads"
+DEFAULT_DOWNLOAD_DIR = DOWNLOAD_ROOT / "CDR-Mails"
+
+
+def _resolve_download_dir() -> Path:
+    override = os.getenv("LETTER_DOWNLOAD_DIR")
+    target = Path(override).expanduser() if override else DEFAULT_DOWNLOAD_DIR
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 def _determine_template_key(lead: BusinessLead) -> str:
@@ -79,7 +88,7 @@ def render_letter_pdf(
     lead: BusinessLead,
     contact: LeadContact,
     property_details: Optional[PropertyView],
-) -> Tuple[bytes, str]:
+) -> Tuple[bytes, str, Path]:
     template_key = _determine_template_key(lead)
     template_path = TEMPLATE_MAP.get(template_key)
     if not template_path:
@@ -117,7 +126,7 @@ def render_letter_pdf(
     )
 
     total_properties = 1
-    fee_percent = "12"
+    fee_percent = "10"
 
     recipient_display_name = formatted_contact_name or formatted_owner_name or (lead.owner_name or "").strip()
     salutation_name = raw_first_name or owner_first_name or "Sir or Madam"
@@ -166,40 +175,42 @@ def render_letter_pdf(
     prefix = FILENAME_PREFIX.get(template_key, "")
     filename = f"{prefix}{slug_base}.pdf"
 
-    output_path = PRINT_DIR / filename
+    download_dir = _resolve_download_dir()
+    output_path = download_dir / filename
     output_path.write_bytes(pdf_bytes)
 
-    return pdf_bytes, filename
+    return pdf_bytes, filename, output_path
 
 
 def _render_pdf_from_html(html: str) -> bytes:
-    tmp_html_path = PRINT_DIR / "_tmp_letter.html"
-    tmp_html_path.write_text(html, encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="cdr_letter_") as tmp_dir:
+        tmp_html_path = Path(tmp_dir) / "letter.html"
+        tmp_html_path.write_text(html, encoding="utf-8")
 
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as exc:  # pragma: no cover
-        raise LetterGenerationError(
-            "Playwright is required to generate PDFs. Install it with 'pip install playwright' "
-            "and run 'playwright install chromium'."
-        ) from exc
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:  # pragma: no cover
+            raise LetterGenerationError(
+                "Playwright is required to generate PDFs. Install it with 'pip install playwright' "
+                "and run 'playwright install chromium'."
+            ) from exc
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
-        page.goto(tmp_html_path.as_uri(), wait_until="networkidle")
-        pdf_bytes = page.pdf(
-            print_background=True,
-            format="Letter",
-            prefer_css_page_size=False,
-            margin={
-                "top": "0.3in",
-                "right": "0.3in",
-                "bottom": "0.3in",
-                "left": "0.3in",
-            },
-        )
-        browser.close()
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(tmp_html_path.as_uri(), wait_until="networkidle")
+            pdf_bytes = page.pdf(
+                print_background=True,
+                format="Letter",
+                prefer_css_page_size=False,
+                margin={
+                    "top": "0.3in",
+                    "right": "0.3in",
+                    "bottom": "0.3in",
+                    "left": "0.3in",
+                },
+            )
+            browser.close()
     return pdf_bytes
 
 

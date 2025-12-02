@@ -31,6 +31,7 @@ from models import (
     ContactType,
     ScheduledEmail,
     ScheduledEmailStatus,
+    PrintLog,
 )
 
 from letters import (
@@ -60,6 +61,7 @@ Base.metadata.create_all(
         LeadAttempt.__table__,
         LeadComment.__table__,
         ScheduledEmail.__table__,
+        PrintLog.__table__,
     ],
 )
 
@@ -401,6 +403,48 @@ def _build_phone_script_context(
     }
 
 
+def _serialize_print_log(log: PrintLog) -> dict[str, Any]:
+    contact = log.contact
+    address_lines: list[str] = []
+    if contact:
+        if contact.address_street:
+            address_lines.append(contact.address_street.strip())
+        city = (contact.address_city or "").strip()
+        state = (contact.address_state or "").strip()
+        zipcode = (contact.address_zipcode or "").strip()
+        if city or state:
+            line = ", ".join(part for part in (city, state) if part)
+            if zipcode:
+                line = f"{line} {zipcode}".strip()
+            address_lines.append(line)
+        elif zipcode:
+            address_lines.append(zipcode)
+
+    return {
+        "id": log.id,
+        "leadId": log.lead_id,
+        "contactId": log.contact_id,
+        "contactName": contact.contact_name if contact else "",
+        "contactTitle": contact.title if contact else "",
+        "addressLines": [line for line in address_lines if line],
+        "filename": log.filename,
+        "filePath": log.file_path,
+        "printedAt": log.printed_at.isoformat() if log.printed_at else None,
+        "mailed": log.mailed,
+        "mailedAt": log.mailed_at.isoformat() if log.mailed_at else None,
+        "attemptId": log.attempt_id,
+    }
+
+
+def _get_print_logs_for_lead(db: Session, lead_id: int):
+    result = db.execute(
+        select(PrintLog)
+        .where(PrintLog.lead_id == lead_id)
+        .order_by(PrintLog.printed_at.desc())
+    )
+    return result.scalars().all()
+
+
 def _property_navigation_info(db: Session, raw_hash: str):
     nav_row = _ranked_navigation_row(db, raw_hash)
     if not nav_row:
@@ -629,6 +673,7 @@ def new_lead_from_property(
             "phone_scripts": PHONE_SCRIPTS,
             "phone_scripts_json": PHONE_SCRIPTS_JSON,
             "phone_script_context_json": json.dumps(phone_script_context, default=str),
+            "print_logs_json": json.dumps([], default=str),
         },
     )
 
@@ -926,6 +971,12 @@ def edit_lead(
             None,
         )
 
+    print_logs = _get_print_logs_for_lead(db, lead.id)
+    print_logs_json = json.dumps(
+        [_serialize_print_log(log) for log in print_logs],
+        default=str,
+    )
+
     return templates.TemplateResponse(
         "lead_form.html",
         {
@@ -956,6 +1007,7 @@ def edit_lead(
             "phone_scripts": PHONE_SCRIPTS,
             "phone_scripts_json": PHONE_SCRIPTS_JSON,
             "phone_script_context_json": json.dumps(phone_script_context, default=str),
+            "print_logs_json": print_logs_json,
         },
     )
 
@@ -1163,10 +1215,16 @@ def generate_contact_letter(
     if not contact or contact.lead_id != lead_id:
         raise HTTPException(status_code=404, detail="Contact not found")
 
-    if not any([contact.address_street, contact.address_city, contact.address_state, contact.address_zipcode]):
+    address_fields = [
+        contact.address_street,
+        contact.address_city,
+        contact.address_state,
+        contact.address_zipcode,
+    ]
+    if not all(address_fields):
         raise HTTPException(
             status_code=400,
-            detail="Contact must have an address before generating a letter.",
+            detail="Contact must have street, city, state, and ZIP before generating a letter.",
         )
 
     property_details = get_property_for_lead(db, lead)
@@ -1180,14 +1238,100 @@ def generate_contact_letter(
         )
 
     try:
-        pdf_bytes, filename = render_letter_pdf(templates.env, lead, contact, property_details)
+        pdf_bytes, filename, saved_path = render_letter_pdf(
+            templates.env, lead, contact, property_details
+        )
     except LetterGenerationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"'
+    print_log = PrintLog(
+        lead_id=lead.id,
+        contact_id=contact.id,
+        filename=filename,
+        file_path=str(saved_path),
+    )
+    db.add(print_log)
+    db.commit()
+
+    return {
+        "status": "ok",
+        "filename": filename,
+        "file_path": str(saved_path),
     }
-    return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
+
+
+@app.get("/leads/{lead_id}/print-logs")
+def list_print_logs(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    logs = _get_print_logs_for_lead(db, lead_id)
+    return {"logs": [_serialize_print_log(log) for log in logs]}
+
+
+@app.post("/leads/{lead_id}/print-logs/{log_id}/mark-mailed")
+def mark_print_log_as_mailed(
+    lead_id: int,
+    log_id: int,
+    db: Session = Depends(get_db),
+):
+    log = db.get(PrintLog, log_id)
+    if not log or log.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Print log not found")
+
+    if log.mailed:
+        return _serialize_print_log(log)
+
+    last_attempt = db.execute(
+        select(LeadAttempt)
+        .where(LeadAttempt.lead_id == lead_id)
+        .order_by(LeadAttempt.attempt_number.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+
+    attempt = LeadAttempt(
+        lead_id=lead_id,
+        contact_id=log.contact_id,
+        channel=ContactChannel.mail,
+        attempt_number=next_attempt_number,
+        outcome="Letter mailed",
+        notes=f"Letter mailed ({log.filename})",
+    )
+    db.add(attempt)
+    db.flush()
+
+    log.mailed = True
+    log.mailed_at = datetime.utcnow()
+    log.attempt_id = attempt.id
+    db.commit()
+    db.refresh(log)
+
+    return _serialize_print_log(log)
+
+
+@app.delete("/leads/{lead_id}/print-logs/{log_id}")
+def delete_print_log(
+    lead_id: int,
+    log_id: int,
+    db: Session = Depends(get_db),
+):
+    log = db.get(PrintLog, log_id)
+    if not log or log.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Print log not found")
+
+    if log.attempt_id:
+        attempt = db.get(LeadAttempt, log.attempt_id)
+        if attempt:
+            db.delete(attempt)
+
+    db.delete(log)
+    db.commit()
+    return {"status": "deleted"}
 
 
 @app.get("/leads/{lead_id}/contacts/{contact_id}/prep-email")

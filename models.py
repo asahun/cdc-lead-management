@@ -108,6 +108,7 @@ class BusinessLead(Base):
     contacts = relationship("LeadContact", back_populates="lead", cascade="all, delete-orphan")
     attempts = relationship("LeadAttempt", back_populates="lead", cascade="all, delete-orphan")
     comments = relationship("LeadComment", back_populates="lead", cascade="all, delete-orphan")
+    print_logs = relationship("PrintLog", back_populates="lead", cascade="all, delete-orphan")
 
 
 class LeadContact(Base):
@@ -193,3 +194,21 @@ class ScheduledEmail(Base):
     
     lead = relationship("BusinessLead")
     contact = relationship("LeadContact", foreign_keys=[contact_id])
+
+
+class PrintLog(Base):
+    __tablename__ = "print_log"
+
+    id = Column(BigInteger, primary_key=True)
+    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
+    filename = Column(Text, nullable=False)
+    file_path = Column(Text, nullable=False)
+    printed_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    mailed = Column(Boolean, nullable=False, default=False)
+    mailed_at = Column(DateTime(timezone=True), nullable=True)
+    attempt_id = Column(BigInteger, ForeignKey("lead_attempt.id", ondelete="SET NULL"), nullable=True)
+
+    lead = relationship("BusinessLead", back_populates="print_logs")
+    contact = relationship("LeadContact", foreign_keys=[contact_id])
+    attempt = relationship("LeadAttempt", foreign_keys=[attempt_id])

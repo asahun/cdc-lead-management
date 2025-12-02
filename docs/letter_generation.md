@@ -22,8 +22,10 @@ you can generate solicitation letters directly from a contact card.
   | `business`      | `acquired_or_merged` / `active_renamed` | `acquired_merged.html` |
   | `business`      | `dissolved`                         | `dissolved_no_owner.html` |
 
-- PDF output is streamed back to the browser (download) and also persisted in
-  `lead_app/print/<prefix>_<slug>.pdf` so the print station can pick it up.
+- The backend now writes the PDF to `~/Downloads/CDR-Mails/<prefix>_<slug>.pdf`
+  (or to the path specified via `LETTER_DOWNLOAD_DIR`). The API responds with a
+  JSON payload so the UI can show the saved location and refresh the Print Log
+  list—no duplicate browser download prompt.
 
 ## Dependencies
 
@@ -41,8 +43,8 @@ you can generate solicitation letters directly from a contact card.
 ## Data Requirements
 
 - Leads should be created from a property record so `property_raw_hash` is set.
-- Contacts must include, at minimum, the street, city, and state to generate a
-  deliverable address block.
+- Contacts must include street, city, state, **and ZIP** before the Generate
+  Letter action is enabled.
 - For business owners marked as `acquired_or_merged` or `active_renamed`, the
   "New Owner" field on the lead is required; it is automatically surfaced in the
   letter body and subject.

@@ -204,98 +204,116 @@
       </div>
     </section>
 
-    <div class="lead-sections two-column-layout">
+    <div class="lead-sections full-width-stack">
+      {% set existing_contacts = contacts | default([]) %}
       <section id="contacts" class="lead-section card">
         <header>
-          <h2>Contacts</h2>
-          <p class="section-subtitle">Capture everyone tied to this opportunity.</p>
+          <div>
+            <h2>Contacts</h2>
+            <p class="section-subtitle">Capture everyone tied to this opportunity.</p>
+          </div>
+          {% set editing_contact = contact_edit_target %}
+          {% set contact_form_open = editing_contact is not none %}
+          <button
+            type="button"
+            class="btn btn-ghost collapse-toggle"
+            data-collapse-toggle
+            data-target="#contact-form-panel"
+            data-open-label="Hide Form"
+            data-closed-label="Add Contact"
+            aria-expanded="{{ 'true' if contact_form_open else 'false' }}">
+            {{ 'Hide Form' if contact_form_open else 'Add Contact' }}
+          </button>
         </header>
 
         <div class="section-content">
-          {% set editing_contact = contact_edit_target %}
           {% set current_contact_type = (editing_contact.contact_type.value if editing_contact and editing_contact.contact_type else 'employee') %}
-          <form class="stacked-form" method="post" action="{% if editing_contact %}/leads/{{ lead.id }}/contacts/{{ editing_contact.id }}/update{% else %}/leads/{{ lead.id }}/contacts/create{% endif %}">
-            <div>
-              <label>Name*</label>
-              <input name="contact_name" value="{{ editing_contact.contact_name if editing_contact else '' }}" required>
-            </div>
-            <div>
-              <label>Title / Role</label>
-              <input name="title" value="{{ editing_contact.title if editing_contact else '' }}">
-            </div>
-            <div>
-              <label>Contact Type</label>
-              <select name="contact_type">
-                {% for ct in contact_types %}
-                  <option value="{{ ct.value }}"
-                    {% if current_contact_type == ct.value %}selected{% endif %}>
-                    {{ ct.value }}
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label>Email</label>
-              <input name="email" type="email" value="{{ editing_contact.email if editing_contact else '' }}">
-            </div>
-            <div>
-              <label>Phone</label>
-              <input name="phone" value="{{ editing_contact.phone if editing_contact else '' }}">
-            </div>
-            <div>
-              <label>LinkedIn</label>
-              <input name="linkedin_url" value="{{ editing_contact.linkedin_url if editing_contact else '' }}">
-            </div>
-            <div>
-              <label>Street</label>
-              <input name="address_street" value="{{ editing_contact.address_street if editing_contact else '' }}">
-            </div>
-            <div class="grid three-column">
+          <div
+            id="contact-form-panel"
+            class="collapsible-panel"
+            data-collapsed="{{ 'false' if contact_form_open else 'true' }}">
+            <form class="stacked-form" method="post" action="{% if editing_contact %}/leads/{{ lead.id }}/contacts/{{ editing_contact.id }}/update{% else %}/leads/{{ lead.id }}/contacts/create{% endif %}">
               <div>
-                <label>City</label>
-                <input name="address_city" value="{{ editing_contact.address_city if editing_contact else '' }}">
+                <label>Name*</label>
+                <input name="contact_name" value="{{ editing_contact.contact_name if editing_contact else '' }}" required>
               </div>
               <div>
-                <label>State</label>
-                <select name="address_state">
-                  {% set states = [
-                    ('', '-- choose --'),
-                    ('AL', 'AL'), ('AK', 'AK'), ('AZ', 'AZ'), ('AR', 'AR'),
-                    ('CA', 'CA'), ('CO', 'CO'), ('CT', 'CT'), ('DE', 'DE'),
-                    ('DC', 'DC'), ('FL', 'FL'), ('GA', 'GA'), ('HI', 'HI'),
-                    ('ID', 'ID'), ('IL', 'IL'), ('IN', 'IN'), ('IA', 'IA'),
-                    ('KS', 'KS'), ('KY', 'KY'), ('LA', 'LA'), ('ME', 'ME'),
-                    ('MD', 'MD'), ('MA', 'MA'), ('MI', 'MI'), ('MN', 'MN'),
-                    ('MS', 'MS'), ('MO', 'MO'), ('MT', 'MT'), ('NE', 'NE'),
-                    ('NV', 'NV'), ('NH', 'NH'), ('NJ', 'NJ'), ('NM', 'NM'),
-                    ('NY', 'NY'), ('NC', 'NC'), ('ND', 'ND'), ('OH', 'OH'),
-                    ('OK', 'OK'), ('OR', 'OR'), ('PA', 'PA'), ('RI', 'RI'),
-                    ('SC', 'SC'), ('SD', 'SD'), ('TN', 'TN'), ('TX', 'TX'),
-                    ('UT', 'UT'), ('VT', 'VT'), ('VA', 'VA'), ('WA', 'WA'),
-                    ('WV', 'WV'), ('WI', 'WI'), ('WY', 'WY')
-                  ] %}
-                  {% for value, label in states %}
-                    <option value="{{ value }}" {% if (editing_contact.address_state if editing_contact else 'GA') == value %}selected{% endif %}>{{ label }}</option>
+                <label>Title / Role</label>
+                <input name="title" value="{{ editing_contact.title if editing_contact else '' }}">
+              </div>
+              <div>
+                <label>Contact Type</label>
+                <select name="contact_type">
+                  {% for ct in contact_types %}
+                    <option value="{{ ct.value }}"
+                      {% if current_contact_type == ct.value %}selected{% endif %}>
+                      {{ ct.value }}
+                    </option>
                   {% endfor %}
                 </select>
               </div>
               <div>
-                <label>ZIP</label>
-                <input name="address_zipcode" value="{{ editing_contact.address_zipcode if editing_contact else '' }}">
+                <label>Email</label>
+                <input name="email" type="email" value="{{ editing_contact.email if editing_contact else '' }}">
               </div>
-            </div>
-            <div class="form-actions">
-              <button class="btn btn-primary" type="submit">
-                {% if editing_contact %}Update Contact{% else %}Add Contact{% endif %}
-              </button>
-              {% if editing_contact %}
-                <a class="btn btn-secondary" href="/leads/{{ lead.id }}/edit#contacts">Cancel</a>
-              {% endif %}
-            </div>
-          </form>
+              <div>
+                <label>Phone</label>
+                <input name="phone" value="{{ editing_contact.phone if editing_contact else '' }}">
+              </div>
+              <div>
+                <label>LinkedIn</label>
+                <input name="linkedin_url" value="{{ editing_contact.linkedin_url if editing_contact else '' }}">
+              </div>
+              <div>
+                <label>Street</label>
+                <input name="address_street" value="{{ editing_contact.address_street if editing_contact else '' }}">
+              </div>
+              <div class="grid three-column">
+                <div>
+                  <label>City</label>
+                  <input name="address_city" value="{{ editing_contact.address_city if editing_contact else '' }}">
+                </div>
+                <div>
+                  <label>State</label>
+                  <select name="address_state">
+                    {% set states = [
+                      ('', '-- choose --'),
+                      ('AL', 'AL'), ('AK', 'AK'), ('AZ', 'AZ'), ('AR', 'AR'),
+                      ('CA', 'CA'), ('CO', 'CO'), ('CT', 'CT'), ('DE', 'DE'),
+                      ('DC', 'DC'), ('FL', 'FL'), ('GA', 'GA'), ('HI', 'HI'),
+                      ('ID', 'ID'), ('IL', 'IL'), ('IN', 'IN'), ('IA', 'IA'),
+                      ('KS', 'KS'), ('KY', 'KY'), ('LA', 'LA'), ('ME', 'ME'),
+                      ('MD', 'MD'), ('MA', 'MA'), ('MI', 'MI'), ('MN', 'MN'),
+                      ('MS', 'MS'), ('MO', 'MO'), ('MT', 'MT'), ('NE', 'NE'),
+                      ('NV', 'NV'), ('NH', 'NH'), ('NJ', 'NJ'), ('NM', 'NM'),
+                      ('NY', 'NY'), ('NC', 'NC'), ('ND', 'ND'), ('OH', 'OH'),
+                      ('OK', 'OK'), ('OR', 'OR'), ('PA', 'PA'), ('RI', 'RI'),
+                      ('SC', 'SC'), ('SD', 'SD'), ('TN', 'TN'), ('TX', 'TX'),
+                      ('UT', 'UT'), ('VT', 'VT'), ('VA', 'VA'), ('WA', 'WA'),
+                      ('WV', 'WV'), ('WI', 'WI'), ('WY', 'WY')
+                    ] %}
+                    {% for value, label in states %}
+                      <option value="{{ value }}" {% if (editing_contact.address_state if editing_contact else 'GA') == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>ZIP</label>
+                  <input name="address_zipcode" value="{{ editing_contact.address_zipcode if editing_contact else '' }}">
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit">
+                  {% if editing_contact %}Update Contact{% else %}Add Contact{% endif %}
+                </button>
+                {% if editing_contact %}
+                  <a class="btn btn-secondary" href="/leads/{{ lead.id }}/edit#contacts">Cancel</a>
+                {% endif %}
+              </div>
+            </form>
+          </div>
 
           <h3>Existing Contacts</h3>
-          {% set existing_contacts = contacts | default([]) %}
           {% if existing_contacts %}
             <div class="contact-card-list">
               {% for c in existing_contacts %}
@@ -307,8 +325,8 @@
                       {{ c.contact_type.value if c.contact_type else 'unspecified' }}
                     </span>
                   </header>
-                  <dl>
-                    <div>
+                  <dl class="contact-fields">
+                    <div class="contact-field">
                       <dt>Email</dt>
                       <dd>
                         {% if c.email %}
@@ -318,11 +336,11 @@
                         {% endif %}
                       </dd>
                     </div>
-                    <div>
+                    <div class="contact-field">
                       <dt>Phone</dt>
                       <dd>{{ c.phone or '—' }}</dd>
                     </div>
-                    <div>
+                    <div class="contact-field">
                       <dt>LinkedIn</dt>
                       <dd>
                         {% if c.linkedin_url %}
@@ -332,16 +350,16 @@
                         {% endif %}
                       </dd>
                     </div>
-                    <div class="address-block">
+                    <div class="contact-field contact-address-inline">
                       <dt>Address</dt>
                       <dd>
                         {% if c.address_street or c.address_city or c.address_state or c.address_zipcode %}
-                          {% set parts = [] %}
-                          {% if c.address_street %}{% set _ = parts.append(c.address_street) %}{% endif %}
-                          {% if c.address_city %}{% set _ = parts.append(c.address_city) %}{% endif %}
-                          {% if c.address_state %}{% set _ = parts.append(c.address_state) %}{% endif %}
-                          {% if c.address_zipcode %}{% set _ = parts.append(c.address_zipcode) %}{% endif %}
-                          {{ parts|join(', ') }}
+                          {% set addr = [] %}
+                          {% if c.address_street %}{% set _ = addr.append(c.address_street) %}{% endif %}
+                          {% if c.address_city %}{% set _ = addr.append(c.address_city) %}{% endif %}
+                          {% if c.address_state %}{% set _ = addr.append(c.address_state) %}{% endif %}
+                          {% if c.address_zipcode %}{% set _ = addr.append(c.address_zipcode) %}{% endif %}
+                          {{ addr|join(', ') }}
                         {% else %}
                           <span class="value-empty">—</span>
                         {% endif %}
@@ -363,9 +381,18 @@
                         </button>
                       {% endif %}
                       {% if can_generate_letters %}
-                        <form method="post" action="/leads/{{ lead.id }}/contacts/{{ c.id }}/letters" target="_blank">
-                          <button class="btn btn-secondary" type="submit">Generate Letter</button>
-                        </form>
+                        {% set has_full_address = c.address_street and c.address_city and c.address_state and c.address_zipcode %}
+                        <button
+                          class="btn btn-secondary generate-letter-btn"
+                          type="button"
+                          data-letter-url="/leads/{{ lead.id }}/contacts/{{ c.id }}/letters"
+                          data-lead-id="{{ lead.id }}"
+                          data-contact-id="{{ c.id }}"
+                          data-contact-name="{{ c.contact_name }}"
+                          data-has-address="{{ 'true' if has_full_address else 'false' }}"
+                          {% if not has_full_address %}disabled{% endif %}>
+                          Generate Letter
+                        </button>
                       {% endif %}
                     </div>
                   </footer>
@@ -380,50 +407,68 @@
 
       <section id="attempts" class="lead-section card">
         <header>
-          <h2>Outreach Attempts</h2>
-          <p class="section-subtitle">Track every touchpoint for this lead.</p>
+          <div>
+            <h2>Outreach Attempts</h2>
+            <p class="section-subtitle">Track every touchpoint for this lead.</p>
+          </div>
+          {% set attempt_form_open = False %}
+          <button
+            type="button"
+            class="btn btn-ghost collapse-toggle"
+            data-collapse-toggle
+            data-target="#attempt-form-panel"
+            data-open-label="Hide Form"
+            data-closed-label="Add Attempt"
+            aria-expanded="{{ 'true' if attempt_form_open else 'false' }}">
+            {{ 'Hide Form' if attempt_form_open else 'Add Attempt' }}
+          </button>
         </header>
 
         <div class="section-content">
-          <form class="stacked-form" method="post" action="/leads/{{ lead.id }}/attempts/create">
-            <div>
-              <label>Channel*</label>
-              <select name="channel" required>
-                {% for ch in channels %}
-                  <option value="{{ ch.value }}">{{ ch.value }}</option>
-                {% endfor %}
-              </select>
-            </div>
+          <div
+            id="attempt-form-panel"
+            class="collapsible-panel"
+            data-collapsed="{{ 'false' if attempt_form_open else 'true' }}">
+            <form class="stacked-form" method="post" action="/leads/{{ lead.id }}/attempts/create">
+              <div>
+                <label>Channel*</label>
+                <select name="channel" required>
+                  {% for ch in channels %}
+                    <option value="{{ ch.value }}">{{ ch.value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
 
-            <div>
-              <label>Attempt #</label>
-              <input name="attempt_number" type="number" min="1" value="1">
-            </div>
+              <div>
+                <label>Attempt #</label>
+                <input name="attempt_number" type="number" min="1" value="1">
+              </div>
 
-            <div>
-              <label>Contact (optional)</label>
-              <select name="contact_id">
-                <option value="">-- none --</option>
-                {% for c in existing_contacts %}
-                  <option value="{{ c.id }}">{{ c.contact_name }}{% if c.title %} ({{ c.title }}){% endif %}</option>
-                {% endfor %}
-              </select>
-            </div>
+              <div>
+                <label>Contact (optional)</label>
+                <select name="contact_id">
+                  <option value="">-- none --</option>
+                  {% for c in existing_contacts %}
+                    <option value="{{ c.id }}">{{ c.contact_name }}{% if c.title %} ({{ c.title }}){% endif %}</option>
+                  {% endfor %}
+                </select>
+              </div>
 
-            <div>
-              <label>Outcome</label>
-              <input name="outcome" placeholder="e.g. left voicemail, no answer, spoke with CFO">
-            </div>
+              <div>
+                <label>Outcome</label>
+                <input name="outcome" placeholder="e.g. left voicemail, no answer, spoke with CFO">
+              </div>
 
-            <div>
-              <label>Notes</label>
-              <textarea name="notes" rows="3"></textarea>
-            </div>
+              <div>
+                <label>Notes</label>
+                <textarea name="notes" rows="3"></textarea>
+              </div>
 
-            <div class="form-actions">
-              <button class="btn btn-primary" type="submit">Save Attempt</button>
-            </div>
-          </form>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Save Attempt</button>
+              </div>
+            </form>
+          </div>
 
           <h3>Previous Attempts</h3>
           {% set existing_attempts = attempts | default([]) %}
@@ -467,6 +512,25 @@
       </section>
 
     </div>
+
+    {% if lead %}
+      <section
+        id="print-log"
+        class="lead-section card full-width print-log-card"
+        data-print-logs="{{ print_logs_json | e }}"
+        data-lead-id="{{ lead.id }}">
+        <header>
+          <h2>Print Log</h2>
+          <p class="section-subtitle">Letters you generate are tracked here so you can mark them mailed later.</p>
+        </header>
+
+        <div class="section-content">
+          <div id="print-log-list" class="print-log-list">
+            <p class="empty-state">Letters you print will appear here.</p>
+          </div>
+        </div>
+      </section>
+    {% endif %}
 
     <section id="scheduled-emails" class="lead-section card full-width">
       <header>
@@ -541,6 +605,21 @@
         </div>
       </div>
     </div>
+    <div id="delete-print-log-modal" class="modal confirm-modal" style="display: none;">
+      <div class="modal-content confirm-modal-content">
+        <div class="modal-header">
+          <h2>Delete Print Log</h2>
+          <button type="button" class="modal-close" data-close-print-log aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p id="delete-print-log-message">This will remove the selected print entry.</p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close-print-log>Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirm-delete-print-log">Delete</button>
+        </div>
+      </div>
+    </div>
 {% endif %}
 </div>
 
@@ -555,8 +634,9 @@
 
 <script src="/static/js/property_detail.js?v=20241128"></script>
 <script src="/static/js/entity_intel.js?v=20241129"></script>
-<script src="/static/js/lead_actions.js?v=20241128" defer></script>
+<script src="/static/js/lead_actions.js?v=20241202" defer></script>
 <script src="/static/js/phone_scripts.js?v=20241128" defer></script>
+<script src="/static/js/letter_print.js?v=20241202" defer></script>
 
 <script>
   (function () {
