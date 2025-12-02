@@ -22,10 +22,11 @@ you can generate solicitation letters directly from a contact card.
   | `business`      | `acquired_or_merged` / `active_renamed` | `acquired_merged.html` |
   | `business`      | `dissolved`                         | `dissolved_no_owner.html` |
 
-- The backend now writes the PDF to `~/Downloads/CDR-Mails/<prefix>_<slug>.pdf`
-  (or to the path specified via `LETTER_DOWNLOAD_DIR`). The API responds with a
-  JSON payload so the UI can show the saved location and refresh the Print Log
-  list—no duplicate browser download prompt.
+- The backend streams the PDF bytes back to the browser so the user’s machine
+  downloads the file directly into its default Downloads folder (no new tabs or
+  extra prompts). The UI still refreshes the Print Log panel using the JSON
+  endpoints, and each entry shows the friendly `Downloads/<filename>.pdf`
+  location for reference.
 
 ## Dependencies
 
@@ -44,7 +45,8 @@ you can generate solicitation letters directly from a contact card.
 
 - Leads should be created from a property record so `property_raw_hash` is set.
 - Contacts must include street, city, state, **and ZIP** before the Generate
-  Letter action is enabled.
+  Letter action is enabled. The button stays disabled (and explains why) until
+  those fields exist.
 - For business owners marked as `acquired_or_merged` or `active_renamed`, the
   "New Owner" field on the lead is required; it is automatically surfaced in the
   letter body and subject.

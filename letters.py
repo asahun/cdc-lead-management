@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
-import os
 from pathlib import Path
 from typing import Optional, Tuple
 import tempfile
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -40,23 +38,12 @@ FILENAME_PREFIX = {
 
 # Paths for shared assets (logos, QR, signature)
 BASE_DIR = Path(__file__).resolve().parent
-REPO_ROOT = BASE_DIR.parent
 STATIC_ASSETS_DIR = BASE_DIR / "static"
 IMG_ASSETS_DIR = STATIC_ASSETS_DIR / "img"
 
 LOGO_PATH = (IMG_ASSETS_DIR / "favicon.ico").resolve()
 QR_PATH = (IMG_ASSETS_DIR / "qr.png").resolve()
 SIGNATURE_PATH = (IMG_ASSETS_DIR / "signature_fish.png").resolve()
-
-DOWNLOAD_ROOT = Path.home() / "Downloads"
-DEFAULT_DOWNLOAD_DIR = DOWNLOAD_ROOT / "CDR-Mails"
-
-
-def _resolve_download_dir() -> Path:
-    override = os.getenv("LETTER_DOWNLOAD_DIR")
-    target = Path(override).expanduser() if override else DEFAULT_DOWNLOAD_DIR
-    target.mkdir(parents=True, exist_ok=True)
-    return target
 
 
 def _determine_template_key(lead: BusinessLead) -> str:
@@ -88,7 +75,7 @@ def render_letter_pdf(
     lead: BusinessLead,
     contact: LeadContact,
     property_details: Optional[PropertyView],
-) -> Tuple[bytes, str, Path]:
+) -> Tuple[bytes, str]:
     template_key = _determine_template_key(lead)
     template_path = TEMPLATE_MAP.get(template_key)
     if not template_path:
@@ -175,11 +162,7 @@ def render_letter_pdf(
     prefix = FILENAME_PREFIX.get(template_key, "")
     filename = f"{prefix}{slug_base}.pdf"
 
-    download_dir = _resolve_download_dir()
-    output_path = download_dir / filename
-    output_path.write_bytes(pdf_bytes)
-
-    return pdf_bytes, filename, output_path
+    return pdf_bytes, filename
 
 
 def _render_pdf_from_html(html: str) -> bytes:

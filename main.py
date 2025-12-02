@@ -1238,26 +1238,26 @@ def generate_contact_letter(
         )
 
     try:
-        pdf_bytes, filename, saved_path = render_letter_pdf(
+        pdf_bytes, filename = render_letter_pdf(
             templates.env, lead, contact, property_details
         )
     except LetterGenerationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    display_path = f"Downloads/{filename}"
     print_log = PrintLog(
         lead_id=lead.id,
         contact_id=contact.id,
         filename=filename,
-        file_path=str(saved_path),
+        file_path=display_path,
     )
     db.add(print_log)
     db.commit()
 
-    return {
-        "status": "ok",
-        "filename": filename,
-        "file_path": str(saved_path),
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"'
     }
+    return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
 
 
 @app.get("/leads/{lead_id}/print-logs")

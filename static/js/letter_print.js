@@ -172,29 +172,6 @@
         checkbox.checked = false;
         checkbox.disabled = false;
       }
-  async function refreshAttempts() {
-    const attemptsContainer = document.getElementById('attempts');
-    if (!attemptsContainer) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/leads/${leadId}/attempts`);
-      if (!response.ok) {
-        throw new Error('Failed to refresh attempts');
-      }
-      const html = await response.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const latest = doc.getElementById('attempts');
-      if (latest) {
-        attemptsContainer.replaceWith(latest);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
       alert(error.message || 'Failed to mark letter as mailed.');
     }
   }
@@ -355,6 +332,29 @@
     button.textContent = defaultLabel;
   }
 
+  function parseFilenameFromDisposition(headerValue) {
+    if (!headerValue) {
+      return '';
+    }
+    const utfMatch = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utfMatch && utfMatch[1]) {
+      return decodeURIComponent(utfMatch[1]);
+    }
+    const asciiMatch = headerValue.match(/filename="?([^";]+)"?/i);
+    return asciiMatch && asciiMatch[1] ? asciiMatch[1] : '';
+  }
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'letter.pdf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   async function handleLetterClick(event) {
     const button = event.currentTarget;
     const url = button.dataset.letterUrl;
@@ -372,7 +372,10 @@
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'X-Requested-With': 'fetch' },
+        headers: {
+          'X-Requested-With': 'fetch',
+          Accept: 'application/pdf',
+        },
       });
       if (!response.ok) {
         let message = 'Unable to generate letter.';
@@ -390,7 +393,16 @@
         throw new Error(message);
       }
 
-      await response.json();
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const contactName = (button.dataset.contactName || '').trim();
+      const contactSlug = contactName
+        ? contactName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'letter'
+        : 'letter';
+      const fallbackName = `${contactSlug}.pdf`;
+      const filename = parseFilenameFromDisposition(disposition) || fallbackName;
+
+      triggerDownload(blob, filename);
       setButtonState(button, 'success');
       await refreshPrintLogs();
     } catch (error) {
@@ -440,4 +452,3 @@
 
   init();
 })();
-

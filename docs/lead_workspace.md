@@ -57,9 +57,9 @@ to the combined workspace, so old bookmarks continue to work.
   to override the defaults.
 - Letter generation reuses the MailTemplate PDF workflow: each contact card
   provides a **Generate Letter** action that renders the correct template based
-  on the lead’s owner type/status and, upon success, saves the PDF into
-  `~/Downloads/CDR-Mails` (auto-created if missing) while logging the job so it
-  appears in the new Print Log panel.
+  on the lead’s owner type/status and streams the PDF back to the user so it
+  lands in their default Downloads folder, while the backend logs the job so it
+  appears in the Print Log panel.
 - `static/local_time.js` converts ISO timestamps to the viewer’s locale so
   activity history (attempts, comments) is easy to read.
 - The global header contains a **Profile** switcher (Fisseha vs Abby). The choice
@@ -70,7 +70,7 @@ to the combined workspace, so old bookmarks continue to work.
 - Each lead header now includes a subtle delete icon that opens a confirmation modal before permanently deleting the lead (and clearing the property assignment flag).
 - A “Phone Scripts” card at the bottom of the lead view surfaces registered-agent, decision-maker, and gatekeeper scripts with placeholders automatically populated from the current profile and lead/property data (plus a copy-to-clipboard action).
 - Contact names are normalized before rendering outbound communications: email greetings always use a capitalized first name, while letters print a properly cased full name in the address block and a first-name salutation even when the CRM data arrives in all caps.
-- Letter generation saves PDFs into `~/Downloads/CDR-Mails` (auto-created if missing), logs each print beneath the attempts list, and lets you mark the letter as mailed—checking the box automatically writes a `mail` attempt for that contact.
+- Letter generation streams PDFs to the browser (no new tab), logs each print beneath the attempts list, and lets you mark the letter as mailed—checking the box automatically writes a `mail` attempt for that contact.
 
 ## Follow-up Ideas
 
