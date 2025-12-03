@@ -1,11 +1,13 @@
 # main.py
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from pathlib import Path
 import json
 import re
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Depends, Request, Form, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -115,6 +117,7 @@ PROPERTY_ORDERING = (
     PropertyView.propertyamount.desc(),
     PropertyView.raw_hash.asc(),
 )
+APP_TIMEZONE = ZoneInfo(os.getenv("APP_TIMEZONE", "America/New_York"))
 
 PHONE_SCRIPTS_DIR = Path("templates") / "phone"
 PHONE_SCRIPT_SOURCES = [
@@ -196,6 +199,29 @@ def _prepare_script_content(raw_text: str) -> tuple[str, str]:
     plain_text = raw_text.strip()
     html_value = _plain_text_to_html(plain_text)
     return html_value, plain_text
+
+
+def _previous_monday_cutoff(now: datetime | None = None) -> datetime:
+    """
+    Return the most recent Monday at 6 PM (APP_TIMEZONE). If we're earlier than
+    this week's Monday 6 PM, go back one more week. Result is returned in UTC.
+    """
+    now_local = (now or datetime.now(APP_TIMEZONE)).astimezone(APP_TIMEZONE)
+    days_since_monday = now_local.weekday()
+    monday_local = (now_local - timedelta(days=days_since_monday)).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    )
+    if now_local < monday_local:
+        monday_local -= timedelta(days=7)
+    return monday_local.astimezone(timezone.utc)
+
+
+def _is_lead_editable(lead: BusinessLead) -> bool:
+    """
+    Determine if a lead can be edited. Returns False for terminal/archived statuses.
+    """
+    read_only_statuses = {LeadStatus.competitor_claimed}
+    return lead.status not in read_only_statuses
 
 
 def _load_phone_scripts():
@@ -511,6 +537,9 @@ def list_properties(
         page = 1
 
     filters = [PROPERTY_AMOUNT_FILTER]
+
+    cutoff = _previous_monday_cutoff()
+    filters.append(PropertyView.last_seen >= cutoff)
 
     if q:
         pattern = f"%{q}%"
@@ -886,11 +915,14 @@ def list_leads(
 
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE if total else 1
 
+    # Add editable flag to each lead for template rendering
+    leads_with_flags = [(lead, _is_lead_editable(lead)) for lead in leads]
+
     return templates.TemplateResponse(
         "leads.html",
         {
             "request": request,
-            "leads": leads,
+            "leads_with_flags": leads_with_flags,
             "page": page,
             "total_pages": total_pages,
             "q": q or "",
@@ -933,6 +965,78 @@ async def lead_entity_intelligence(
     return {"input": payload, "analysis": analysis}
 
 
+@app.get("/leads/{lead_id}/view", response_class=HTMLResponse)
+def view_lead(
+    request: Request,
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    """Read-only view of a lead."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    contacts = list(lead.contacts)
+    attempts = sorted(
+        lead.attempts,
+        key=lambda attempt: attempt.created_at or datetime.min,
+        reverse=True,
+    )
+    comments = sorted(
+        lead.comments,
+        key=lambda comment: comment.created_at or datetime.min,
+        reverse=True,
+    )
+
+    property_details = _get_property_details_for_lead(db, lead)
+    phone_script_context = _build_phone_script_context(
+        lead.owner_name,
+        lead.property_id,
+        lead.property_amount,
+        property_details,
+    )
+
+    print_logs = _get_print_logs_for_lead(db, lead.id)
+    print_logs_json = json.dumps(
+        [_serialize_print_log(log) for log in print_logs],
+        default=str,
+    )
+
+    return templates.TemplateResponse(
+        "lead_form.html",
+        {
+            "request": request,
+            "lead": lead,
+            "mode": "view",
+            "property_id": lead.property_id,
+            "owner_name": lead.owner_name,
+            "property_amount": lead.property_amount,
+            "statuses": list(LeadStatus),
+            "contacts": contacts,
+            "attempts": attempts,
+            "channels": list(ContactChannel),
+            "comments": comments,
+            "contact_edit_target": None,
+            "owner_types": list(OwnerType),
+            "business_owner_statuses": list(BusinessOwnerStatus),
+            "owner_sizes": list(OwnerSize),
+            "individual_owner_statuses": list(IndividualOwnerStatus),
+            "contact_types": list(ContactType),
+            "owner_type": lead.owner_type,
+            "business_owner_status": lead.business_owner_status,
+            "owner_size": lead.owner_size,
+            "new_business_name": lead.new_business_name or "",
+            "individual_owner_status": lead.individual_owner_status,
+            "property_raw_hash": lead.property_raw_hash,
+            "can_generate_letters": False,  # Disable in view mode
+            "phone_scripts": PHONE_SCRIPTS,
+            "phone_scripts_json": PHONE_SCRIPTS_JSON,
+            "phone_script_context_json": json.dumps(phone_script_context, default=str),
+            "print_logs_json": print_logs_json,
+        },
+    )
+
+
 @app.get("/leads/{lead_id}/edit", response_class=HTMLResponse)
 def edit_lead(
     request: Request,
@@ -943,6 +1047,10 @@ def edit_lead(
     lead = db.get(BusinessLead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Prevent editing of read-only leads
+    if not _is_lead_editable(lead):
+        return RedirectResponse(url=f"/leads/{lead_id}/view", status_code=303)
 
     contacts = list(lead.contacts)
     attempts = sorted(

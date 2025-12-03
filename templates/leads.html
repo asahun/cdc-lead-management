@@ -28,8 +28,8 @@
     </tr>
   </thead>
   <tbody>
-  {% for l in leads %}
-    <tr>
+  {% for l, is_editable in leads_with_flags %}
+    <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
       <td>{{ l.id }}</td>
       <td>{{ l.property_id }}</td>
       <td>{{ l.owner_name }}</td>
@@ -39,7 +39,10 @@
             <time class="js-local-time" datetime="{{ l.created_at.isoformat() }}">{{ l.created_at }}</time>
           </td>
           <td class="cell-actions">
+        <a href="/leads/{{ l.id }}/view">View</a>
+        {% if is_editable %}
         <a href="/leads/{{ l.id }}/edit">Edit</a>
+        {% endif %}
       </td>
     </tr>
   {% endfor %}

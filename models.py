@@ -22,6 +22,7 @@ class PropertyView(Base):
     propertyid = Column(Text)
     ownername = Column(Text)
     propertyamount = Column(Numeric(18, 2))
+    last_seen = Column(DateTime(timezone=True))
     assigned_to_lead = Column(Boolean, nullable=False, default=False)
     owneraddress1 = Column(Text)
     owneraddress2 = Column(Text)
@@ -45,6 +46,7 @@ class LeadStatus(str, enum.Enum):
     lost = "lost"
     no_response = "no_response"
     invalid = "invalid"
+    competitor_claimed = "competitor_claimed"
 
 
 class OwnerType(str, enum.Enum):

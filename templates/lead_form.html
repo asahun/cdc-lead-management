@@ -16,7 +16,7 @@
         {% endif %}
       </h1>
       {% if mode != "create" %}
-        <p class="page-subtitle">Status: <span class="status-pill">{{ lead.status.value }}</span></p>
+        <p class="page-subtitle">Status: <span class="status-pill">{{ lead.status.value }}</span>{% if mode == 'view' %} <span class="readonly-badge">(Read Only)</span>{% endif %}</p>
 {% endif %}
     </div>
     <div class="header-actions">
@@ -31,7 +31,7 @@
           View Property Detail
         </button>
 {% endif %}
-{% if mode != "create" %}
+{% if mode != "create" and mode != "view" %}
         <button
           type="button"
           class="icon-button danger"
@@ -44,7 +44,7 @@
     </div>
   </div>
 
-  <form class="card lead-overview" method="post" action="{% if mode == 'create' %}/leads/create{% else %}/leads/{{ lead.id }}/update{% endif %}">
+  <form class="card lead-overview" method="post" action="{% if mode == 'create' %}/leads/create{% else %}/leads/{{ lead.id }}/update{% endif %}" {% if mode == 'view' %}onsubmit="return false;"{% endif %}>
     <div class="grid two-column">
   <div>
     <label>Property ID</label>
@@ -52,16 +52,16 @@
   </div>
   <div>
     <label>Owner Name</label>
-        <input name="owner_name" value="{{ owner_name if mode == 'create' else lead.owner_name }}" {% if mode != 'create' %}readonly{% endif %}>
+        <input name="owner_name" value="{{ owner_name if mode == 'create' else lead.owner_name }}" {% if mode != 'create' or mode == 'view' %}readonly{% endif %}>
   </div>
   <div>
     <label>Property Amount</label>
     <input name="property_amount" type="number" step="0.01"
-               value="{{ property_amount if mode == 'create' else lead.property_amount }}" {% if mode != 'create' %}readonly{% endif %}>
+               value="{{ property_amount if mode == 'create' else lead.property_amount }}" {% if mode != 'create' or mode == 'view' %}readonly{% endif %}>
   </div>
   <div>
     <label>Status</label>
-    <select name="status">
+    <select name="status" {% if mode == 'view' %}disabled{% endif %}>
       {% for s in statuses %}
         <option value="{{ s.value }}"
           {% if mode != 'create' and lead.status.value == s.value %}selected{% endif %}>
@@ -76,7 +76,7 @@
       <div class="owner-meta-row">
         <div data-owner-section="all">
           <label>Owner Type</label>
-          <select name="owner_type" id="owner_type_select">
+          <select name="owner_type" id="owner_type_select" {% if mode == 'view' %}disabled{% endif %}>
             {% for ot in owner_types %}
               <option value="{{ ot.value }}"
                 {% if owner_type.value == ot.value %}selected{% endif %}>
@@ -87,7 +87,7 @@
         </div>
         <div class="owner-business" data-owner-section="business">
           <label>Owner Status</label>
-          <select name="business_owner_status" id="business_owner_status_select">
+          <select name="business_owner_status" id="business_owner_status_select" {% if mode == 'view' %}disabled{% endif %}>
             {% for bos in business_owner_statuses %}
               <option value="{{ bos.value }}"
                 {% if business_owner_status and business_owner_status.value == bos.value %}selected{% endif %}>
@@ -98,7 +98,7 @@
         </div>
         <div class="owner-business owner-size" data-owner-section="business">
           <label>Owner Size</label>
-          <select name="owner_size">
+          <select name="owner_size" {% if mode == 'view' %}disabled{% endif %}>
             <option value="">-- choose --</option>
             {% for os in owner_sizes %}
               <option value="{{ os.value }}"
@@ -110,11 +110,11 @@
         </div>
         <div class="owner-business owner-new-name" data-owner-section="business">
           <label>New Owner</label>
-          <input name="new_business_name" value="{{ new_business_name }}">
+          <input name="new_business_name" value="{{ new_business_name }}" {% if mode == 'view' %}readonly{% endif %}>
         </div>
         <div class="owner-individual" data-owner-section="individual">
           <label>Owner Status</label>
-          <select name="individual_owner_status">
+          <select name="individual_owner_status" {% if mode == 'view' %}disabled{% endif %}>
             {% for ios in individual_owner_statuses %}
               <option value="{{ ios.value }}"
                 {% if individual_owner_status and individual_owner_status.value == ios.value %}selected{% endif %}>
@@ -128,9 +128,11 @@
 
     <input type="hidden" name="property_raw_hash" value="{{ property_raw_hash or '' }}">
     <input type="hidden" name="notes" value="{{ '' if mode == 'create' else lead.notes or '' }}">
+    {% if mode != 'view' %}
     <div class="form-actions">
       <button class="btn btn-primary" type="submit">Save Lead</button>
   </div>
+    {% endif %}
 </form>
 
 {% if mode != 'create' %}
@@ -165,6 +167,7 @@
       </header>
 
       <div class="section-content">
+        {% if mode != 'view' %}
         <form class="stacked-form" method="post" action="/leads/{{ lead.id }}/comments/create">
           <div class="profile-context">
             <p class="profile-context-label">
@@ -180,6 +183,7 @@
             <button class="btn btn-primary" type="submit">Add Comment</button>
           </div>
         </form>
+        {% endif %}
 
         <h3>History</h3>
         {% if comments %}
@@ -190,9 +194,11 @@
                   <span class="comment-author">{{ comment.author or "Anonymous" }}</span>
                   <span class="comment-dot">•</span>
                   <time class="js-local-time" datetime="{{ comment.created_at.isoformat() }}">{{ comment.created_at }}</time>
+                  {% if mode != 'view' %}
                   <form method="post" action="/leads/{{ lead.id }}/comments/{{ comment.id }}/delete" onsubmit="return confirm('Delete this comment?')">
                     <button class="btn btn-ghost" type="submit">Delete</button>
                   </form>
+                  {% endif %}
                 </div>
                 <p class="comment-body">{{ comment.body }}</p>
               </li>
@@ -214,6 +220,7 @@
           </div>
           {% set editing_contact = contact_edit_target %}
           {% set contact_form_open = editing_contact is not none %}
+          {% if mode != 'view' %}
           <button
             type="button"
             class="btn btn-ghost collapse-toggle"
@@ -224,10 +231,12 @@
             aria-expanded="{{ 'true' if contact_form_open else 'false' }}">
             {{ 'Hide Form' if contact_form_open else 'Add Contact' }}
           </button>
+          {% endif %}
         </header>
 
         <div class="section-content">
           {% set current_contact_type = (editing_contact.contact_type.value if editing_contact and editing_contact.contact_type else 'employee') %}
+          {% if mode != 'view' %}
           <div
             id="contact-form-panel"
             class="collapsible-panel"
@@ -307,11 +316,12 @@
                   {% if editing_contact %}Update Contact{% else %}Add Contact{% endif %}
                 </button>
                 {% if editing_contact %}
-                  <a class="btn btn-secondary" href="/leads/{{ lead.id }}/edit#contacts">Cancel</a>
+                  <a class="btn btn-secondary" href="/leads/{{ lead.id }}/{% if mode == 'view' %}view{% else %}edit{% endif %}#contacts">Cancel</a>
                 {% endif %}
               </div>
             </form>
           </div>
+          {% endif %}
 
           <h3>Existing Contacts</h3>
           {% if existing_contacts %}
@@ -366,6 +376,7 @@
                       </dd>
                     </div>
                   </dl>
+                  {% if mode != 'view' %}
                   <footer>
                     <div class="contact-actions">
                       <a class="btn btn-ghost" href="/leads/{{ lead.id }}/edit?edit_contact_id={{ c.id }}#contacts">Edit</a>
@@ -396,6 +407,7 @@
                       {% endif %}
                     </div>
                   </footer>
+                  {% endif %}
                 </article>
               {% endfor %}
             </div>
@@ -412,6 +424,7 @@
             <p class="section-subtitle">Track every touchpoint for this lead.</p>
           </div>
           {% set attempt_form_open = False %}
+          {% if mode != 'view' %}
           <button
             type="button"
             class="btn btn-ghost collapse-toggle"
@@ -422,9 +435,11 @@
             aria-expanded="{{ 'true' if attempt_form_open else 'false' }}">
             {{ 'Hide Form' if attempt_form_open else 'Add Attempt' }}
           </button>
+          {% endif %}
         </header>
 
         <div class="section-content">
+          {% if mode != 'view' %}
           <div
             id="attempt-form-panel"
             class="collapsible-panel"
@@ -469,6 +484,7 @@
               </div>
             </form>
           </div>
+          {% endif %}
 
           <h3>Previous Attempts</h3>
           {% set existing_attempts = attempts | default([]) %}

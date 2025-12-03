@@ -104,5 +104,23 @@ The app will be available at `http://localhost:8000`
 - PDF letter generation for contacts
 - Responsive UI with localStorage state persistence
 
+## Mgration tasks
+
+ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'competitor_claimed';
+
+WITH cutoff AS (
+    SELECT date_trunc('week', now())  -- Monday 00:00 (DB timezone)
+           - interval '7 days'        -- previous Monday
+           + interval '18 hours'      -- 6:00 PM
+           AS ts
+)
+UPDATE business_lead bl
+SET status = 'competitor_claimed',
+    updated_at = now()
+FROM ucp_main_year_e_2025 p, cutoff c
+WHERE bl.property_raw_hash  = p.row_hash 
+  AND p.last_seen < c.ts
+  AND bl.status <> 'competitor_claimed';
+
 
 

@@ -60,6 +60,10 @@ to the combined workspace, so old bookmarks continue to work.
   on the lead’s owner type/status and streams the PDF back to the user so it
   lands in their default Downloads folder, while the backend logs the job so it
   appears in the Print Log panel.
+- The properties list automatically filters out stale records—only rows with
+  `last_seen` greater than or equal to the most recent Monday at 6 PM (Eastern)
+  are shown. This lines up with the weekly refresh cadence so the UI never shows
+  data older than the latest batch.
 - `static/local_time.js` converts ISO timestamps to the viewer’s locale so
   activity history (attempts, comments) is easy to read.
 - The global header contains a **Profile** switcher (Fisseha vs Abby). The choice
@@ -71,6 +75,28 @@ to the combined workspace, so old bookmarks continue to work.
 - A “Phone Scripts” card at the bottom of the lead view surfaces registered-agent, decision-maker, and gatekeeper scripts with placeholders automatically populated from the current profile and lead/property data (plus a copy-to-clipboard action).
 - Contact names are normalized before rendering outbound communications: email greetings always use a capitalized first name, while letters print a properly cased full name in the address block and a first-name salutation even when the CRM data arrives in all caps.
 - Letter generation streams PDFs to the browser (no new tab), logs each print beneath the attempts list, and lets you mark the letter as mailed—checking the box automatically writes a `mail` attempt for that contact.
+- Lead statuses now include `competitor_claimed`, which is used by the weekly
+  refresh job to flag properties that have aged out (per the cutoff rule above).
+  Add the enum value in Postgres via:
+
+  ```sql
+  ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'competitor_claimed';
+  ```
+
+  To bulk update older leads during a refresh:
+
+  ```sql
+  WITH cutoff AS (
+    SELECT date_trunc('week', now()) - interval '7 days' + interval '18 hours' AS ts
+  )
+  UPDATE business_lead bl
+  SET status = 'competitor_claimed',
+      updated_at = now()
+  FROM properties p, cutoff c
+  WHERE bl.property_id = p.property_id
+    AND p.last_seen < c.ts
+    AND bl.status <> 'competitor_claimed';
+  ```
 
 ## Follow-up Ideas
 

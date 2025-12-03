@@ -245,6 +245,20 @@ body {
     letter-spacing: 0.05em;
   }
 
+  .readonly-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(107, 114, 128, 0.15);
+    color: #6b7280;
+    font-weight: 500;
+    font-size: 11px;
+    margin-left: 8px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
   .ghost-link {
     display: inline-flex;
     align-items: center;
@@ -356,6 +370,22 @@ body {
     outline: none;
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  input[readonly],
+  select[readonly],
+  textarea[readonly] {
+    background: #f9fafb;
+    color: #6b7280;
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+
+  select:disabled {
+    background-image: none;
   }
 
   select {
@@ -897,6 +927,21 @@ body {
 
   .data-table tbody tr:hover td {
     background: #f8fafc;
+  }
+
+  .data-table tbody tr.lead-readonly td {
+    background: #f9fafb;
+    color: #6b7280;
+    opacity: 0.7;
+  }
+
+  .data-table tbody tr.lead-readonly:hover td {
+    background: #f3f4f6;
+  }
+
+  .data-table tbody tr.lead-readonly .status-pill {
+    background: #e5e7eb;
+    color: #6b7280;
   }
 
   .data-table .cell-actions {
