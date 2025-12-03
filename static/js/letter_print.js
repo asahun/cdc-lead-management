@@ -172,7 +172,7 @@
         checkbox.checked = false;
         checkbox.disabled = false;
       }
-      alert(error.message || 'Failed to mark letter as mailed.');
+      showError(error.message || 'Failed to mark letter as mailed.');
     }
   }
 
@@ -251,7 +251,7 @@
       await refreshPrintLogs();
       await refreshAttempts();
     } catch (error) {
-      alert(error.message || 'Failed to delete print log.');
+      showError(error.message || 'Failed to delete print log.');
     }
   }
 
@@ -363,7 +363,7 @@
     }
 
     if (button.dataset.hasAddress === 'false') {
-      alert('Add a mailing address to this contact before generating a letter.');
+      showWarning('Add a mailing address to this contact before generating a letter.');
       return;
     }
 
@@ -407,7 +407,7 @@
       await refreshPrintLogs();
     } catch (error) {
       setButtonState(button, 'idle');
-      alert(error.message || 'Unable to generate letter.');
+      showError(error.message || 'Unable to generate letter.');
     }
   }
 

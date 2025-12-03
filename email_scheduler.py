@@ -37,7 +37,7 @@ def _process_scheduled_emails():
                 profile_key, clean_body = extract_profile_marker(scheduled_email.body)
                 profile_config = resolve_profile(profile_key)
                 
-                # Send the email
+                # Send the email with profile-specific SMTP credentials
                 send_email(
                     to_email=scheduled_email.to_email,
                     subject=scheduled_email.subject,
@@ -45,6 +45,8 @@ def _process_scheduled_emails():
                     from_email=profile_config["from_email"],
                     from_name=profile_config["from_name"],
                     reply_to=profile_config["reply_to"],
+                    smtp_username=profile_config["from_email"],  # Use profile email as SMTP username
+                    smtp_password=profile_config.get("smtp_password") or None,  # Use profile password
                 )
                 
                 # Mark as sent

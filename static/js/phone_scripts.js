@@ -135,11 +135,11 @@
       const profile = window.getCurrentProfile ? window.getCurrentProfile() : {};
       const plainText = applyPlaceholders(scripts[key].text || '', profile);
       if (!plainText) {
-        alert('Nothing to copy for this script.');
+        showWarning('Nothing to copy for this script.');
         return;
       }
       if (!navigator.clipboard) {
-        alert('Clipboard access is unavailable in this browser.');
+        showWarning('Clipboard access is unavailable in this browser.');
         return;
       }
 
@@ -152,7 +152,7 @@
           }, 2000);
         })
         .catch(() => {
-          alert('Unable to copy script to clipboard.');
+          showError('Unable to copy script to clipboard.');
         });
     });
 

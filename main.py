@@ -1480,7 +1480,7 @@ def send_contact_email(
     
     try:
         profile_config = resolve_profile(profile)
-        # Send email
+        # Send email with profile-specific SMTP credentials
         send_email(
             to_email=contact.email,
             subject=subject,
@@ -1488,6 +1488,8 @@ def send_contact_email(
             from_email=profile_config["from_email"],
             from_name=profile_config["from_name"],
             reply_to=profile_config["reply_to"],
+            smtp_username=profile_config["from_email"],  # Use profile email as SMTP username
+            smtp_password=profile_config.get("smtp_password") or None,  # Use profile password
         )
         
         # Get the next attempt number
@@ -1681,7 +1683,7 @@ def send_scheduled_email_now(
         profile_key, clean_body = extract_profile_marker(scheduled_email.body)
         profile_config = resolve_profile(profile_key)
         
-        # Send email
+        # Send email with profile-specific SMTP credentials
         send_email(
             to_email=scheduled_email.to_email,
             subject=scheduled_email.subject,
@@ -1689,6 +1691,8 @@ def send_scheduled_email_now(
             from_email=profile_config["from_email"],
             from_name=profile_config["from_name"],
             reply_to=profile_config["reply_to"],
+            smtp_username=profile_config["from_email"],  # Use profile email as SMTP username
+            smtp_password=profile_config.get("smtp_password") or None,  # Use profile password
         )
         
         # Mark as sent

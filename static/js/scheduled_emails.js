@@ -97,12 +97,12 @@
     })
       .then(response => response.json())
       .then(data => {
-        alert('Email sent successfully!');
+        showSuccess('Email sent successfully!');
         loadScheduledEmails(leadId);
         window.location.reload(); // Reload to show new attempt
       })
       .catch(error => {
-        alert('Failed to send email: ' + error.message);
+        showError('Failed to send email: ' + error.message);
       });
   };
 
@@ -114,11 +114,11 @@
     })
       .then(response => response.json())
       .then(data => {
-        alert('Email cancelled successfully!');
+        showSuccess('Email cancelled successfully!');
         loadScheduledEmails(leadId);
       })
       .catch(error => {
-        alert('Failed to cancel email: ' + error.message);
+        showError('Failed to cancel email: ' + error.message);
       });
   };
 
@@ -181,7 +181,7 @@
       })
       .catch(error => {
         console.error('Error loading scheduled email:', error);
-        alert('Failed to load scheduled email: ' + error.message);
+        showError('Failed to load scheduled email: ' + error.message);
       });
   };
 

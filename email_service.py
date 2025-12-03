@@ -20,11 +20,6 @@ from utils.name_utils import format_first_name
 # SMTP Configuration (IONIO)
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.ionos.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME", "fisseha@loadrouter.com")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "wAcheb-retqu4-dejriw")
-SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "fisseha@loadrouter.com")
-SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Fisseha Gebresilasie")
-SMTP_REPLY_TO = os.getenv("SMTP_REPLY_TO", "fisseha@loadrouter.com")
 
 # Template directory
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "email"
@@ -38,8 +33,9 @@ PROFILES_ENV_DEFAULTS = {
         "full_name": os.getenv("EMAIL_PROFILE_FISSEHA_NAME", "Fisseha Gebresilasie"),
         "from_email": os.getenv("EMAIL_PROFILE_FISSEHA_FROM", "fisseha@loadrouter.com"),
         "reply_to": os.getenv("EMAIL_PROFILE_FISSEHA_REPLY_TO", "fisseha@loadrouter.com"),
-        "phone": os.getenv("EMAIL_PROFILE_FISSEHA_PHONE", "(404) 000-0000"),
+        "phone": os.getenv("EMAIL_PROFILE_FISSEHA_PHONE", "(404) 654-3593"),
         "signature_template": "fisseha_signature.html",
+        "smtp_password": os.getenv("EMAIL_PROFILE_FISSEHA_PASSWORD", "wAcheb-retqu4-dejriw"),
     },
     "abby": {
         "label": "Abby",
@@ -50,6 +46,7 @@ PROFILES_ENV_DEFAULTS = {
         "reply_to": os.getenv("EMAIL_PROFILE_ABBY_REPLY_TO", "abby@loadrouter.com"),
         "phone": os.getenv("EMAIL_PROFILE_ABBY_PHONE", "(404) 000-0000"),
         "signature_template": "abby_signature.html",
+        "smtp_password": os.getenv("EMAIL_PROFILE_ABBY_PASSWORD", "qedgom-6Diqpa-nodgas"),
     },
 }
 
@@ -249,20 +246,40 @@ def send_email(
     from_email: Optional[str] = None,
     from_name: Optional[str] = None,
     reply_to: Optional[str] = None,
+    smtp_username: Optional[str] = None,
+    smtp_password: Optional[str] = None,
 ) -> None:
     """
     Send email via SMTP with anti-spam best practices.
+    
+    Args:
+        to_email: Recipient email address
+        subject: Email subject
+        html_body: HTML email body
+        from_email: Sender email (required)
+        from_name: Sender name (required)
+        reply_to: Reply-to address (required)
+        smtp_username: SMTP login username (required - profile email)
+        smtp_password: SMTP login password (required - profile password)
     
     Raises:
         ValueError: If SMTP credentials are missing
         smtplib.SMTPException: If email sending fails
     """
-    if not SMTP_PASSWORD:
-        raise ValueError("SMTP_PASSWORD environment variable is not set")
+    # All parameters are required - no fallbacks
+    if not from_email:
+        raise ValueError("from_email is required")
+    if not from_name:
+        raise ValueError("from_name is required")
+    if not reply_to:
+        raise ValueError("reply_to is required")
+    if not smtp_username:
+        raise ValueError("smtp_username is required")
+    if not smtp_password or smtp_password.strip() == "":
+        raise ValueError(f"SMTP password is required for profile email {smtp_username}")
     
-    from_email = from_email or SMTP_FROM_EMAIL
-    from_name = from_name or SMTP_FROM_NAME
-    reply_to = reply_to or SMTP_REPLY_TO
+    smtp_user = smtp_username
+    smtp_pass = smtp_password
     
     # Create message
     msg = MIMEMultipart("alternative")
@@ -294,7 +311,7 @@ def send_email(
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
             server.starttls()  # TLS encryption
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.login(smtp_user, smtp_pass)
             server.send_message(msg)
     except smtplib.SMTPException as e:
         raise Exception(f"Failed to send email: {str(e)}") from e

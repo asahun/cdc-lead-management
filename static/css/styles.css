@@ -2034,6 +2034,107 @@ body {
     gap: 8px;
   }
 
+  /* Toast Notifications */
+  .notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+  }
+
+  .notification {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, #ffffff, #f8fafc);
+    border-radius: 12px;
+    box-shadow:
+      0 10px 30px rgba(0, 0, 0, 0.15),
+      0 4px 12px rgba(0, 0, 0, 0.1);
+    min-width: 300px;
+    max-width: 450px;
+    pointer-events: auto;
+    cursor: pointer;
+    transform: translateX(400px);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-left: 4px solid;
+  }
+
+  .notification-show {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  .notification-hide {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+
+  .notification-icon {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .notification-message {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #1f2937;
+    font-weight: 500;
+  }
+
+  .notification-success {
+    border-left-color: #10b981;
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+  }
+
+  .notification-success .notification-icon {
+    color: #10b981;
+  }
+
+  .notification-error {
+    border-left-color: #ef4444;
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  }
+
+  .notification-error .notification-icon {
+    color: #ef4444;
+  }
+
+  .notification-warning {
+    border-left-color: #f59e0b;
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  }
+
+  .notification-warning .notification-icon {
+    color: #f59e0b;
+  }
+
+  .notification-info {
+    border-left-color: #3b82f6;
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  }
+
+  .notification-info .notification-icon {
+    color: #3b82f6;
+  }
+
+  .notification:hover {
+    box-shadow:
+      0 12px 36px rgba(0, 0, 0, 0.18),
+      0 6px 16px rgba(0, 0, 0, 0.12);
+    transform: translateX(0) scale(1.02);
+  }
+
   .scheduled-email-details {
     display: flex;
     flex-direction: column;

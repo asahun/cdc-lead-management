@@ -86,7 +86,7 @@
     const contactName = btn.dataset.contactName;
 
     if (!leadId || !contactId || !contactEmail) {
-      alert('Missing contact information');
+      showError('Missing contact information');
       return;
     }
 
@@ -129,7 +129,7 @@
       sendBtn.textContent = 'Send';
     } catch (error) {
       console.error('Error loading email:', error);
-      alert('Failed to load email template: ' + error.message);
+      showError('Failed to load email template: ' + error.message);
       bodyEditor.innerHTML = '<p style="color: #d32f2f;">Error loading template. Please compose manually.</p>';
       sendBtn.disabled = false;
       sendBtn.textContent = 'Send';
@@ -146,7 +146,7 @@
     e.preventDefault();
 
     if (!currentLeadId) {
-      alert('Missing lead information');
+      showError('Missing lead information');
       return;
     }
 
@@ -155,12 +155,12 @@
     const profileKey = getActiveProfileKey();
 
     if (!subject) {
-      alert('Subject is required');
+      showError('Subject is required');
       return;
     }
 
     if (!body || body.trim() === '') {
-      alert('Email body is required');
+      showError('Email body is required');
       return;
     }
 
@@ -198,13 +198,13 @@
           throw new Error(error.detail || 'Failed to send email');
         }
 
-        alert('Email updated and sent successfully!');
+        showSuccess('Email updated and sent successfully!');
         resetModal();
         window.currentScheduledEmailId = null;
         window.location.reload();
       } catch (error) {
         console.error('Error updating/sending email:', error);
-        alert('Failed to update/send email: ' + error.message);
+        showError('Failed to update/send email: ' + error.message);
         sendBtn.disabled = false;
         sendBtn.textContent = 'Send Now';
         scheduleBtn.disabled = false;
@@ -214,7 +214,7 @@
 
     // Regular send (not editing scheduled email)
     if (!currentContactId) {
-      alert('Missing contact information');
+      showError('Missing contact information');
       return;
     }
 
@@ -241,14 +241,14 @@
       }
 
       const result = await response.json();
-      alert('Email sent successfully!');
+      showSuccess('Email sent successfully!');
       resetModal();
 
       // Reload page to show new attempt
       window.location.reload();
     } catch (error) {
       console.error('Error sending email:', error);
-      alert('Failed to send email: ' + error.message);
+      showError('Failed to send email: ' + error.message);
       sendBtn.disabled = false;
       sendBtn.textContent = 'Send';
       scheduleBtn.disabled = false;
@@ -374,18 +374,18 @@
       const profileKey = getActiveProfileKey();
 
       if (!subject) {
-        alert('Subject is required');
+        showError('Subject is required');
         return;
       }
 
       if (!body || body.trim() === '') {
-        alert('Email body is required');
+        showError('Email body is required');
         return;
       }
 
       const validation = validateBusinessHours(scheduledDate, scheduledTime);
       if (!validation.valid) {
-        alert(validation.message);
+        showError(validation.message);
         return;
       }
 
@@ -416,13 +416,13 @@
             throw new Error(error.detail || 'Failed to update scheduled email');
           }
 
-          alert('Scheduled email updated!');
+          showSuccess('Scheduled email updated!');
           resetModal();
           window.currentScheduledEmailId = null;
           window.location.reload();
         } catch (error) {
           console.error('Error updating scheduled email:', error);
-          alert('Failed to update scheduled email: ' + error.message);
+          showError('Failed to update scheduled email: ' + error.message);
           scheduleBtn.disabled = false;
           scheduleBtn.textContent = 'Schedule Email';
         }
@@ -432,7 +432,7 @@
 
       // Creating a brand new scheduled email (requires contact)
       if (!currentLeadId || !currentContactId) {
-        alert('Missing lead or contact information');
+        showError('Missing lead or contact information');
         return;
       }
 
@@ -457,7 +457,7 @@
           throw new Error(error.detail || 'Failed to schedule email');
         }
 
-        alert('Email scheduled successfully!');
+        showSuccess('Email scheduled successfully!');
         modal.style.display = 'none';
         form.reset();
         bodyEditor.innerHTML = '';
@@ -472,7 +472,7 @@
         window.location.reload();
       } catch (error) {
         console.error('Error scheduling email:', error);
-        alert('Failed to schedule email: ' + error.message);
+        showError('Failed to schedule email: ' + error.message);
         scheduleBtn.disabled = false;
         scheduleBtn.textContent = 'Schedule Email';
       }
