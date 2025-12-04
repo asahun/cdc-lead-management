@@ -34,7 +34,8 @@ PROFILES_ENV_DEFAULTS = {
         "from_email": os.getenv("EMAIL_PROFILE_FISSEHA_FROM", "fisseha@loadrouter.com"),
         "reply_to": os.getenv("EMAIL_PROFILE_FISSEHA_REPLY_TO", "fisseha@loadrouter.com"),
         "phone": os.getenv("EMAIL_PROFILE_FISSEHA_PHONE", "(404) 654-3593"),
-        "signature_template": "fisseha_signature.html",
+        "title": os.getenv("EMAIL_PROFILE_FISSEHA_TITLE", "Client Relations & Compliance Manager"),
+        "signature_template": "signature.html",
         "smtp_password": os.getenv("EMAIL_PROFILE_FISSEHA_PASSWORD", "wAcheb-retqu4-dejriw"),
     },
     "abby": {
@@ -44,8 +45,9 @@ PROFILES_ENV_DEFAULTS = {
         "full_name": os.getenv("EMAIL_PROFILE_ABBY_NAME", "Abby Tezera"),
         "from_email": os.getenv("EMAIL_PROFILE_ABBY_FROM", "abby@loadrouter.com"),
         "reply_to": os.getenv("EMAIL_PROFILE_ABBY_REPLY_TO", "abby@loadrouter.com"),
-        "phone": os.getenv("EMAIL_PROFILE_ABBY_PHONE", "(404) 000-0000"),
-        "signature_template": "abby_signature.html",
+        "phone": os.getenv("EMAIL_PROFILE_ABBY_PHONE", "(678) 250-3198"),
+        "title": os.getenv("EMAIL_PROFILE_ABBY_TITLE", "Client Relations & Compliance Manager"),
+        "signature_template": "signature.html",
         "smtp_password": os.getenv("EMAIL_PROFILE_ABBY_PASSWORD", "qedgom-6Diqpa-nodgas"),
     },
 }
@@ -186,14 +188,28 @@ def extract_profile_marker(body: str | None) -> tuple[str, str]:
     return DEFAULT_PROFILE_KEY, body
 
 
-def _render_signature(signature_template: str) -> str:
-    """Render email signature template."""
+def _render_signature(signature_template: str, profile: Dict[str, str]) -> str:
+    """Render email signature template with profile data."""
     template_path = TEMPLATE_DIR / signature_template
     if not template_path.exists():
         return ""
     
     with open(template_path, "r", encoding="utf-8") as f:
-        return f.read()
+        content = f.read()
+    
+    # Replace placeholders with profile data
+    replacements = {
+        "FullName": profile.get("full_name", ""),
+        "Title": profile.get("title", ""),
+        "Phone": profile.get("phone", ""),
+        "Email": profile.get("from_email", ""),
+    }
+    
+    for key, value in replacements.items():
+        placeholder = f"[{key}]"
+        content = content.replace(placeholder, str(value) if value else "")
+    
+    return content
 
 
 def build_email_body(
@@ -213,7 +229,7 @@ def build_email_body(
     profile = resolve_profile(profile_key)
     context = _build_template_context(lead, contact, property_details)
     body_content = _render_template(template_name, context)
-    signature = _render_signature(profile["signature_template"])
+    signature = _render_signature(profile["signature_template"], profile)
     
     return f"{body_content}\n{signature}"
 
