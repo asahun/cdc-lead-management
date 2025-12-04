@@ -36,7 +36,7 @@ PROFILES_ENV_DEFAULTS = {
         "phone": os.getenv("EMAIL_PROFILE_FISSEHA_PHONE", "(404) 654-3593"),
         "title": os.getenv("EMAIL_PROFILE_FISSEHA_TITLE", "Client Relations & Compliance Manager"),
         "signature_template": "signature.html",
-        "smtp_password": os.getenv("EMAIL_PROFILE_FISSEHA_PASSWORD", "wAcheb-retqu4-dejriw"),
+        "smtp_password": os.getenv("EMAIL_PROFILE_FISSEHA_PASSWORD", ""),
     },
     "abby": {
         "label": "Abby",
@@ -48,7 +48,7 @@ PROFILES_ENV_DEFAULTS = {
         "phone": os.getenv("EMAIL_PROFILE_ABBY_PHONE", "(678) 250-3198"),
         "title": os.getenv("EMAIL_PROFILE_ABBY_TITLE", "Client Relations & Compliance Manager"),
         "signature_template": "signature.html",
-        "smtp_password": os.getenv("EMAIL_PROFILE_ABBY_PASSWORD", "qedgom-6Diqpa-nodgas"),
+        "smtp_password": os.getenv("EMAIL_PROFILE_ABBY_PASSWORD", ""),
     },
 }
 
