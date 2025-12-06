@@ -2087,11 +2087,16 @@ def prep_email(
     lead_id: int,
     contact_id: int,
     profile: str | None = Query(None),
+    template_variant: str = Query("initial", description="Template variant: initial, followup_1, followup_2"),
     db: Session = Depends(get_db),
 ):
     """Prepare email content for a contact."""
+    # Validate template_variant
+    if template_variant not in ("initial", "followup_1", "followup_2"):
+        raise HTTPException(status_code=400, detail="Invalid template_variant. Must be one of: initial, followup_1, followup_2")
+    
     try:
-        email_data = prep_contact_email(db, lead_id, contact_id, profile_key=profile)
+        email_data = prep_contact_email(db, lead_id, contact_id, profile_key=profile, template_variant=template_variant)
         return JSONResponse(content=email_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -49,6 +49,10 @@
     modal.style.display = 'none';
     form.reset();
     bodyEditor.innerHTML = '';
+    const templateSelector = document.getElementById('email-template-variant');
+    if (templateSelector) {
+      templateSelector.value = 'initial';
+    }
     const scheduleGroup = document.getElementById('schedule-group');
     if (scheduleGroup) {
       scheduleGroup.style.display = 'none';
@@ -58,6 +62,54 @@
       toggleScheduleMode(false);
     }
     window.emailComposeModule.clearContext();
+  }
+  
+  // Helper to load email template
+  async function loadEmailTemplate(templateVariant = 'initial') {
+    if (!currentLeadId || !currentContactId) {
+      return;
+    }
+    
+    // Ensure elements exist
+    if (!bodyEditor || !subjectInput || !bodyHidden || !sendBtn) {
+      return;
+    }
+    
+    const profileKey = getActiveProfileKey();
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Loading...';
+    bodyEditor.innerHTML = '<p style="color: #666;">Loading email template...</p>';
+    
+    try {
+      const url = `/leads/${currentLeadId}/contacts/${currentContactId}/prep-email?profile=${encodeURIComponent(profileKey)}&template_variant=${encodeURIComponent(templateVariant)}`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to load email template');
+      }
+
+      const data = await response.json();
+      
+      subjectInput.value = data.subject || '';
+      bodyEditor.innerHTML = data.body || '<p>No template available. Please compose manually.</p>';
+
+      // Sync hidden input for form submission
+      bodyHidden.value = bodyEditor.innerHTML;
+
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+    } catch (error) {
+      console.error('Error loading email:', error);
+      showError('Failed to load email template: ' + error.message);
+      if (bodyEditor) {
+        bodyEditor.innerHTML = '<p style="color: #d32f2f;">Error loading template. Please compose manually.</p>';
+      }
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+      }
+    }
   }
 
   // Close modal handlers
@@ -109,30 +161,23 @@
     modal.style.display = 'flex';
     toInput.value = `${contactName} <${contactEmail}>`;
 
-    try {
-      const profileKey = getActiveProfileKey();
-      // Fetch email content
-      const response = await fetch(`/leads/${leadId}/contacts/${contactId}/prep-email?profile=${encodeURIComponent(profileKey)}`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to load email template');
+    // Load initial template
+    const templateSelector = document.getElementById('email-template-variant');
+    const templateVariant = templateSelector?.value || 'initial';
+    loadEmailTemplate(templateVariant);
+  });
+  
+  // Handle template selector change using event delegation (works even if element doesn't exist yet)
+  document.addEventListener('change', async (e) => {
+    if (e.target && e.target.id === 'email-template-variant') {
+      const templateVariant = e.target.value;
+      
+      // Ensure modal is open and we have the required IDs
+      if (!currentLeadId || !currentContactId) {
+        return;
       }
-
-      const data = await response.json();
-      subjectInput.value = data.subject || '';
-      bodyEditor.innerHTML = data.body || '<p>No template available. Please compose manually.</p>';
-
-      // Sync hidden input for form submission
-      bodyHidden.value = bodyEditor.innerHTML;
-
-      sendBtn.disabled = false;
-      sendBtn.textContent = 'Send';
-    } catch (error) {
-      console.error('Error loading email:', error);
-      showError('Failed to load email template: ' + error.message);
-      bodyEditor.innerHTML = '<p style="color: #d32f2f;">Error loading template. Please compose manually.</p>';
-      sendBtn.disabled = false;
-      sendBtn.textContent = 'Send';
+      
+      await loadEmailTemplate(templateVariant);
     }
   });
 

@@ -75,15 +75,38 @@ TEMPLATE_MAP = {
 }
 
 
-def _get_template_name(lead: BusinessLead) -> Optional[str]:
-    """Determine which email template to use based on lead status."""
+def _get_template_name(lead: BusinessLead, template_variant: str = "initial") -> Optional[str]:
+    """
+    Determine which email template to use based on lead status and variant.
+    
+    Args:
+        lead: The business lead
+        template_variant: One of "initial", "followup_1", "followup_2"
+    
+    Returns:
+        Template filename or None if no match
+    """
+    base_template = None
+    
     if lead.owner_type == OwnerType.individual:
-        return TEMPLATE_MAP[OwnerType.individual]
+        base_template = TEMPLATE_MAP[OwnerType.individual]
+    elif lead.owner_type == OwnerType.business and lead.business_owner_status:
+        base_template = TEMPLATE_MAP.get(lead.business_owner_status)
     
-    if lead.owner_type == OwnerType.business and lead.business_owner_status:
-        return TEMPLATE_MAP.get(lead.business_owner_status)
+    if not base_template:
+        return None
     
-    return None
+    # Handle template variants
+    if template_variant == "initial":
+        return base_template
+    elif template_variant == "followup_1":
+        # Replace .html with _followup_1.html
+        return base_template.replace(".html", "_followup_1.html")
+    elif template_variant == "followup_2":
+        # Replace .html with _followup_2.html
+        return base_template.replace(".html", "_followup_2.html")
+    
+    return base_template
 
 
 def _extract_first_name(contact_name: str) -> str:
@@ -217,12 +240,20 @@ def build_email_body(
     contact: LeadContact,
     property_details: Optional[PropertyView],
     profile_key: Optional[str] = None,
+    template_variant: str = "initial",
 ) -> str:
     """
     Build complete email body by rendering template and appending signature.
     Returns empty string if no matching template found.
+    
+    Args:
+        lead: The business lead
+        contact: The contact to email
+        property_details: Property details (optional)
+        profile_key: Email profile key
+        template_variant: One of "initial", "followup_1", "followup_2"
     """
-    template_name = _get_template_name(lead)
+    template_name = _get_template_name(lead, template_variant)
     if not template_name:
         return ""
     
@@ -234,22 +265,74 @@ def build_email_body(
     return f"{body_content}\n{signature}"
 
 
-def build_email_subject(lead: BusinessLead) -> str:
-    """Build email subject line based on lead status."""
+def build_email_subject(lead: BusinessLead, template_variant: str = "initial") -> str:
+    """
+    Build email subject line based on lead status and template variant.
+    
+    Args:
+        lead: The business lead
+        template_variant: One of "initial", "followup_1", "followup_2"
+    """
     property_id = lead.property_id or ""
     
-    if lead.owner_type == OwnerType.individual:
-        return f"Unclaimed Property Reported Under Your Name (Georgia)"
+    # Subject templates organized by owner_type, business_owner_status, and template_variant
+    SUBJECT_TEMPLATES = {
+        OwnerType.individual: {
+            "initial": "Unclaimed Property Reported Under Your Name (GA – Ref: {id})",
+            "followup_1": "Follow-up: Unclaimed Property Under Your Name (GA – Ref: {id})",
+            "followup_2": "Final Check: Unclaimed Property Under Your Name (GA – Ref: {id})",
+        },
+        OwnerType.business: {
+            BusinessOwnerStatus.active: {
+                "initial": "Unclaimed Property for {company} (GA – Ref: {id})",
+                "followup_1": "Follow-up: Unclaimed Property for {company} (GA – Ref: {id})",
+                "followup_2": "Final Check: Unclaimed Property for {company} (GA – Ref: {id})",
+            },
+            BusinessOwnerStatus.acquired_or_merged: {
+                "initial": "Unclaimed Property Reported Under Former Entity: {company} (GA – Ref: {id})",
+                "followup_1": "Follow-up: Unclaimed Property – Former Entity {company} (GA – Ref: {id})",
+                "followup_2": "Final Check: Unclaimed Property – Former Entity {company} (GA – Ref: {id})",
+            },
+            BusinessOwnerStatus.active_renamed: {
+                "initial": "Unclaimed Property Reported Under Former Entity: {company} (GA – Ref: {id})",
+                "followup_1": "Follow-up: Unclaimed Property – Former Entity {company} (GA – Ref: {id})",
+                "followup_2": "Final Check: Unclaimed Property – Former Entity {company} (GA – Ref: {id})",
+            },
+            BusinessOwnerStatus.dissolved: {
+                "initial": "Unclaimed Property Reported Under Dissolved Business: {company} (GA – Ref: {id})",
+                "followup_1": "",  # Empty for dissolved followup_1
+                "followup_2": "Follow-up: Unclaimed Property – {company} (GA – Ref: {id})",
+            },
+        },
+    }
     
-    if lead.owner_type == OwnerType.business:
-        if lead.business_owner_status == BusinessOwnerStatus.dissolved:
-            return f"Unclaimed Property Reported Under Dissolved Business: {lead.owner_name} (GA – Ref: {property_id})"
-        elif lead.business_owner_status == BusinessOwnerStatus.acquired_or_merged:
-            return f"Unclaimed Property Reported Under Former Entity: {lead.owner_name} (GA – Ref: {property_id})"
-        elif lead.business_owner_status == BusinessOwnerStatus.active_renamed:
-            return f"Unclaimed Property Reported Under Former Entity: {lead.owner_name} (GA – Ref: {property_id})"
-        elif lead.business_owner_status == BusinessOwnerStatus.active:
-            return f"Unclaimed Property for {lead.owner_name} (GA – Ref: {property_id})"
+    # Get template based on owner type
+    if lead.owner_type == OwnerType.individual:
+        template = SUBJECT_TEMPLATES[OwnerType.individual].get(template_variant)
+        if template:
+            return template.format(id=property_id)
+        # Fallback to initial if variant not found
+        return SUBJECT_TEMPLATES[OwnerType.individual]["initial"].format(id=property_id)
+    
+    # Business owner types
+    if lead.owner_type == OwnerType.business and lead.business_owner_status:
+        status_templates = SUBJECT_TEMPLATES[OwnerType.business].get(lead.business_owner_status)
+        if status_templates:
+            template = status_templates.get(template_variant)
+            if template is not None:  # Check if key exists (even if empty string)
+                # Use new_business_name for acquired/renamed if available, otherwise owner_name
+                company_name = lead.owner_name
+                if lead.business_owner_status in (BusinessOwnerStatus.acquired_or_merged, BusinessOwnerStatus.active_renamed):
+                    company_name = lead.new_business_name or lead.owner_name
+                elif lead.business_owner_status == BusinessOwnerStatus.dissolved:
+                    company_name = lead.owner_name
+                
+                # Handle empty template (e.g., dissolved followup_1) - return empty string as specified
+                if template.strip():
+                    return template.format(company=company_name, id=property_id)
+                else:
+                    # Return empty string for intentionally empty templates
+                    return ""
     
     # Fallback
     return f"Unclaimed Property Inquiry (GA – Ref: {property_id})"
@@ -338,10 +421,18 @@ def prep_contact_email(
     lead_id: int,
     contact_id: int,
     profile_key: Optional[str] = None,
+    template_variant: str = "initial",
 ) -> Dict[str, Any]:
     """
     Prepare email content for a contact.
     Returns subject and body (empty if no template match).
+    
+    Args:
+        db: Database session
+        lead_id: Lead ID
+        contact_id: Contact ID
+        profile_key: Email profile key
+        template_variant: One of "initial", "followup_1", "followup_2"
     """
     lead = db.get(BusinessLead, lead_id)
     if not lead:
@@ -372,8 +463,8 @@ def prep_contact_email(
             select(PropertyView).where(PropertyView.propertyid == lead.property_id)
         )
     
-    subject = build_email_subject(lead)
-    body = build_email_body(lead, contact, property_details, profile_key=profile_key)
+    subject = build_email_subject(lead, template_variant=template_variant)
+    body = build_email_body(lead, contact, property_details, profile_key=profile_key, template_variant=template_variant)
     profile = resolve_profile(profile_key)
     
     return {
