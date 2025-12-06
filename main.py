@@ -14,7 +14,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, cast, String, update, case, and_
+from sqlalchemy import select, func, or_, cast, String, update, case, and_, Table, MetaData, inspect, exists
 from markupsafe import Markup, escape
 
 from db import Base, SessionLocal, engine
@@ -113,11 +113,70 @@ def get_db():
 
 PAGE_SIZE = 20
 PROPERTY_MIN_AMOUNT = Decimal("10000")
+DEFAULT_YEAR = "2025"
+
+# Cache for discovered year tables
+_YEAR_TABLES_LIST = None
+
+
+def _get_available_years(db: Session) -> list[str]:
+    """Discover available year tables from database."""
+    global _YEAR_TABLES_LIST
+    
+    if _YEAR_TABLES_LIST is not None:
+        return _YEAR_TABLES_LIST
+    
+    inspector = inspect(engine)
+    all_tables = inspector.get_table_names()
+    
+    # Filter tables matching pattern ucp_main_year_e_YYYY
+    year_tables = []
+    for table_name in all_tables:
+        if table_name.startswith("ucp_main_year_e_"):
+            # Extract year from table name (e.g., "ucp_main_year_e_2025" -> "2025")
+            year_match = re.search(r"ucp_main_year_e_(\d{4})$", table_name)
+            if year_match:
+                year = year_match.group(1)
+                year_tables.append(year)
+    
+    # Sort descending (newest first)
+    year_tables.sort(reverse=True)
+    _YEAR_TABLES_LIST = year_tables
+    return year_tables
+
+
+def _get_property_table_for_year(year: str | None = None) -> Table:
+    """Get SQLAlchemy Table object for the specified year's property table."""
+    if not year:
+        year = DEFAULT_YEAR
+    
+    table_name = f"ucp_main_year_e_{year}"
+    
+    # Check if table exists
+    inspector = inspect(engine)
+    if table_name not in inspector.get_table_names():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Property table for year {year} not found"
+        )
+    
+    # Use reflection to get the table
+    metadata = MetaData()
+    return Table(
+        table_name,
+        metadata,
+        autoload_with=engine,
+        schema=None
+    )
+
+
+# Legacy constants for backward compatibility (will be replaced with dynamic table)
 PROPERTY_AMOUNT_FILTER = PropertyView.propertyamount >= PROPERTY_MIN_AMOUNT
 PROPERTY_ORDERING = (
     PropertyView.propertyamount.desc(),
     PropertyView.raw_hash.asc(),
 )
+
 APP_TIMEZONE = ZoneInfo(os.getenv("APP_TIMEZONE", "America/New_York"))
 
 PHONE_SCRIPTS_DIR = Path("templates") / "phone"
@@ -352,56 +411,74 @@ def _sync_existing_property_assignments():
         db.close()
 
 
-def _get_property_by_id(db: Session, property_id: str) -> PropertyView | None:
-    return db.scalar(
-        select(PropertyView)
-        .where(PROPERTY_AMOUNT_FILTER)
-        .where(PropertyView.propertyid == property_id)
-    )
+def _get_property_by_id(db: Session, property_id: str, year: str | None = None) -> dict | None:
+    """Get property by ID from the specified year's table. Returns dict with property data."""
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop_table = _get_property_table_for_year(year)
+    
+    result = db.execute(
+        select(prop_table)
+        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+        .where(prop_table.c.propertyid == property_id)
+        .limit(1)
+    ).first()
+    
+    if result:
+        return dict(result._mapping)
+    return None
 
 
-def _get_property_by_order(db: Session, order_id: int) -> PropertyView | None:
-    raw_hash = _get_raw_hash_for_order(db, order_id)
+def _get_property_by_order(db: Session, order_id: int, year: str | None = None) -> dict | None:
+    """Get property by order ID from the specified year's table."""
+    if not year:
+        year = DEFAULT_YEAR
+    
+    raw_hash = _get_raw_hash_for_order(db, order_id, year)
     if not raw_hash:
         return None
-    return _get_property_by_raw_hash(db, raw_hash)
+    return _get_property_by_raw_hash(db, raw_hash, year)
 
 
-def _get_property_by_raw_hash(db: Session, raw_hash: str) -> PropertyView | None:
-    return db.scalar(
-        select(PropertyView)
-        .where(PROPERTY_AMOUNT_FILTER)
-        .where(PropertyView.raw_hash == raw_hash)
-    )
+def _get_property_by_raw_hash(db: Session, raw_hash: str, year: str | None = None) -> dict | None:
+    """Get property by raw hash from the specified year's table. Returns dict with property data."""
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop_table = _get_property_table_for_year(year)
+    
+    result = db.execute(
+        select(prop_table)
+        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+        .where(prop_table.c.row_hash == raw_hash)  # Database column is "row_hash"
+        .limit(1)
+    ).first()
+    
+    if result:
+        return dict(result._mapping)
+    return None
 
 
-def _ranked_navigation_row(db: Session, raw_hash: str):
-    ranked = (
-        select(
-            PropertyView.raw_hash.label("raw_hash"),
-            func.row_number().over(order_by=PROPERTY_ORDERING).label("order_id"),
-            func.lag(PropertyView.raw_hash).over(order_by=PROPERTY_ORDERING).label("prev_hash"),
-            func.lead(PropertyView.raw_hash).over(order_by=PROPERTY_ORDERING).label("next_hash"),
-        )
-        .where(PROPERTY_AMOUNT_FILTER)
-        .subquery()
-    )
-    return db.execute(
-        select(
-            ranked.c.order_id,
-            ranked.c.prev_hash,
-            ranked.c.next_hash,
-        ).where(ranked.c.raw_hash == raw_hash)
-    ).one_or_none()
-
-
-def _get_property_details_for_lead(db: Session, lead: BusinessLead) -> PropertyView | None:
-    if lead.property_raw_hash:
-        prop = _get_property_by_raw_hash(db, lead.property_raw_hash)
-        if prop:
-            return prop
-    if lead.property_id:
-        return _get_property_by_id(db, lead.property_id)
+def _get_property_details_for_lead(db: Session, lead: BusinessLead, year: str | None = None) -> dict | None:
+    """Get property details for a lead, trying to find it in the specified year's table."""
+    if not year:
+        year = DEFAULT_YEAR
+    
+    # Try all available years if property not found in specified year
+    available_years = _get_available_years(db)
+    years_to_try = [year] + [y for y in available_years if y != year]
+    
+    for try_year in years_to_try:
+        if lead.property_raw_hash:
+            prop = _get_property_by_raw_hash(db, lead.property_raw_hash, try_year)
+            if prop:
+                return prop
+        if lead.property_id:
+            prop = _get_property_by_id(db, lead.property_id, try_year)
+            if prop:
+                return prop
+    
     return None
 
 
@@ -409,11 +486,11 @@ def _build_phone_script_context(
     owner_name: str | None,
     property_id: str | None,
     property_amount,
-    property_details: PropertyView | None,
+    property_details: dict | None,
 ):
     amount_value = None
-    if property_details and property_details.propertyamount not in (None, ""):
-        amount_value = property_details.propertyamount
+    if property_details and property_details.get("propertyamount") not in (None, ""):
+        amount_value = property_details.get("propertyamount")
     elif property_amount not in (None, ""):
         amount_value = property_amount
 
@@ -424,9 +501,9 @@ def _build_phone_script_context(
         "PropertyID": property_id or "",
         "PropertyAmount": formatted_amount,
         "PropertyAmountValue": str(amount_value) if amount_value not in (None, "") else "",
-        "HolderName": (property_details.holdername if property_details else "") or "",
-        "ReportYear": (property_details.reportyear if property_details else "") or "",
-        "PropertyType": (property_details.propertytypedescription if property_details else "") or "",
+        "HolderName": (property_details.get("holdername") if property_details else "") or "",
+        "ReportYear": (property_details.get("reportyear") if property_details else "") or "",
+        "PropertyType": (property_details.get("propertytypedescription") if property_details else "") or "",
     }
 
 
@@ -691,8 +768,31 @@ def _lead_navigation_info(
     }
 
 
-def _property_navigation_info(db: Session, raw_hash: str):
-    nav_row = _ranked_navigation_row(db, raw_hash)
+def _property_navigation_info(db: Session, raw_hash: str, year: str | None = None):
+    """Get property navigation info for the specified year's table."""
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop_table = _get_property_table_for_year(year)
+    property_ordering = (prop_table.c.propertyamount.desc(), prop_table.c.row_hash.asc())
+    
+    ranked = (
+        select(
+            prop_table.c.row_hash.label("raw_hash"),
+            func.row_number().over(order_by=property_ordering).label("order_id"),
+            func.lag(prop_table.c.row_hash).over(order_by=property_ordering).label("prev_hash"),
+            func.lead(prop_table.c.row_hash).over(order_by=property_ordering).label("next_hash"),
+        )
+        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+        .subquery()
+    )
+    nav_row = db.execute(
+        select(
+            ranked.c.order_id,
+            ranked.c.prev_hash,
+            ranked.c.next_hash,
+        ).where(ranked.c.raw_hash == raw_hash)
+    ).one_or_none()
     if not nav_row:
         return {
             "order_id": None,
@@ -715,13 +815,20 @@ def _property_navigation_info(db: Session, raw_hash: str):
     }
 
 
-def _get_raw_hash_for_order(db: Session, order_id: int) -> str | None:
+def _get_raw_hash_for_order(db: Session, order_id: int, year: str | None = None) -> str | None:
+    """Get raw hash for a property by order ID from the specified year's table."""
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop_table = _get_property_table_for_year(year)
+    property_ordering = (prop_table.c.propertyamount.desc(), prop_table.c.row_hash.asc())
+    
     ranked = (
         select(
-            PropertyView.raw_hash.label("raw_hash"),
-            func.row_number().over(order_by=PROPERTY_ORDERING).label("order_id"),
+            prop_table.c.row_hash.label("raw_hash"),  # Database column is "row_hash", label as "raw_hash"
+            func.row_number().over(order_by=property_ordering).label("order_id"),
         )
-        .where(PROPERTY_AMOUNT_FILTER)
+        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
         .subquery()
     )
     return db.scalar(
@@ -729,19 +836,20 @@ def _get_raw_hash_for_order(db: Session, order_id: int) -> str | None:
     )
 
 
-def _build_gpt_payload(lead: BusinessLead, prop: PropertyView) -> dict[str, Any]:
+def _build_gpt_payload(lead: BusinessLead, prop: dict) -> dict[str, Any]:
+    """Build GPT payload from lead and property dict."""
     report_year_value = None
-    if getattr(prop, "reportyear", None):
+    if prop.get("reportyear"):
         try:
-            report_year_value = int(str(prop.reportyear))
+            report_year_value = int(str(prop.get("reportyear")))
         except (TypeError, ValueError):
             report_year_value = None
 
     return {
-        "business_name": lead.owner_name or prop.ownername or "",
-        "property_state": prop.ownerstate or "",
-        "holder_name_on_record": prop.holdername,
-        "last_activity_date": prop.lastactivitydate,
+        "business_name": lead.owner_name or prop.get("ownername") or "",
+        "property_state": prop.get("ownerstate") or "",
+        "holder_name_on_record": prop.get("holdername") or "",
+        "last_activity_date": prop.get("lastactivitydate") or "",
         "property_report_year": report_year_value,
     }
 
@@ -751,24 +859,39 @@ def list_properties(
     request: Request,
     page: int = 1,
     q: str | None = None,
+    year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
     claim_authority: str | None = Query("Single", description="Claim Authority: Unknown, Single, Joint"),
     db: Session = Depends(get_db),
 ):
     if page < 1:
         page = 1
 
-    filters = [PROPERTY_AMOUNT_FILTER]
-
+    # Default to current year if not specified
+    if not year:
+        year = DEFAULT_YEAR
+    
+    # Validate year exists
+    available_years = _get_available_years(db)
+    if year not in available_years:
+        year = DEFAULT_YEAR
+    
+    # Get dynamic table for the selected year
+    prop_table = _get_property_table_for_year(year)
+    
+    # Build filters using dynamic table
+    filters = [prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT]
+    
     cutoff = _previous_monday_cutoff()
-    filters.append(PropertyView.last_seen >= cutoff)
+    if prop_table.c.last_seen is not None:
+        filters.append(prop_table.c.last_seen >= cutoff)
 
     if q:
         pattern = f"%{q}%"
-        prop_id_text = cast(PropertyView.propertyid, String)
+        prop_id_text = cast(prop_table.c.propertyid, String)
         filters.append(
             or_(
                 prop_id_text.ilike(pattern),
-                PropertyView.ownername.ilike(pattern),
+                prop_table.c.ownername.ilike(pattern),
             )
         )
 
@@ -782,7 +905,7 @@ def list_properties(
     join_condition = None
     if claim_authority and claim_authority.lower() in ("unknown", "single", "joint"):
         # Join condition: trim both sides to handle whitespace (varchar(50) and text are compatible)
-        join_condition = func.trim(OwnerRelationshipAuthority.code) == func.trim(PropertyView.ownerrelation)
+        join_condition = func.trim(OwnerRelationshipAuthority.code) == func.trim(prop_table.c.ownerrelation)
         
         # Add filter for Claim_Authority - trim and compare case-insensitively
         # Normalize the input to match database values (Unknown, Single, Joint)
@@ -790,23 +913,27 @@ def list_properties(
             func.upper(func.trim(OwnerRelationshipAuthority.Claim_Authority)) == claim_authority.upper()
         )
 
+    # Build ordering for dynamic table
+    # Note: database column is "row_hash", not "raw_hash"
+    property_ordering = (prop_table.c.propertyamount.desc(), prop_table.c.row_hash.asc())
+
     # Build base query with join if filtering by Claim_Authority
     if join_condition is not None:
         count_stmt = (
             select(func.count())
-            .select_from(PropertyView)
+            .select_from(prop_table)
             .join(OwnerRelationshipAuthority, join_condition)
             .where(*filters)
         )
 
         ranked_stmt = (
             select(
-                PropertyView.raw_hash.label("raw_hash"),
-                PropertyView.propertyid.label("propertyid"),
-                PropertyView.ownername.label("ownername"),
-                PropertyView.propertyamount.label("propertyamount"),
-                PropertyView.assigned_to_lead.label("assigned_to_lead"),
-                func.row_number().over(order_by=PROPERTY_ORDERING).label("order_id"),
+                prop_table.c.row_hash.label("raw_hash"),  # Database column is "row_hash", label as "raw_hash"
+                prop_table.c.propertyid.label("propertyid"),
+                prop_table.c.ownername.label("ownername"),
+                prop_table.c.propertyamount.label("propertyamount"),
+                prop_table.c.assigned_to_lead.label("assigned_to_lead"),
+                func.row_number().over(order_by=property_ordering).label("order_id"),
             )
             .join(OwnerRelationshipAuthority, join_condition)
             .where(*filters)
@@ -814,18 +941,18 @@ def list_properties(
     else:
         count_stmt = (
             select(func.count())
-            .select_from(PropertyView)
+            .select_from(prop_table)
             .where(*filters)
         )
 
         ranked_stmt = (
             select(
-                PropertyView.raw_hash.label("raw_hash"),
-                PropertyView.propertyid.label("propertyid"),
-                PropertyView.ownername.label("ownername"),
-                PropertyView.propertyamount.label("propertyamount"),
-                PropertyView.assigned_to_lead.label("assigned_to_lead"),
-                func.row_number().over(order_by=PROPERTY_ORDERING).label("order_id"),
+                prop_table.c.row_hash.label("raw_hash"),  # Database column is "row_hash", label as "raw_hash"
+                prop_table.c.propertyid.label("propertyid"),
+                prop_table.c.ownername.label("ownername"),
+                prop_table.c.propertyamount.label("propertyamount"),
+                prop_table.c.assigned_to_lead.label("assigned_to_lead"),
+                func.row_number().over(order_by=property_ordering).label("order_id"),
             )
             .where(*filters)
         )
@@ -853,6 +980,8 @@ def list_properties(
             "total_pages": total_pages,
             "q": q or "",
             "total": total,
+            "year": year,
+            "available_years": available_years,
             "claim_authority": claim_authority or "Single",
         },
     )
@@ -865,13 +994,17 @@ def list_properties(
 def property_detail(
     request: Request,
     property_id: str,
+    year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
     db: Session = Depends(get_db),
 ):
-    prop = _get_property_by_id(db, property_id)
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop = _get_property_by_id(db, property_id, year)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    nav = _property_navigation_info(db, prop.raw_hash)
+    nav = _property_navigation_info(db, prop["raw_hash"], year)
 
     context = request.query_params.get("context", "")
     show_navigation = context != "lead"
@@ -896,23 +1029,28 @@ def property_detail(
 def new_lead_from_property(
     request: Request,
     property_id: str,
+    year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
     db: Session = Depends(get_db),
 ):
     # 1) Ensure we actually got a non-empty property_id
     if not property_id:
         raise HTTPException(status_code=400, detail="property_id query parameter is required")
 
+    # Default to current year if not specified
+    if not year:
+        year = DEFAULT_YEAR
+
     # 2) Fetch row from the view using propertyid as PK
-    prop = _get_property_by_id(db, property_id)
+    prop = _get_property_by_id(db, property_id, year)
     if not prop:
         raise HTTPException(status_code=404, detail=f"Property '{property_id}' not found in view")
 
-    if prop.assigned_to_lead:
+    if prop.get("assigned_to_lead"):
         existing_lead = db.scalar(
             select(BusinessLead).where(
                 or_(
-                    BusinessLead.property_raw_hash == prop.raw_hash,
-                    BusinessLead.property_id == prop.propertyid,
+                    BusinessLead.property_raw_hash == prop["raw_hash"],
+                    BusinessLead.property_id == prop["propertyid"],
                 )
             )
         )
@@ -928,10 +1066,10 @@ def new_lead_from_property(
 
     # 3) Pass the 3 fields to the template
     phone_script_context = _build_phone_script_context(
-        prop.ownername if prop else None,
-        prop.propertyid if prop else None,
-        prop.propertyamount if prop else None,
-        prop,
+        prop.get("ownername") if prop else None,
+        prop.get("propertyid") if prop else None,
+        prop.get("propertyamount") if prop else None,
+        prop,  # Pass dict instead of PropertyView object
     )
 
     return templates.TemplateResponse(
@@ -940,9 +1078,9 @@ def new_lead_from_property(
             "request": request,
             "lead": None,
             "mode": "create",
-            "property_id": prop.propertyid,          # view column
-            "owner_name": prop.ownername,           # view column
-            "property_amount": prop.propertyamount, # view column
+            "property_id": prop["propertyid"],          # view column
+            "owner_name": prop["ownername"],           # view column
+            "property_amount": prop["propertyamount"], # view column
             "statuses": list(LeadStatus),
             "contacts": [],
             "attempts": [],
@@ -959,7 +1097,7 @@ def new_lead_from_property(
             "individual_owner_status": IndividualOwnerStatus.alive,
             "new_business_name": "",
             "contact_edit_target": None,
-            "property_raw_hash": getattr(prop, "raw_hash", None),
+            "property_raw_hash": prop.get("raw_hash"),
             "can_generate_letters": False,
             "phone_scripts": PHONE_SCRIPTS,
             "phone_scripts_json": PHONE_SCRIPTS_JSON,
@@ -972,20 +1110,22 @@ def new_lead_from_property(
 @app.get("/api/properties/{property_id}")
 def property_detail_json(
     property_id: str,
+    year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
     db: Session = Depends(get_db),
 ):
-    prop = _get_property_by_id(db, property_id)
+    # Default to current year if not specified
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop = _get_property_by_id(db, property_id, year)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    column_names = prop.__table__.columns.keys()
-    data = {column: getattr(prop, column) for column in column_names}
-
-    nav = _property_navigation_info(db, prop.raw_hash)
+    nav = _property_navigation_info(db, prop["raw_hash"], year)
 
     return JSONResponse(
         {
-            "property": data,
+            "property": prop,
             "order_id": nav["order_id"],
             "prev_order_id": nav["prev_order_id"],
             "next_order_id": nav["next_order_id"],
@@ -999,13 +1139,18 @@ def property_detail_json(
 def property_detail_by_hash(
     request: Request,
     raw_hash: str,
+    year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
     db: Session = Depends(get_db),
 ):
-    prop = _get_property_by_raw_hash(db, raw_hash)
+    # Default to current year if not specified
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop = _get_property_by_raw_hash(db, raw_hash, year)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    nav = _property_navigation_info(db, prop.raw_hash)
+    nav = _property_navigation_info(db, prop["raw_hash"], year)
 
     context = request.query_params.get("context", "")
     show_navigation = context != "lead"
@@ -1033,11 +1178,15 @@ def property_detail_by_order(
     order_id: int,
     db: Session = Depends(get_db),
 ):
-    prop = _get_property_by_order(db, order_id)
+    # Default to current year if not specified
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop = _get_property_by_order(db, order_id, year)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    nav = _property_navigation_info(db, prop.raw_hash)
+    nav = _property_navigation_info(db, prop["raw_hash"], year)
 
     context = request.query_params.get("context", "")
     show_navigation = context != "lead"
@@ -1062,20 +1211,22 @@ def property_detail_by_order(
 @app.get("/api/properties/by_order/{order_id}")
 def property_detail_json_by_order(
     order_id: int,
+    year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
     db: Session = Depends(get_db),
 ):
-    prop = _get_property_by_order(db, order_id)
+    # Default to current year if not specified
+    if not year:
+        year = DEFAULT_YEAR
+    
+    prop = _get_property_by_order(db, order_id, year)
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    column_names = prop.__table__.columns.keys()
-    data = {column: getattr(prop, column) for column in column_names}
-
-    nav = _property_navigation_info(db, prop.raw_hash)
+    nav = _property_navigation_info(db, prop["raw_hash"], year)
 
     return JSONResponse(
         {
-            "property": data,
+            "property": prop,
             "order_id": nav["order_id"],
             "prev_order_id": nav["prev_order_id"],
             "next_order_id": nav["next_order_id"],
@@ -1148,6 +1299,7 @@ def list_leads(
     request: Request,
     page: int = 1,
     q: str | None = None,
+    year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
     # Attempt filters
     attempt_type: str | None = Query(None, description="Type: all, email, phone, mail"),
     attempt_operator: str | None = Query(None, description="Operator: >=, =, <="),
@@ -1186,6 +1338,32 @@ def list_leads(
     stmt = select(BusinessLead)
     count_stmt = select(func.count()).select_from(BusinessLead)
 
+    # Filter leads by year: only show leads whose properties exist in the selected year's table
+    prop_table = _get_property_table_for_year(year)
+    year_filter = or_(
+        # Check if property_raw_hash exists in the year's table
+        and_(
+            BusinessLead.property_raw_hash.is_not(None),
+            exists(
+                select(1)
+                .select_from(prop_table)
+                .where(prop_table.c.row_hash == BusinessLead.property_raw_hash)  # Database column is "row_hash"
+                .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+            )
+        ),
+        # Or check if property_id exists in the year's table
+        # Cast propertyid to text to match BusinessLead.property_id type
+        and_(
+            BusinessLead.property_id.is_not(None),
+            exists(
+                select(1)
+                .select_from(prop_table)
+                .where(cast(prop_table.c.propertyid, String) == BusinessLead.property_id)
+                .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+            )
+        )
+    )
+
     # Build filters using helper function
     filters = _build_lead_filters(
         q, attempt_type, attempt_operator, attempt_count_int,
@@ -1193,6 +1371,9 @@ def list_leads(
         scheduled_email_operator, scheduled_email_count_int,
         failed_email_operator, failed_email_count_int, status
     )
+    
+    # Add year filter to filters list
+    filters.append(year_filter)
 
     # Apply all filters
     if filters:
@@ -1229,6 +1410,8 @@ def list_leads(
             "failed_email_operator": failed_email_operator or "",
             "failed_email_count": failed_email_count_int,
             "status": status or "",
+            "year": year or DEFAULT_YEAR,
+            "available_years": _get_available_years(db),
         },
     )
 
@@ -1242,12 +1425,8 @@ async def lead_entity_intelligence(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    prop: PropertyView | None = None
-    if lead.property_raw_hash:
-        prop = _get_property_by_raw_hash(db, lead.property_raw_hash)
-
-    if not prop and lead.property_id:
-        prop = _get_property_by_id(db, lead.property_id)
+    # Try to find property in any available year
+    prop = _get_property_details_for_lead(db, lead)
 
     if not prop:
         raise HTTPException(
