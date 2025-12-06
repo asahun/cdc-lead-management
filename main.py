@@ -20,6 +20,7 @@ from markupsafe import Markup, escape
 from db import Base, SessionLocal, engine
 from models import (
     PropertyView,
+    OwnerRelationshipAuthority,
     BusinessLead,
     LeadStatus,
     LeadContact,
@@ -750,6 +751,7 @@ def list_properties(
     request: Request,
     page: int = 1,
     q: str | None = None,
+    claim_authority: str | None = Query("Single", description="Claim Authority: Unknown, Single, Joint"),
     db: Session = Depends(get_db),
 ):
     if page < 1:
@@ -770,23 +772,63 @@ def list_properties(
             )
         )
 
-    count_stmt = (
-        select(func.count())
-        .select_from(PropertyView)
-        .where(*filters)
-    )
-
-    ranked_stmt = (
-        select(
-            PropertyView.raw_hash.label("raw_hash"),
-            PropertyView.propertyid.label("propertyid"),
-            PropertyView.ownername.label("ownername"),
-            PropertyView.propertyamount.label("propertyamount"),
-            PropertyView.assigned_to_lead.label("assigned_to_lead"),
-            func.row_number().over(order_by=PROPERTY_ORDERING).label("order_id"),
+    # Join with owner_relationship_authority and filter by Claim_Authority if specified
+    # Join condition: owner_relationship_authority.Code = PropertyView.ownerrelation
+    # Default to "Single" if not specified or empty
+    if not claim_authority or claim_authority.strip() == "":
+        claim_authority = "Single"
+    
+    # Handle potential whitespace and case issues
+    join_condition = None
+    if claim_authority and claim_authority.lower() in ("unknown", "single", "joint"):
+        # Join condition: trim both sides to handle whitespace (varchar(50) and text are compatible)
+        join_condition = func.trim(OwnerRelationshipAuthority.code) == func.trim(PropertyView.ownerrelation)
+        
+        # Add filter for Claim_Authority - trim and compare case-insensitively
+        # Normalize the input to match database values (Unknown, Single, Joint)
+        filters.append(
+            func.upper(func.trim(OwnerRelationshipAuthority.Claim_Authority)) == claim_authority.upper()
         )
-        .where(*filters)
-    )
+
+    # Build base query with join if filtering by Claim_Authority
+    if join_condition is not None:
+        count_stmt = (
+            select(func.count())
+            .select_from(PropertyView)
+            .join(OwnerRelationshipAuthority, join_condition)
+            .where(*filters)
+        )
+
+        ranked_stmt = (
+            select(
+                PropertyView.raw_hash.label("raw_hash"),
+                PropertyView.propertyid.label("propertyid"),
+                PropertyView.ownername.label("ownername"),
+                PropertyView.propertyamount.label("propertyamount"),
+                PropertyView.assigned_to_lead.label("assigned_to_lead"),
+                func.row_number().over(order_by=PROPERTY_ORDERING).label("order_id"),
+            )
+            .join(OwnerRelationshipAuthority, join_condition)
+            .where(*filters)
+        )
+    else:
+        count_stmt = (
+            select(func.count())
+            .select_from(PropertyView)
+            .where(*filters)
+        )
+
+        ranked_stmt = (
+            select(
+                PropertyView.raw_hash.label("raw_hash"),
+                PropertyView.propertyid.label("propertyid"),
+                PropertyView.ownername.label("ownername"),
+                PropertyView.propertyamount.label("propertyamount"),
+                PropertyView.assigned_to_lead.label("assigned_to_lead"),
+                func.row_number().over(order_by=PROPERTY_ORDERING).label("order_id"),
+            )
+            .where(*filters)
+        )
 
     ranked_subq = ranked_stmt.subquery()
     stmt = (
@@ -811,6 +853,7 @@ def list_properties(
             "total_pages": total_pages,
             "q": q or "",
             "total": total,
+            "claim_authority": claim_authority or "Single",
         },
     )
 

@@ -37,6 +37,13 @@ class PropertyView(Base):
     propertytypedescription = Column(Text)
 
 
+class OwnerRelationshipAuthority(Base):
+    __tablename__ = "owner_relationship_authority"
+
+    code = Column("Code", Text, primary_key=True)
+    Claim_Authority = Column("Claim_Authority", Text)
+
+
 class LeadStatus(str, enum.Enum):
     new = "new"
     researching = "researching"

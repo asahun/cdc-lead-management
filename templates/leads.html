@@ -99,7 +99,7 @@
       </div>
 
       <button type="submit" class="btn btn-primary btn-block">Apply Filters</button>
-    </form>
+</form>
   </aside>
 
   <div class="page-content">
@@ -181,12 +181,12 @@
           Page {{ page }} of {{ total_pages }}
         </div>
         <div class="pager-buttons">
-          {% if page > 1 %}
+  {% if page > 1 %}
             <a class="ghost-link" href="?page={{ page-1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Prev</a>
-          {% endif %}
-          {% if page < total_pages %}
+  {% endif %}
+  {% if page < total_pages %}
             <a class="ghost-link" href="?page={{ page+1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Next</a>
-          {% endif %}
+  {% endif %}
         </div>
       </div>
     </div>

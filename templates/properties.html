@@ -1,14 +1,45 @@
 {# templates/properties.html #}
 {% extends "base.html" %}
 {% block content %}
-<h1>Properties</h1>
 
-<form class="page-actions" method="get" action="/properties">
-  <input type="text" name="q" placeholder="Search by Property ID or Owner" value="{{ q }}">
-  <button class="btn btn-secondary" type="submit">Search</button>
-</form>
+<div class="page-with-sidebar">
+  <aside class="filters-sidebar">
+    <div class="filters-header">
+      <h2>Filters</h2>
+      <button type="button" class="btn btn-ghost btn-sm" id="clear-filters">Clear All</button>
+    </div>
 
-<p>Total: {{ total }}</p>
+    <form id="filters-form" method="get" action="/properties">
+      <input type="hidden" name="q" value="{{ q }}">
+      <input type="hidden" name="page" value="1">
+
+      <div class="filter-group">
+        <label class="filter-label">Claim Authority</label>
+        <div class="filter-controls">
+          <select name="claim_authority" id="claim_authority" class="filter-select">
+            <option value="">All</option>
+            <option value="Unknown" {% if claim_authority == 'Unknown' %}selected{% endif %}>Unknown</option>
+            <option value="Single" {% if not claim_authority or claim_authority == 'Single' %}selected{% endif %}>Single</option>
+            <option value="Joint" {% if claim_authority == 'Joint' %}selected{% endif %}>Joint</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Apply Filters</button>
+    </form>
+  </aside>
+
+  <div class="page-content">
+    <div class="page-header">
+      <p class="page-subtitle">Total: {{ total }}</p>
+      <form class="page-actions search-form-inline" method="get" action="/properties">
+        <input type="hidden" name="claim_authority" value="{{ claim_authority }}">
+        <div class="search-input-group">
+          <input type="text" name="q" placeholder="Search by Property ID or Owner" value="{{ q }}" class="search-input">
+          <button class="btn btn-secondary search-button" type="submit">Search</button>
+        </div>
+      </form>
+    </div>
 
 <table class="data-table properties-table">
   <thead>
@@ -55,13 +86,15 @@
   <div class="pager-info">
     Page {{ page }} of {{ total_pages }}
   </div>
-  <div class="pager-buttons">
-    {% if page > 1 %}
-      <a class="ghost-link" href="?page={{ page-1 }}&q={{ q }}">Prev</a>
-    {% endif %}
-    {% if page < total_pages %}
-      <a class="ghost-link" href="?page={{ page+1 }}&q={{ q }}">Next</a>
-    {% endif %}
+      <div class="pager-buttons">
+  {% if page > 1 %}
+      <a class="ghost-link" href="?page={{ page-1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if claim_authority %}&claim_authority={{ claim_authority|urlencode }}{% endif %}">Prev</a>
+  {% endif %}
+  {% if page < total_pages %}
+      <a class="ghost-link" href="?page={{ page+1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if claim_authority %}&claim_authority={{ claim_authority|urlencode }}{% endif %}">Next</a>
+  {% endif %}
+  </div>
+    </div>
   </div>
 </div>
 
@@ -75,6 +108,7 @@
 </dialog>
 
 <script src="/static/js/property_detail.js?v=20241128"></script>
+<script src="/static/js/properties_filters.js?v=20241203"></script>
 <script src="/static/js/properties_state.js?v=20241128"></script>
 
 {% endblock %}
