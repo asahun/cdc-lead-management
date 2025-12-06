@@ -14,7 +14,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, cast, String, update
+from sqlalchemy import select, func, or_, cast, String, update, case, and_
 from markupsafe import Markup, escape
 
 from db import Base, SessionLocal, engine
@@ -471,6 +471,225 @@ def _get_print_logs_for_lead(db: Session, lead_id: int):
     return result.scalars().all()
 
 
+def _build_lead_filters(
+    q: str | None,
+    attempt_type: str | None,
+    attempt_operator: str | None,
+    attempt_count_int: int | None,
+    print_log_operator: str | None,
+    print_log_count_int: int | None,
+    print_log_mailed: str | None,
+    scheduled_email_operator: str | None,
+    scheduled_email_count_int: int | None,
+    failed_email_operator: str | None,
+    failed_email_count_int: int | None,
+    status: str | None,
+):
+    """Build filter conditions for leads query. Returns list of filter conditions."""
+    filters = []
+    
+    # Text search filter
+    if q:
+        pattern = f"%{q}%"
+        filters.append(
+            or_(
+                BusinessLead.property_id.ilike(pattern),
+                BusinessLead.owner_name.ilike(pattern)
+            )
+        )
+    
+    # Attempt count filter
+    if attempt_type and attempt_operator and attempt_count_int is not None:
+        attempt_filter = []
+        if attempt_type != "all":
+            attempt_filter.append(LeadAttempt.channel == ContactChannel[attempt_type])
+        attempt_count_subq = (
+            select(func.count(LeadAttempt.id))
+            .where(LeadAttempt.lead_id == BusinessLead.id)
+            .where(*attempt_filter)
+            .correlate(BusinessLead)
+            .scalar_subquery()
+        )
+        if attempt_operator == ">=":
+            filters.append(attempt_count_subq >= attempt_count_int)
+        elif attempt_operator == "=":
+            filters.append(attempt_count_subq == attempt_count_int)
+        elif attempt_operator == "<=":
+            filters.append(attempt_count_subq <= attempt_count_int)
+
+    # Print log count filter
+    if print_log_operator and print_log_count_int is not None:
+        print_log_filter = []
+        if print_log_mailed == "mailed":
+            print_log_filter.append(PrintLog.mailed == True)
+        elif print_log_mailed == "not_mailed":
+            print_log_filter.append(PrintLog.mailed == False)
+        print_log_count_subq = (
+            select(func.count(PrintLog.id))
+            .where(PrintLog.lead_id == BusinessLead.id)
+            .where(*print_log_filter)
+            .correlate(BusinessLead)
+            .scalar_subquery()
+        )
+        if print_log_operator == ">=":
+            filters.append(print_log_count_subq >= print_log_count_int)
+        elif print_log_operator == "=":
+            filters.append(print_log_count_subq == print_log_count_int)
+        elif print_log_operator == "<=":
+            filters.append(print_log_count_subq <= print_log_count_int)
+
+    # Scheduled email count filter (pending + sent)
+    if scheduled_email_operator and scheduled_email_count_int is not None:
+        scheduled_email_count_subq = (
+            select(func.count(ScheduledEmail.id))
+            .where(ScheduledEmail.lead_id == BusinessLead.id)
+            .where(ScheduledEmail.status.in_([ScheduledEmailStatus.pending, ScheduledEmailStatus.sent]))
+            .correlate(BusinessLead)
+            .scalar_subquery()
+        )
+        if scheduled_email_operator == ">=":
+            filters.append(scheduled_email_count_subq >= scheduled_email_count_int)
+        elif scheduled_email_operator == "=":
+            filters.append(scheduled_email_count_subq == scheduled_email_count_int)
+        elif scheduled_email_operator == "<=":
+            filters.append(scheduled_email_count_subq <= scheduled_email_count_int)
+
+    # Failed email count filter
+    if failed_email_operator and failed_email_count_int is not None:
+        failed_email_count_subq = (
+            select(func.count(ScheduledEmail.id))
+            .where(ScheduledEmail.lead_id == BusinessLead.id)
+            .where(ScheduledEmail.status == ScheduledEmailStatus.failed)
+            .correlate(BusinessLead)
+            .scalar_subquery()
+        )
+        if failed_email_operator == ">=":
+            filters.append(failed_email_count_subq >= failed_email_count_int)
+        elif failed_email_operator == "=":
+            filters.append(failed_email_count_subq == failed_email_count_int)
+        elif failed_email_operator == "<=":
+            filters.append(failed_email_count_subq <= failed_email_count_int)
+
+    # Status filter
+    if status:
+        try:
+            status_enum = LeadStatus[status]
+            filters.append(BusinessLead.status == status_enum)
+        except (KeyError, ValueError):
+            pass  # Invalid status, ignore
+    
+    return filters
+
+
+def _build_filter_query_string(
+    q: str | None,
+    attempt_type: str | None,
+    attempt_operator: str | None,
+    attempt_count: str | None,
+    print_log_operator: str | None,
+    print_log_count: str | None,
+    print_log_mailed: str | None,
+    scheduled_email_operator: str | None,
+    scheduled_email_count: str | None,
+    failed_email_operator: str | None,
+    failed_email_count: str | None,
+    status: str | None,
+) -> str:
+    """Build query string from filter parameters."""
+    from urllib.parse import urlencode
+    params = {}
+    if q:
+        params["q"] = q
+    if attempt_type and attempt_type != "all":
+        params["attempt_type"] = attempt_type
+    if attempt_operator:
+        params["attempt_operator"] = attempt_operator
+    if attempt_count:
+        params["attempt_count"] = attempt_count
+    if print_log_operator:
+        params["print_log_operator"] = print_log_operator
+    if print_log_count:
+        params["print_log_count"] = print_log_count
+    if print_log_mailed and print_log_mailed != "all":
+        params["print_log_mailed"] = print_log_mailed
+    if scheduled_email_operator:
+        params["scheduled_email_operator"] = scheduled_email_operator
+    if scheduled_email_count:
+        params["scheduled_email_count"] = scheduled_email_count
+    if failed_email_operator:
+        params["failed_email_operator"] = failed_email_operator
+    if failed_email_count:
+        params["failed_email_count"] = failed_email_count
+    if status:
+        params["status"] = status
+    if params:
+        return "?" + urlencode(params)
+    return ""
+
+
+def _lead_navigation_info(
+    db: Session,
+    lead_id: int,
+    q: str | None = None,
+    attempt_type: str | None = None,
+    attempt_operator: str | None = None,
+    attempt_count_int: int | None = None,
+    print_log_operator: str | None = None,
+    print_log_count_int: int | None = None,
+    print_log_mailed: str | None = None,
+    scheduled_email_operator: str | None = None,
+    scheduled_email_count_int: int | None = None,
+    failed_email_operator: str | None = None,
+    failed_email_count_int: int | None = None,
+    status: str | None = None,
+):
+    """Get navigation info for a lead (prev/next based on filtered ordering)."""
+    # Build filters using the same logic as list_leads
+    filters = _build_lead_filters(
+        q, attempt_type, attempt_operator, attempt_count_int,
+        print_log_operator, print_log_count_int, print_log_mailed,
+        scheduled_email_operator, scheduled_email_count_int,
+        failed_email_operator, failed_email_count_int, status
+    )
+    
+    # Use the same ordering as the leads list
+    lead_ordering = BusinessLead.created_at.desc()
+    
+    # Create ranked subquery with prev/next, applying filters
+    ranked_query = select(
+        BusinessLead.id.label("lead_id"),
+        func.row_number().over(order_by=lead_ordering).label("order_id"),
+        func.lag(BusinessLead.id).over(order_by=lead_ordering).label("prev_lead_id"),
+        func.lead(BusinessLead.id).over(order_by=lead_ordering).label("next_lead_id"),
+    )
+    
+    if filters:
+        ranked_query = ranked_query.where(and_(*filters))
+    
+    ranked = ranked_query.subquery()
+    
+    nav_row = db.execute(
+        select(
+            ranked.c.order_id,
+            ranked.c.prev_lead_id,
+            ranked.c.next_lead_id,
+        ).where(ranked.c.lead_id == lead_id)
+    ).one_or_none()
+    
+    if not nav_row:
+        return {
+            "order_id": None,
+            "prev_lead_id": None,
+            "next_lead_id": None,
+        }
+    
+    return {
+        "order_id": nav_row.order_id,
+        "prev_lead_id": nav_row.prev_lead_id,
+        "next_lead_id": nav_row.next_lead_id,
+    }
+
+
 def _property_navigation_info(db: Session, raw_hash: str):
     nav_row = _ranked_navigation_row(db, raw_hash)
     if not nav_row:
@@ -886,28 +1105,56 @@ def list_leads(
     request: Request,
     page: int = 1,
     q: str | None = None,
+    # Attempt filters
+    attempt_type: str | None = Query(None, description="Type: all, email, phone, mail"),
+    attempt_operator: str | None = Query(None, description="Operator: >=, =, <="),
+    attempt_count: str | None = Query(None, description="Count number"),
+    # Print log filters
+    print_log_operator: str | None = Query(None, description="Operator: >=, =, <="),
+    print_log_count: str | None = Query(None, description="Count number"),
+    print_log_mailed: str | None = Query(None, description="Mailed status: all, mailed, not_mailed"),
+    # Scheduled email filters
+    scheduled_email_operator: str | None = Query(None, description="Operator: >=, =, <="),
+    scheduled_email_count: str | None = Query(None, description="Count number"),
+    # Failed email filters
+    failed_email_operator: str | None = Query(None, description="Operator: >=, =, <="),
+    failed_email_count: str | None = Query(None, description="Count number"),
+    # Status filter
+    status: str | None = Query(None, description="Lead status"),
     db: Session = Depends(get_db),
 ):
+    # Convert string count parameters to integers, handling empty strings
+    def parse_count(value: str | None) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+    
+    attempt_count_int = parse_count(attempt_count)
+    print_log_count_int = parse_count(print_log_count)
+    scheduled_email_count_int = parse_count(scheduled_email_count)
+    failed_email_count_int = parse_count(failed_email_count)
     if page < 1:
         page = 1
 
+    # Base query
     stmt = select(BusinessLead)
     count_stmt = select(func.count()).select_from(BusinessLead)
 
-    if q:
-        pattern = f"%{q}%"
-        stmt = stmt.where(
-            or_(
-                BusinessLead.property_id.ilike(pattern),
-                BusinessLead.owner_name.ilike(pattern)
-            )
-        )
-        count_stmt = count_stmt.where(
-            or_(
-                BusinessLead.property_id.ilike(pattern),
-                BusinessLead.owner_name.ilike(pattern)
-            )
-        )
+    # Build filters using helper function
+    filters = _build_lead_filters(
+        q, attempt_type, attempt_operator, attempt_count_int,
+        print_log_operator, print_log_count_int, print_log_mailed,
+        scheduled_email_operator, scheduled_email_count_int,
+        failed_email_operator, failed_email_count_int, status
+    )
+
+    # Apply all filters
+    if filters:
+        stmt = stmt.where(and_(*filters))
+        count_stmt = count_stmt.where(and_(*filters))
 
     total = db.scalar(count_stmt) or 0
     stmt = stmt.order_by(BusinessLead.created_at.desc()).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
@@ -927,6 +1174,18 @@ def list_leads(
             "total_pages": total_pages,
             "q": q or "",
             "total": total,
+            # Filter values for template
+            "attempt_type": attempt_type or "all",
+            "attempt_operator": attempt_operator or "",
+            "attempt_count": attempt_count_int,
+            "print_log_operator": print_log_operator or "",
+            "print_log_count": print_log_count_int,
+            "print_log_mailed": print_log_mailed or "all",
+            "scheduled_email_operator": scheduled_email_operator or "",
+            "scheduled_email_count": scheduled_email_count_int,
+            "failed_email_operator": failed_email_operator or "",
+            "failed_email_count": failed_email_count_int,
+            "status": status or "",
         },
     )
 
@@ -969,12 +1228,47 @@ async def lead_entity_intelligence(
 def view_lead(
     request: Request,
     lead_id: int,
+    # Filter parameters (same as list_leads)
+    q: str | None = Query(None),
+    attempt_type: str | None = Query(None),
+    attempt_operator: str | None = Query(None),
+    attempt_count: str | None = Query(None),
+    print_log_operator: str | None = Query(None),
+    print_log_count: str | None = Query(None),
+    print_log_mailed: str | None = Query(None),
+    scheduled_email_operator: str | None = Query(None),
+    scheduled_email_count: str | None = Query(None),
+    failed_email_operator: str | None = Query(None),
+    failed_email_count: str | None = Query(None),
+    status: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     """Read-only view of a lead."""
     lead = db.get(BusinessLead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Parse count parameters
+    def parse_count(value: str | None) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+    
+    attempt_count_int = parse_count(attempt_count)
+    print_log_count_int = parse_count(print_log_count)
+    scheduled_email_count_int = parse_count(scheduled_email_count)
+    failed_email_count_int = parse_count(failed_email_count)
+    
+    # Get navigation info with filters
+    nav = _lead_navigation_info(
+        db, lead_id, q, attempt_type, attempt_operator, attempt_count_int,
+        print_log_operator, print_log_count_int, print_log_mailed,
+        scheduled_email_operator, scheduled_email_count_int,
+        failed_email_operator, failed_email_count_int, status
+    )
 
     contacts = list(lead.contacts)
     attempts = sorted(
@@ -1033,6 +1327,24 @@ def view_lead(
             "phone_scripts_json": PHONE_SCRIPTS_JSON,
             "phone_script_context_json": json.dumps(phone_script_context, default=str),
             "print_logs_json": print_logs_json,
+            # Navigation info
+            "prev_lead_id": nav["prev_lead_id"],
+            "next_lead_id": nav["next_lead_id"],
+            # Filter params for navigation links
+            "filter_params": {
+                "q": q or "",
+                "attempt_type": attempt_type or "",
+                "attempt_operator": attempt_operator or "",
+                "attempt_count": attempt_count or "",
+                "print_log_operator": print_log_operator or "",
+                "print_log_count": print_log_count or "",
+                "print_log_mailed": print_log_mailed or "",
+                "scheduled_email_operator": scheduled_email_operator or "",
+                "scheduled_email_count": scheduled_email_count or "",
+                "failed_email_operator": failed_email_operator or "",
+                "failed_email_count": failed_email_count or "",
+                "status": status or "",
+            },
         },
     )
 
@@ -1042,6 +1354,19 @@ def edit_lead(
     request: Request,
     lead_id: int,
     edit_contact_id: int | None = None,
+    # Filter parameters (same as list_leads)
+    q: str | None = Query(None),
+    attempt_type: str | None = Query(None),
+    attempt_operator: str | None = Query(None),
+    attempt_count: str | None = Query(None),
+    print_log_operator: str | None = Query(None),
+    print_log_count: str | None = Query(None),
+    print_log_mailed: str | None = Query(None),
+    scheduled_email_operator: str | None = Query(None),
+    scheduled_email_count: str | None = Query(None),
+    failed_email_operator: str | None = Query(None),
+    failed_email_count: str | None = Query(None),
+    status: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     lead = db.get(BusinessLead, lead_id)
@@ -1050,7 +1375,36 @@ def edit_lead(
     
     # Prevent editing of read-only leads
     if not _is_lead_editable(lead):
-        return RedirectResponse(url=f"/leads/{lead_id}/view", status_code=303)
+        # Preserve filter params in redirect
+        filter_query = _build_filter_query_string(
+            q, attempt_type, attempt_operator, attempt_count,
+            print_log_operator, print_log_count, print_log_mailed,
+            scheduled_email_operator, scheduled_email_count,
+            failed_email_operator, failed_email_count, status
+        )
+        return RedirectResponse(url=f"/leads/{lead_id}/view{filter_query}", status_code=303)
+    
+    # Parse count parameters
+    def parse_count(value: str | None) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+    
+    attempt_count_int = parse_count(attempt_count)
+    print_log_count_int = parse_count(print_log_count)
+    scheduled_email_count_int = parse_count(scheduled_email_count)
+    failed_email_count_int = parse_count(failed_email_count)
+    
+    # Get navigation info with filters
+    nav = _lead_navigation_info(
+        db, lead_id, q, attempt_type, attempt_operator, attempt_count_int,
+        print_log_operator, print_log_count_int, print_log_mailed,
+        scheduled_email_operator, scheduled_email_count_int,
+        failed_email_operator, failed_email_count_int, status
+    )
 
     contacts = list(lead.contacts)
     attempts = sorted(
@@ -1116,6 +1470,24 @@ def edit_lead(
             "phone_scripts_json": PHONE_SCRIPTS_JSON,
             "phone_script_context_json": json.dumps(phone_script_context, default=str),
             "print_logs_json": print_logs_json,
+            # Navigation info
+            "prev_lead_id": nav["prev_lead_id"],
+            "next_lead_id": nav["next_lead_id"],
+            # Filter params for navigation links
+            "filter_params": {
+                "q": q or "",
+                "attempt_type": attempt_type or "",
+                "attempt_operator": attempt_operator or "",
+                "attempt_count": attempt_count or "",
+                "print_log_operator": print_log_operator or "",
+                "print_log_count": print_log_count or "",
+                "print_log_mailed": print_log_mailed or "",
+                "scheduled_email_operator": scheduled_email_operator or "",
+                "scheduled_email_count": scheduled_email_count or "",
+                "failed_email_operator": failed_email_operator or "",
+                "failed_email_count": failed_email_count or "",
+                "status": status or "",
+            },
         },
     )
 

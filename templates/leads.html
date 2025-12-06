@@ -2,20 +2,130 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="page">
-  <div class="page-header">
-    <div>
-      <h1 class="page-title">Leads</h1>
-      <p class="page-subtitle">Total leads: {{ total }}</p>
+<div class="page-with-sidebar">
+  <aside class="filters-sidebar">
+    <div class="filters-header">
+      <h2>Filters</h2>
+      <button type="button" class="btn btn-ghost btn-sm" id="clear-filters">Clear All</button>
     </div>
-    <form class="page-actions" method="get" action="/leads">
-  <input type="text" name="q" placeholder="Search by Property ID or Owner" value="{{ q }}">
-      <button class="btn btn-secondary" type="submit">Search</button>
-</form>
-  </div>
 
-  <div class="card">
-    <table class="data-table leads-table">
+    <form id="filters-form" method="get" action="/leads">
+      <input type="hidden" name="q" value="{{ q }}">
+      <input type="hidden" name="page" value="1">
+
+      <div class="filter-group">
+        <label class="filter-label">Attempts</label>
+        <div class="filter-controls">
+          <select name="attempt_type" id="attempt_type" class="filter-select">
+            <option value="all" {% if attempt_type == 'all' %}selected{% endif %}>All</option>
+            <option value="email" {% if attempt_type == 'email' %}selected{% endif %}>Email</option>
+            <option value="phone" {% if attempt_type == 'phone' %}selected{% endif %}>Phone</option>
+            <option value="mail" {% if attempt_type == 'mail' %}selected{% endif %}>Mail</option>
+          </select>
+          <select name="attempt_operator" id="attempt_operator" class="filter-select">
+            <option value="">—</option>
+            <option value=">=" {% if attempt_operator == '>=' %}selected{% endif %}>≥</option>
+            <option value="=" {% if attempt_operator == '=' %}selected{% endif %}>=</option>
+            <option value="<=" {% if attempt_operator == '<=' %}selected{% endif %}>≤</option>
+          </select>
+          <input type="number" name="attempt_count" id="attempt_count" class="filter-input" 
+                 value="{{ attempt_count or '' }}" placeholder="Count" min="0">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Print Logs</label>
+        <div class="filter-controls">
+          <select name="print_log_operator" id="print_log_operator" class="filter-select">
+            <option value="">—</option>
+            <option value=">=" {% if print_log_operator == '>=' %}selected{% endif %}>≥</option>
+            <option value="=" {% if print_log_operator == '=' %}selected{% endif %}>=</option>
+            <option value="<=" {% if print_log_operator == '<=' %}selected{% endif %}>≤</option>
+          </select>
+          <input type="number" name="print_log_count" id="print_log_count" class="filter-input" 
+                 value="{{ print_log_count or '' }}" placeholder="Count" min="0">
+          <select name="print_log_mailed" id="print_log_mailed" class="filter-select">
+            <option value="all" {% if print_log_mailed == 'all' %}selected{% endif %}>All</option>
+            <option value="mailed" {% if print_log_mailed == 'mailed' %}selected{% endif %}>Mailed</option>
+            <option value="not_mailed" {% if print_log_mailed == 'not_mailed' %}selected{% endif %}>Not Mailed</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Scheduled Emails</label>
+        <div class="filter-controls">
+          <select name="scheduled_email_operator" id="scheduled_email_operator" class="filter-select">
+            <option value="">—</option>
+            <option value=">=" {% if scheduled_email_operator == '>=' %}selected{% endif %}>≥</option>
+            <option value="=" {% if scheduled_email_operator == '=' %}selected{% endif %}>=</option>
+            <option value="<=" {% if scheduled_email_operator == '<=' %}selected{% endif %}>≤</option>
+          </select>
+          <input type="number" name="scheduled_email_count" id="scheduled_email_count" class="filter-input" 
+                 value="{{ scheduled_email_count or '' }}" placeholder="Count" min="0">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Failed Emails</label>
+        <div class="filter-controls">
+          <select name="failed_email_operator" id="failed_email_operator" class="filter-select">
+            <option value="">—</option>
+            <option value=">=" {% if failed_email_operator == '>=' %}selected{% endif %}>≥</option>
+            <option value="=" {% if failed_email_operator == '=' %}selected{% endif %}>=</option>
+            <option value="<=" {% if failed_email_operator == '<=' %}selected{% endif %}>≤</option>
+          </select>
+          <input type="number" name="failed_email_count" id="failed_email_count" class="filter-input" 
+                 value="{{ failed_email_count or '' }}" placeholder="Count" min="0">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Status</label>
+        <div class="filter-controls">
+          <select name="status" id="status" class="filter-select">
+            <option value="">All</option>
+            <option value="new" {% if status == 'new' %}selected{% endif %}>New</option>
+            <option value="researching" {% if status == 'researching' %}selected{% endif %}>Researching</option>
+            <option value="contact_in_progress" {% if status == 'contact_in_progress' %}selected{% endif %}>Contact In Progress</option>
+            <option value="response_received" {% if status == 'response_received' %}selected{% endif %}>Response Received</option>
+            <option value="won" {% if status == 'won' %}selected{% endif %}>Won</option>
+            <option value="lost" {% if status == 'lost' %}selected{% endif %}>Lost</option>
+            <option value="no_response" {% if status == 'no_response' %}selected{% endif %}>No Response</option>
+            <option value="invalid" {% if status == 'invalid' %}selected{% endif %}>Invalid</option>
+            <option value="competitor_claimed" {% if status == 'competitor_claimed' %}selected{% endif %}>Competitor Claimed</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Apply Filters</button>
+    </form>
+  </aside>
+
+  <div class="page-content">
+    <div class="page-header">
+      <p class="page-subtitle">Total leads: {{ total }}</p>
+      <form class="page-actions search-form-inline" method="get" action="/leads">
+        <input type="hidden" name="attempt_type" value="{{ attempt_type }}">
+        <input type="hidden" name="attempt_operator" value="{{ attempt_operator }}">
+        <input type="hidden" name="attempt_count" value="{{ attempt_count or '' }}">
+        <input type="hidden" name="print_log_operator" value="{{ print_log_operator }}">
+        <input type="hidden" name="print_log_count" value="{{ print_log_count or '' }}">
+        <input type="hidden" name="print_log_mailed" value="{{ print_log_mailed }}">
+        <input type="hidden" name="scheduled_email_operator" value="{{ scheduled_email_operator }}">
+        <input type="hidden" name="scheduled_email_count" value="{{ scheduled_email_count or '' }}">
+        <input type="hidden" name="failed_email_operator" value="{{ failed_email_operator }}">
+        <input type="hidden" name="failed_email_count" value="{{ failed_email_count or '' }}">
+        <input type="hidden" name="status" value="{{ status }}">
+        <div class="search-input-group">
+          <input type="text" name="q" placeholder="Search by Property ID or Owner" value="{{ q }}" class="search-input">
+          <button class="btn btn-secondary search-button" type="submit">Search</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <table class="data-table leads-table">
   <thead>
     <tr>
       <th>ID</th>
@@ -24,46 +134,66 @@
       <th>Amount</th>
       <th>Status</th>
       <th>Created</th>
-          <th></th>
+            <th></th>
     </tr>
   </thead>
   <tbody>
-  {% for l, is_editable in leads_with_flags %}
-    <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
+        {% for l, is_editable in leads_with_flags %}
+          <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
       <td>{{ l.id }}</td>
       <td>{{ l.property_id }}</td>
       <td>{{ l.owner_name }}</td>
-          <td>{{ l.property_amount|currency }}</td>
-          <td><span class="status-pill">{{ l.status.value }}</span></td>
+            <td>{{ l.property_amount|currency }}</td>
+            <td><span class="status-pill">{{ l.status.value }}</span></td>
       <td>
-            <time class="js-local-time" datetime="{{ l.created_at.isoformat() }}">{{ l.created_at }}</time>
-          </td>
-          <td class="cell-actions">
-        <a href="/leads/{{ l.id }}/view">View</a>
-        {% if is_editable %}
-        <a href="/leads/{{ l.id }}/edit">Edit</a>
-        {% endif %}
+              <time class="js-local-time" datetime="{{ l.created_at.isoformat() }}">{{ l.created_at }}</time>
+            </td>
+            <td class="cell-actions">
+              {% set filter_qs = "" %}
+              {% if q or (attempt_type and attempt_type != 'all') or attempt_operator or attempt_count is not none or print_log_operator or print_log_count is not none or (print_log_mailed and print_log_mailed != 'all') or scheduled_email_operator or scheduled_email_count is not none or failed_email_operator or failed_email_count is not none or status %}
+                {% set param_parts = [] %}
+                {% if q %}{{ param_parts.append('q=' + q|urlencode) or '' }}{% endif %}
+                {% if attempt_type and attempt_type != 'all' %}{{ param_parts.append('attempt_type=' + attempt_type|urlencode) or '' }}{% endif %}
+                {% if attempt_operator %}{{ param_parts.append('attempt_operator=' + attempt_operator|urlencode) or '' }}{% endif %}
+                {% if attempt_count is not none %}{{ param_parts.append('attempt_count=' + attempt_count|string) or '' }}{% endif %}
+                {% if print_log_operator %}{{ param_parts.append('print_log_operator=' + print_log_operator|urlencode) or '' }}{% endif %}
+                {% if print_log_count is not none %}{{ param_parts.append('print_log_count=' + print_log_count|string) or '' }}{% endif %}
+                {% if print_log_mailed and print_log_mailed != 'all' %}{{ param_parts.append('print_log_mailed=' + print_log_mailed|urlencode) or '' }}{% endif %}
+                {% if scheduled_email_operator %}{{ param_parts.append('scheduled_email_operator=' + scheduled_email_operator|urlencode) or '' }}{% endif %}
+                {% if scheduled_email_count is not none %}{{ param_parts.append('scheduled_email_count=' + scheduled_email_count|string) or '' }}{% endif %}
+                {% if failed_email_operator %}{{ param_parts.append('failed_email_operator=' + failed_email_operator|urlencode) or '' }}{% endif %}
+                {% if failed_email_count is not none %}{{ param_parts.append('failed_email_count=' + failed_email_count|string) or '' }}{% endif %}
+                {% if status %}{{ param_parts.append('status=' + status|urlencode) or '' }}{% endif %}
+                {% if param_parts %}{% set filter_qs = '?' + param_parts|join('&') %}{% endif %}
+              {% endif %}
+              <a href="/leads/{{ l.id }}/view{{ filter_qs }}">View</a>
+              {% if is_editable %}
+        <a href="/leads/{{ l.id }}/edit{{ filter_qs }}">Edit</a>
+              {% endif %}
       </td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
 
-    <div class="pager">
-      <div class="pager-info">
-        Page {{ page }} of {{ total_pages }}
-      </div>
-      <div class="pager-buttons">
-  {% if page > 1 %}
-          <a class="ghost-link" href="?page={{ page-1 }}&q={{ q }}">Prev</a>
-  {% endif %}
-  {% if page < total_pages %}
-          <a class="ghost-link" href="?page={{ page+1 }}&q={{ q }}">Next</a>
-  {% endif %}
+      <div class="pager">
+        <div class="pager-info">
+          Page {{ page }} of {{ total_pages }}
+        </div>
+        <div class="pager-buttons">
+          {% if page > 1 %}
+            <a class="ghost-link" href="?page={{ page-1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Prev</a>
+          {% endif %}
+          {% if page < total_pages %}
+            <a class="ghost-link" href="?page={{ page+1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Next</a>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
 </div>
 
+<script src="/static/js/leads_filters.js?v=20241203"></script>
+<script src="/static/js/leads_filters_persistence.js?v=20241203"></script>
 <script src="/static/js/leads_state.js?v=20241128"></script>
 {% endblock %}

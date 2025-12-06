@@ -20,6 +20,37 @@
 {% endif %}
     </div>
     <div class="header-actions">
+      {% if mode != "create" and (prev_lead_id or next_lead_id) %}
+        {% set filter_qs = "" %}
+        {% if filter_params %}
+          {% set param_parts = [] %}
+          {% if filter_params.q %}{{ param_parts.append('q=' + filter_params.q|urlencode) or '' }}{% endif %}
+          {% if filter_params.attempt_type and filter_params.attempt_type != 'all' %}{{ param_parts.append('attempt_type=' + filter_params.attempt_type|urlencode) or '' }}{% endif %}
+          {% if filter_params.attempt_operator %}{{ param_parts.append('attempt_operator=' + filter_params.attempt_operator|urlencode) or '' }}{% endif %}
+          {% if filter_params.attempt_count %}{{ param_parts.append('attempt_count=' + filter_params.attempt_count) or '' }}{% endif %}
+          {% if filter_params.print_log_operator %}{{ param_parts.append('print_log_operator=' + filter_params.print_log_operator|urlencode) or '' }}{% endif %}
+          {% if filter_params.print_log_count %}{{ param_parts.append('print_log_count=' + filter_params.print_log_count) or '' }}{% endif %}
+          {% if filter_params.print_log_mailed and filter_params.print_log_mailed != 'all' %}{{ param_parts.append('print_log_mailed=' + filter_params.print_log_mailed|urlencode) or '' }}{% endif %}
+          {% if filter_params.scheduled_email_operator %}{{ param_parts.append('scheduled_email_operator=' + filter_params.scheduled_email_operator|urlencode) or '' }}{% endif %}
+          {% if filter_params.scheduled_email_count %}{{ param_parts.append('scheduled_email_count=' + filter_params.scheduled_email_count) or '' }}{% endif %}
+          {% if filter_params.failed_email_operator %}{{ param_parts.append('failed_email_operator=' + filter_params.failed_email_operator|urlencode) or '' }}{% endif %}
+          {% if filter_params.failed_email_count %}{{ param_parts.append('failed_email_count=' + filter_params.failed_email_count) or '' }}{% endif %}
+          {% if filter_params.status %}{{ param_parts.append('status=' + filter_params.status|urlencode) or '' }}{% endif %}
+          {% if param_parts %}{% set filter_qs = '?' + param_parts|join('&') %}{% endif %}
+        {% endif %}
+        <div class="action-cluster">
+          {% if prev_lead_id %}
+          <a href="/leads/{{ prev_lead_id }}/{{ mode }}{{ filter_qs }}" class="btn btn-ghost btn-inline">← Prev</a>
+          {% else %}
+          <span class="btn btn-ghost btn-inline" style="opacity: 0.5; pointer-events: none;">← Prev</span>
+          {% endif %}
+          {% if next_lead_id %}
+          <a href="/leads/{{ next_lead_id }}/{{ mode }}{{ filter_qs }}" class="btn btn-ghost btn-inline">Next →</a>
+          {% else %}
+          <span class="btn btn-ghost btn-inline" style="opacity: 0.5; pointer-events: none;">Next →</span>
+          {% endif %}
+        </div>
+      {% endif %}
 {% if current_property_hash or current_property_id %}
         <button
           type="button"
