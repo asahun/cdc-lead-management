@@ -59,9 +59,9 @@
     restoreYearIfNeeded();
   }
 
-  // Listen for year selector changes
+  // Listen for year selector changes (only on properties page, not leads)
   document.addEventListener('change', function(e) {
-    if (e.target && e.target.id === 'year') {
+    if (e.target && e.target.id === 'year' && !e.target.disabled) {
       const year = e.target.value;
       saveYear(year);
       

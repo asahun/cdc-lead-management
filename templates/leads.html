@@ -16,7 +16,7 @@
       <div class="filter-group">
         <label class="filter-label">Year</label>
         <div class="filter-controls">
-          <select name="year" id="year" class="filter-select">
+          <select name="year" id="year" class="filter-select" disabled title="Year is controlled from Properties page">
             {% for y in available_years %}
             <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
