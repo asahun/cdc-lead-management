@@ -419,9 +419,26 @@ def _get_property_by_id(db: Session, property_id: str, year: str | None = None) 
     prop_table = _get_property_table_for_year(year)
     
     result = db.execute(
-        select(prop_table)
+        select(
+            prop_table.c.row_hash.label("raw_hash"),  # Label as raw_hash for consistency
+            prop_table.c.propertyid,
+            prop_table.c.ownername,
+            prop_table.c.propertyamount,
+            prop_table.c.assigned_to_lead,
+            prop_table.c.owneraddress1,
+            prop_table.c.owneraddress2,
+            prop_table.c.owneraddress3,
+            prop_table.c.ownercity,
+            prop_table.c.ownerstate,
+            prop_table.c.ownerzipcode,
+            prop_table.c.ownerrelation,
+            prop_table.c.lastactivitydate,
+            prop_table.c.reportyear,
+            prop_table.c.holdername,
+            prop_table.c.propertytypedescription,
+        )
         .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
-        .where(prop_table.c.propertyid == property_id)
+        .where(cast(prop_table.c.propertyid, String) == property_id)  # Cast to match text type
         .limit(1)
     ).first()
     
@@ -449,7 +466,24 @@ def _get_property_by_raw_hash(db: Session, raw_hash: str, year: str | None = Non
     prop_table = _get_property_table_for_year(year)
     
     result = db.execute(
-        select(prop_table)
+        select(
+            prop_table.c.row_hash.label("raw_hash"),  # Label as raw_hash for consistency
+            prop_table.c.propertyid,
+            prop_table.c.ownername,
+            prop_table.c.propertyamount,
+            prop_table.c.assigned_to_lead,
+            prop_table.c.owneraddress1,
+            prop_table.c.owneraddress2,
+            prop_table.c.owneraddress3,
+            prop_table.c.ownercity,
+            prop_table.c.ownerstate,
+            prop_table.c.ownerzipcode,
+            prop_table.c.ownerrelation,
+            prop_table.c.lastactivitydate,
+            prop_table.c.reportyear,
+            prop_table.c.holdername,
+            prop_table.c.propertytypedescription,
+        )
         .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
         .where(prop_table.c.row_hash == raw_hash)  # Database column is "row_hash"
         .limit(1)
@@ -860,7 +894,7 @@ def list_properties(
     page: int = 1,
     q: str | None = None,
     year: str | None = Query(None, description="Year for property table (e.g., 2025)"),
-    claim_authority: str | None = Query("Single", description="Claim Authority: Unknown, Single, Joint"),
+    claim_authority: str | None = Query(None, description="Claim Authority: Unknown, Single, Joint"),
     db: Session = Depends(get_db),
 ):
     if page < 1:
@@ -897,20 +931,32 @@ def list_properties(
 
     # Join with owner_relationship_authority and filter by Claim_Authority if specified
     # Join condition: owner_relationship_authority.Code = PropertyView.ownerrelation
-    # Default to "Single" if not specified or empty
-    if not claim_authority or claim_authority.strip() == "":
-        claim_authority = "Single"
+    # Default to "Single" only if no claim_authority parameter is provided at all
+    # If claim_authority is empty string (from "All" selection), don't apply filter
+    claim_authority_filter = None
+    if claim_authority is None:
+        # No parameter provided - default to "Single"
+        claim_authority_filter = "Single"
+        claim_authority_display = "Single"
+    elif claim_authority.strip() == "":
+        # "All" was selected - don't apply claim_authority filter
+        claim_authority_filter = None
+        claim_authority_display = ""
+    else:
+        # Specific value selected
+        claim_authority_filter = claim_authority
+        claim_authority_display = claim_authority
     
     # Handle potential whitespace and case issues
     join_condition = None
-    if claim_authority and claim_authority.lower() in ("unknown", "single", "joint"):
+    if claim_authority_filter and claim_authority_filter.lower() in ("unknown", "single", "joint"):
         # Join condition: trim both sides to handle whitespace (varchar(50) and text are compatible)
         join_condition = func.trim(OwnerRelationshipAuthority.code) == func.trim(prop_table.c.ownerrelation)
         
         # Add filter for Claim_Authority - trim and compare case-insensitively
         # Normalize the input to match database values (Unknown, Single, Joint)
         filters.append(
-            func.upper(func.trim(OwnerRelationshipAuthority.Claim_Authority)) == claim_authority.upper()
+            func.upper(func.trim(OwnerRelationshipAuthority.Claim_Authority)) == claim_authority_filter.upper()
         )
 
     # Build ordering for dynamic table
@@ -982,7 +1028,7 @@ def list_properties(
             "total": total,
             "year": year,
             "available_years": available_years,
-            "claim_authority": claim_authority or "Single",
+            "claim_authority": claim_authority_display,
         },
     )
 
@@ -1008,7 +1054,7 @@ def property_detail(
 
     context = request.query_params.get("context", "")
     show_navigation = context != "lead"
-    show_add_to_lead = context != "lead" and not prop.assigned_to_lead
+    show_add_to_lead = context != "lead" and not prop.get("assigned_to_lead")
 
     return templates.TemplateResponse(
         "property_detail.html",
@@ -1154,7 +1200,7 @@ def property_detail_by_hash(
 
     context = request.query_params.get("context", "")
     show_navigation = context != "lead"
-    show_add_to_lead = context != "lead" and not prop.assigned_to_lead
+    show_add_to_lead = context != "lead" and not prop.get("assigned_to_lead")
 
     return templates.TemplateResponse(
         "property_detail.html",
@@ -1190,7 +1236,7 @@ def property_detail_by_order(
 
     context = request.query_params.get("context", "")
     show_navigation = context != "lead"
-    show_add_to_lead = context != "lead" and not prop.assigned_to_lead
+    show_add_to_lead = context != "lead" and not prop.get("assigned_to_lead")
 
     return templates.TemplateResponse(
         "property_detail.html",

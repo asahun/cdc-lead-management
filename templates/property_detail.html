@@ -53,7 +53,7 @@
     </div>
     <div class="meta-block">
       <span class="meta-label">Report Year</span>
-      <span class="meta-value">{{ display_value(property.reportyear if 'reportyear' in property.__dict__ else None) }}</span>
+      <span class="meta-value">{{ display_value(property.reportyear|default(None)) }}</span>
     </div>
   </section>
 

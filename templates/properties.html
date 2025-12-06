@@ -28,9 +28,9 @@
         <label class="filter-label">Claim Authority</label>
         <div class="filter-controls">
           <select name="claim_authority" id="claim_authority" class="filter-select">
-            <option value="">All</option>
+            <option value="" {% if not claim_authority or claim_authority == '' %}selected{% endif %}>All</option>
             <option value="Unknown" {% if claim_authority == 'Unknown' %}selected{% endif %}>Unknown</option>
-            <option value="Single" {% if not claim_authority or claim_authority == 'Single' %}selected{% endif %}>Single</option>
+            <option value="Single" {% if claim_authority == 'Single' %}selected{% endif %}>Single</option>
             <option value="Joint" {% if claim_authority == 'Joint' %}selected{% endif %}>Joint</option>
           </select>
         </div>
