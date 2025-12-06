@@ -422,6 +422,13 @@
                           Prep Email
                         </button>
                       {% endif %}
+                      <button type="button" 
+                        class="btn btn-primary linkedin-messages-btn" 
+                        data-lead-id="{{ lead.id }}"
+                        data-contact-id="{{ c.id }}"
+                        title="Open LinkedIn message templates">
+                        LinkedIn Messages
+                      </button>
                       {% if can_generate_letters %}
                         {% set has_full_address = c.address_street and c.address_city and c.address_state and c.address_zipcode %}
                         <button
@@ -813,6 +820,51 @@
   </div>
 </div>
 
+<!-- LinkedIn Messages Modal -->
+<div id="linkedin-modal" class="modal" style="display: none;">
+  <div class="modal-content linkedin-modal-content">
+    <div class="modal-header">
+      <h2>LinkedIn Message Templates</h2>
+      <button type="button" class="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="linkedin-modal-body">
+      <div class="profile-context">
+        <p class="profile-context-label">
+          Sending as: <span class="profile-chip" id="linkedin-profile-label">Abby</span>
+        </p>
+      </div>
+      <div class="linkedin-tabs">
+        <button type="button" class="linkedin-tab active" data-tab="connection_requests">Connection Requests</button>
+        <button type="button" class="linkedin-tab" data-tab="accepted_messages">Follow-up Messages</button>
+        <button type="button" class="linkedin-tab" data-tab="inmail">InMail</button>
+      </div>
+      <div class="linkedin-content">
+        <div class="linkedin-template-list">
+          <div id="linkedin-templates-container">
+            <p style="color: #666; padding: 20px;">Loading templates...</p>
+          </div>
+        </div>
+        <div class="linkedin-preview">
+          <div class="linkedin-preview-header">
+            <div class="linkedin-preview-title">
+              <h3>Preview</h3>
+              <span id="linkedin-followup-indicator" class="linkedin-followup-badge" style="display: none;"></span>
+            </div>
+            <div class="linkedin-preview-actions">
+              <button type="button" id="linkedin-copy-btn" class="btn btn-primary" disabled>Copy Message</button>
+              <button type="button" id="linkedin-mark-sent-btn" class="btn btn-secondary" disabled style="display: none;">Mark as Sent</button>
+            </div>
+          </div>
+          <div id="linkedin-preview-content" class="linkedin-preview-content">
+            <p style="color: #999; padding: 20px; text-align: center;">Select a template to preview</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/email_compose.js?v=20241128" defer></script>
 <script src="/static/js/scheduled_emails.js?v=20241128" defer></script>
+<script src="/static/js/linkedin_templates.js?v=20241128" defer></script>
 {% endblock %}

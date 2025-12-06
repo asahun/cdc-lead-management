@@ -125,25 +125,59 @@ def _build_template_context(
     lead: BusinessLead,
     contact: LeadContact,
     property_details: Optional[PropertyView],
+    profile: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    """Build context dictionary for template placeholder substitution."""
+    """
+    Build context dictionary for template placeholder substitution.
+    
+    Args:
+        lead: The business lead
+        contact: The contact
+        property_details: Property details (optional)
+        profile: Profile configuration (optional, for LinkedIn templates)
+    """
+    first_name = _extract_first_name(contact.contact_name)
+    company_name = lead.owner_name
+    new_entity_name = lead.new_business_name or company_name  # Use new entity name if available, otherwise fall back to company name
+    
     context = {
-        "FirstName": _extract_first_name(contact.contact_name),
+        "FirstName": first_name,  # Standardized placeholder for contact's first name (used in all LinkedIn templates)
         "ID": lead.property_id,
-        "Company Legal Name": lead.owner_name,
-        "Old Entity Legal Name": lead.owner_name,
-        "OldBusinessName": lead.owner_name,
-        "New Entity Name": lead.new_business_name or "",
+        "Company Legal Name": company_name,  # Standardized placeholder for company name (property record name)
+        "Company": company_name,  # Alias for Company Legal Name (for shorter usage)
+        "Old Entity Legal Name": company_name,  # Same as Company Legal Name (for dissolved/acquired contexts)
+        "OldBusinessName": company_name,  # Same as Company Legal Name
+        "New Entity Name": new_entity_name,  # Current/active company name (for acquired/merged companies)
     }
     
+    # Add profile first name if profile is provided (for LinkedIn templates)
+    if profile:
+        context["Profile First Name"] = profile.get("first_name", "")
+    
     if property_details:
+        # Handle both dict and object (PropertyView) cases
+        if isinstance(property_details, dict):
+            reportyear = property_details.get("reportyear") or ""
+            holdername = property_details.get("holdername") or ""
+            propertytypedescription = property_details.get("propertytypedescription") or ""
+            propertyamount = property_details.get("propertyamount")
+            ownerstate = property_details.get("ownerstate") or "Georgia"
+        else:
+            # PropertyView object
+            reportyear = property_details.reportyear or ""
+            holdername = property_details.holdername or ""
+            propertytypedescription = property_details.propertytypedescription or ""
+            propertyamount = property_details.propertyamount
+            ownerstate = property_details.ownerstate or "Georgia"
+        
         context.update({
-            "YYYY": property_details.reportyear or "",
-            "HolderName": property_details.holdername or "",
-            "Holder Name": property_details.holdername or "",
-            "Type": property_details.propertytypedescription or "",
-            "Amount": _format_amount(property_details.propertyamount),
-            "Exact or Range": _format_amount(property_details.propertyamount),
+            "YYYY": reportyear,
+            "HolderName": holdername,
+            "Holder Name": holdername,
+            "Type": propertytypedescription,
+            "Amount": _format_amount(propertyamount) if propertyamount else "",
+            "Exact or Range": _format_amount(propertyamount) if propertyamount else "",
+            "State": ownerstate,  # For LinkedIn templates
         })
     else:
         context.update({
@@ -153,6 +187,7 @@ def _build_template_context(
             "Type": "",
             "Amount": "",
             "Exact or Range": "",
+            "State": "Georgia",  # Default fallback
         })
     
     return context
@@ -258,7 +293,7 @@ def build_email_body(
         return ""
     
     profile = resolve_profile(profile_key)
-    context = _build_template_context(lead, contact, property_details)
+    context = _build_template_context(lead, contact, property_details, profile=profile)
     body_content = _render_template(template_name, context)
     signature = _render_signature(profile["signature_template"], profile)
     

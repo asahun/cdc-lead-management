@@ -48,6 +48,10 @@ from email_service import (
     send_email,
     resolve_profile,
     embed_profile_marker,
+    _build_template_context,
+    _render_template,
+    _build_template_context,
+    _render_template,
     extract_profile_marker,
     PROFILE_REGISTRY,
 )
@@ -2100,6 +2104,553 @@ def prep_email(
         return JSONResponse(content=email_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# LinkedIn Templates
+LINKEDIN_TEMPLATE_DIR = Path(__file__).parent / "templates" / "linkedin"
+
+# Template metadata organized by category, contact type, and business status
+LINKEDIN_TEMPLATES = {
+    "connection_requests": [
+        {
+            "name": "agent_connection_request.txt",
+            "display_name": "For Registered Agents",
+            "category": "connection_requests",
+            "contact_type": "agent",
+            "attempt": "initial",
+        },
+        {
+            "name": "leader_active_connection_request.txt",
+            "display_name": "For Active Businesses",
+            "category": "connection_requests",
+            "contact_type": "leader",
+            "business_status": "active",
+            "attempt": "initial",
+        },
+        {
+            "name": "leader_dissolved_connection_request.txt",
+            "display_name": "For Dissolved Businesses",
+            "category": "connection_requests",
+            "contact_type": "leader",
+            "business_status": "dissolved",
+            "attempt": "initial",
+        },
+        {
+            "name": "leader_acquired_connection_request.txt",
+            "display_name": "For Acquired/Merged Businesses",
+            "category": "connection_requests",
+            "contact_type": "leader",
+            "business_status": "acquired",
+            "attempt": "initial",
+        },
+    ],
+    "accepted_messages": [
+        # Leader - Active
+        {
+            "name": "leader_active_message_1.txt",
+            "display_name": "First Follow-up - Active Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "active",
+            "attempt": "followup_1",
+        },
+        {
+            "name": "leader_active_message_2.txt",
+            "display_name": "Second Follow-up - Active Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "active",
+            "attempt": "followup_2",
+        },
+        {
+            "name": "leader_active_message_3.txt",
+            "display_name": "Final Follow-up - Active Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "active",
+            "attempt": "followup_3",
+        },
+        # Leader - Dissolved
+        {
+            "name": "leader_dissolved_message_1.txt",
+            "display_name": "First Follow-up - Dissolved Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "dissolved",
+            "attempt": "followup_1",
+        },
+        {
+            "name": "leader_dissolved_message_2.txt",
+            "display_name": "Second Follow-up - Dissolved Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "dissolved",
+            "attempt": "followup_2",
+        },
+        {
+            "name": "leader_dissolved_message_3.txt",
+            "display_name": "Final Follow-up - Dissolved Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "dissolved",
+            "attempt": "followup_3",
+        },
+        # Leader - Acquired/Merged
+        {
+            "name": "leader_acquired_message_1.txt",
+            "display_name": "First Follow-up - Acquired/Merged Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "acquired",
+            "attempt": "followup_1",
+        },
+        {
+            "name": "leader_acquired_message_2.txt",
+            "display_name": "Second Follow-up - Acquired/Merged Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "acquired",
+            "attempt": "followup_2",
+        },
+        {
+            "name": "leader_acquired_message_3.txt",
+            "display_name": "Final Follow-up - Acquired/Merged Business",
+            "category": "accepted_messages",
+            "contact_type": "leader",
+            "business_status": "acquired",
+            "attempt": "followup_3",
+        },
+        # Agent - Active
+        {
+            "name": "agent_active_message_1.txt",
+            "display_name": "First Follow-up - Active Business",
+            "category": "accepted_messages",
+            "contact_type": "agent",
+            "business_status": "active",
+            "attempt": "followup_1",
+        },
+        {
+            "name": "agent_active_message_2.txt",
+            "display_name": "Second Follow-up - Active Business",
+            "category": "accepted_messages",
+            "contact_type": "agent",
+            "business_status": "active",
+            "attempt": "followup_2",
+        },
+        {
+            "name": "agent_active_message_3.txt",
+            "display_name": "Final Follow-up - Active Business",
+            "category": "accepted_messages",
+            "contact_type": "agent",
+            "business_status": "active",
+            "attempt": "followup_3",
+        },
+        # Agent - Dissolved
+        {
+            "name": "agent_dissolved_message_1.txt",
+            "display_name": "First Follow-up - Dissolved Business",
+            "category": "accepted_messages",
+            "contact_type": "agent",
+            "business_status": "dissolved",
+            "attempt": "followup_1",
+        },
+        {
+            "name": "agent_dissolved_message_2.txt",
+            "display_name": "Second Follow-up - Dissolved Business",
+            "category": "accepted_messages",
+            "contact_type": "agent",
+            "business_status": "dissolved",
+            "attempt": "followup_2",
+        },
+        {
+            "name": "agent_dissolved_message_3.txt",
+            "display_name": "Final Follow-up - Dissolved Business",
+            "category": "accepted_messages",
+            "contact_type": "agent",
+            "business_status": "dissolved",
+            "attempt": "followup_3",
+        },
+    ],
+    "inmail": [
+        {
+            "name": "leader_active_inmail.txt",
+            "display_name": "InMail - Active Business",
+            "category": "inmail",
+            "contact_type": "leader",
+            "business_status": "active",
+            "attempt": "alternative",
+        },
+        {
+            "name": "leader_dissolved_inmail.txt",
+            "display_name": "InMail - Dissolved Business",
+            "category": "inmail",
+            "contact_type": "leader",
+            "business_status": "dissolved",
+            "attempt": "alternative",
+        },
+        {
+            "name": "leader_acquired_inmail.txt",
+            "display_name": "InMail - Acquired/Merged Business",
+            "category": "inmail",
+            "contact_type": "leader",
+            "business_status": "acquired",
+            "attempt": "alternative",
+        },
+    ],
+}
+
+
+def _get_linkedin_connection_status(db: Session, contact_id: int) -> dict:
+    """
+    Determine LinkedIn connection status and message progression for a contact.
+    
+    Returns:
+    {
+        "is_connected": bool,
+        "has_connection_request": bool,
+        "last_message_number": int | None,  # 1, 2, or 3
+        "can_send_connection": bool,
+        "can_send_messages": bool,
+        "can_send_inmail": bool,
+        "next_message_number": int | None  # Which message to show next (1, 2, or 3)
+    }
+    """
+    # Get all LinkedIn attempts for this contact
+    linkedin_attempts = db.query(LeadAttempt).filter(
+        LeadAttempt.contact_id == contact_id,
+        LeadAttempt.channel == ContactChannel.linkedin
+    ).order_by(LeadAttempt.created_at.desc()).all()
+    
+    is_connected = False
+    has_connection_request = False
+    last_message_number = None
+    
+    for attempt in linkedin_attempts:
+        outcome = (attempt.outcome or "").strip()
+        
+        # Check for connection status
+        if "Connection Accepted" in outcome:
+            is_connected = True
+        elif "Connection Request Sent" in outcome:
+            has_connection_request = True
+        
+        # Check for message numbers
+        if "Message 1" in outcome or "Follow-up 1" in outcome:
+            if last_message_number is None:
+                last_message_number = 1
+        elif "Message 2" in outcome or "Follow-up 2" in outcome:
+            if last_message_number is None or last_message_number < 2:
+                last_message_number = 2
+        elif "Message 3" in outcome or "Follow-up 3" in outcome:
+            if last_message_number is None or last_message_number < 3:
+                last_message_number = 3
+    
+    # Determine what can be sent
+    can_send_connection = not has_connection_request and not is_connected
+    can_send_messages = is_connected
+    can_send_inmail = has_connection_request and not is_connected
+    
+    # Determine next message number
+    if is_connected:
+        if last_message_number is None:
+            next_message_number = 1
+        elif last_message_number < 3:
+            next_message_number = last_message_number + 1
+        else:
+            next_message_number = None  # All messages sent
+    else:
+        next_message_number = None
+    
+    return {
+        "is_connected": is_connected,
+        "has_connection_request": has_connection_request,
+        "last_message_number": last_message_number,
+        "can_send_connection": can_send_connection,
+        "can_send_messages": can_send_messages,
+        "can_send_inmail": can_send_inmail,
+        "next_message_number": next_message_number
+    }
+
+
+@app.get("/leads/{lead_id}/linkedin-templates")
+def get_linkedin_templates(
+    lead_id: int,
+    contact_id: int = Query(None, description="Contact ID to filter templates by contact type"),
+    db: Session = Depends(get_db),
+):
+    """Get list of available LinkedIn templates, filtered by contact type and connection status."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # If contact_id is provided, filter templates based on contact type and connection status
+    if contact_id:
+        contact = db.get(LeadContact, contact_id)
+        if not contact or contact.lead_id != lead_id:
+            raise HTTPException(status_code=404, detail="Contact not found")
+        
+        # Get LinkedIn connection status
+        connection_status = _get_linkedin_connection_status(db, contact_id)
+        
+        # Filter templates based on contact type and business status
+        filtered_templates = {}
+        
+        # Determine business status
+        business_status = None
+        if lead.business_owner_status == BusinessOwnerStatus.dissolved:
+            business_status = "dissolved"
+        elif lead.business_owner_status in (BusinessOwnerStatus.acquired_or_merged, BusinessOwnerStatus.active_renamed):
+            business_status = "acquired"
+        elif lead.business_owner_status == BusinessOwnerStatus.active:
+            business_status = "active"
+        # Default to active if status is None or unknown
+        if business_status is None:
+            business_status = "active"
+        
+        # Connection requests: only show if connection request hasn't been sent
+        if connection_status["can_send_connection"]:
+            if contact.contact_type == ContactType.agent:
+                filtered_templates["connection_requests"] = [
+                    t for t in LINKEDIN_TEMPLATES["connection_requests"]
+                    if t.get("contact_type") == "agent"
+                ]
+            else:
+                filtered_templates["connection_requests"] = [
+                    t for t in LINKEDIN_TEMPLATES["connection_requests"]
+                    if t.get("contact_type") == "leader" and (
+                        t.get("business_status") == business_status or 
+                        t.get("business_status") is None
+                    )
+                ]
+        else:
+            filtered_templates["connection_requests"] = []
+        
+        # Accepted messages: only show if connected, and filter to show only next message
+        if connection_status["can_send_messages"]:
+            all_messages = []
+            if contact.contact_type == ContactType.agent:
+                all_messages = [
+                    t for t in LINKEDIN_TEMPLATES["accepted_messages"]
+                    if t.get("contact_type") == "agent" and (
+                        t.get("business_status") == business_status or
+                        t.get("business_status") is None
+                    )
+                ]
+            else:
+                all_messages = [
+                    t for t in LINKEDIN_TEMPLATES["accepted_messages"]
+                    if t.get("contact_type") == "leader" and (
+                        t.get("business_status") == business_status or
+                        t.get("business_status") is None
+                    )
+                ]
+            
+            # Filter to show only the next message based on progression
+            if connection_status["next_message_number"]:
+                filtered_templates["accepted_messages"] = [
+                    t for t in all_messages
+                    if t.get("attempt") == f"followup_{connection_status['next_message_number']}"
+                ]
+            else:
+                # All messages sent
+                filtered_templates["accepted_messages"] = []
+        else:
+            filtered_templates["accepted_messages"] = []
+        
+        # InMail templates: only show if connection request sent but not accepted
+        if connection_status["can_send_inmail"]:
+            if contact.contact_type != ContactType.agent:
+                # Filter InMail templates by business status, but always return at least one
+                inmail_templates = []
+                all_inmail = LINKEDIN_TEMPLATES.get("inmail", [])
+                
+                # Try to find exact match first
+                for t in all_inmail:
+                    if t.get("business_status") == business_status:
+                        inmail_templates.append(t)
+                        break
+                
+                # If no exact match, use active template as fallback
+                if not inmail_templates:
+                    for t in all_inmail:
+                        if t.get("business_status") == "active":
+                            inmail_templates.append(t)
+                            break
+                
+                # Final fallback: return first available template (should always have at least one)
+                if not inmail_templates and all_inmail:
+                    inmail_templates = [all_inmail[0]]
+                
+                filtered_templates["inmail"] = inmail_templates
+            else:
+                filtered_templates["inmail"] = []
+        else:
+            filtered_templates["inmail"] = []
+        
+        # Ensure inmail is always in the response if can_send_inmail is true
+        if connection_status["can_send_inmail"] and not filtered_templates.get("inmail"):
+            # Last resort: return first available InMail template
+            all_inmail = LINKEDIN_TEMPLATES.get("inmail", [])
+            if all_inmail:
+                filtered_templates["inmail"] = [all_inmail[0]]
+        
+        return JSONResponse(content={
+            "templates": filtered_templates,
+            "connection_status": connection_status
+        })
+    
+    # If no contact_id, return all templates
+    return JSONResponse(content={"templates": LINKEDIN_TEMPLATES})
+
+
+@app.get("/leads/{lead_id}/contacts/{contact_id}/linkedin-preview")
+def preview_linkedin_template(
+    lead_id: int,
+    contact_id: int,
+    template_name: str = Query(..., description="Template filename"),
+    profile: str = Query(None, description="Profile key"),
+    db: Session = Depends(get_db),
+):
+    """Preview LinkedIn template with placeholders filled."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    contact = db.get(LeadContact, contact_id)
+    if not contact or contact.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Get property details
+    prop = _get_property_details_for_lead(db, lead)
+    
+    # Resolve profile
+    profile_data = resolve_profile(profile)
+    
+    # Build context with profile for LinkedIn placeholders
+    context = _build_template_context(lead, contact, prop, profile=profile_data)
+    
+    # Load and render template
+    template_path = LINKEDIN_TEMPLATE_DIR / template_name
+    if not template_path.exists():
+        raise HTTPException(status_code=404, detail=f"Template {template_name} not found")
+    
+    # Read template file
+    with open(template_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    
+    # Replace placeholders manually (LinkedIn templates are .txt, not HTML)
+    for key, value in context.items():
+        placeholder = f"[{key}]"
+        content = content.replace(placeholder, str(value) if value else "")
+    
+    return JSONResponse(content={"preview": content})
+
+
+@app.post("/leads/{lead_id}/contacts/{contact_id}/linkedin-mark-sent")
+def mark_linkedin_message_sent(
+    lead_id: int,
+    contact_id: int,
+    template_name: str = Form(..., description="Template filename"),
+    template_category: str = Form(..., description="Template category: connection_requests, accepted_messages, or inmail"),
+    db: Session = Depends(get_db),
+):
+    """Mark a LinkedIn message as sent and create an attempt record."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    contact = db.get(LeadContact, contact_id)
+    if not contact or contact.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Determine outcome based on template category and name
+    outcome = None
+    if template_category == "connection_requests":
+        outcome = "Connection Request Sent"
+    elif template_category == "accepted_messages":
+        # Determine message number from template name
+        if "message_1" in template_name or "followup_1" in template_name:
+            outcome = "LinkedIn Message 1 Sent"
+        elif "message_2" in template_name or "followup_2" in template_name:
+            outcome = "LinkedIn Message 2 Sent"
+        elif "message_3" in template_name or "followup_3" in template_name:
+            outcome = "LinkedIn Message 3 Sent"
+        else:
+            outcome = "LinkedIn Message Sent"
+    elif template_category == "inmail":
+        outcome = "InMail Sent"
+    else:
+        outcome = "LinkedIn Message Sent"
+    
+    # Get the next attempt number for this lead
+    last_attempt = db.scalar(
+        select(LeadAttempt)
+        .where(LeadAttempt.lead_id == lead_id)
+        .order_by(LeadAttempt.attempt_number.desc())
+        .limit(1)
+    )
+    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+    
+    # Create attempt record
+    attempt = LeadAttempt(
+        lead_id=lead.id,
+        contact_id=contact.id,
+        channel=ContactChannel.linkedin,
+        attempt_number=next_attempt_number,
+        outcome=outcome,
+        notes=f"Template: {template_name}",
+    )
+    db.add(attempt)
+    db.commit()
+    
+    return JSONResponse(content={
+        "status": "success",
+        "message": "LinkedIn message marked as sent",
+        "attempt_id": attempt.id
+    })
+
+
+@app.post("/leads/{lead_id}/contacts/{contact_id}/linkedin-connection-accepted")
+def mark_linkedin_connection_accepted(
+    lead_id: int,
+    contact_id: int,
+    db: Session = Depends(get_db),
+):
+    """Mark LinkedIn connection as accepted and create an attempt record."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    contact = db.get(LeadContact, contact_id)
+    if not contact or contact.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Get the next attempt number for this lead
+    last_attempt = db.scalar(
+        select(LeadAttempt)
+        .where(LeadAttempt.lead_id == lead_id)
+        .order_by(LeadAttempt.attempt_number.desc())
+        .limit(1)
+    )
+    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+    
+    # Create attempt record
+    attempt = LeadAttempt(
+        lead_id=lead.id,
+        contact_id=contact.id,
+        channel=ContactChannel.linkedin,
+        attempt_number=next_attempt_number,
+        outcome="Connection Accepted",
+        notes="LinkedIn connection request was accepted",
+    )
+    db.add(attempt)
+    db.commit()
+    
+    return JSONResponse(content={
+        "status": "success",
+        "message": "LinkedIn connection marked as accepted",
+        "attempt_id": attempt.id
+    })
 
 
 @app.post("/leads/{lead_id}/contacts/{contact_id}/send-email")
