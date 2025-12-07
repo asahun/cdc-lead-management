@@ -1,0 +1,220 @@
+/* Journey Tracking Styles */
+
+.journey-card {
+  margin-top: 1.5rem;
+}
+
+.journey-loading,
+.journey-error {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+
+.journey-error {
+  color: #d32f2f;
+}
+
+.journey-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.journey-meta {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.journey-started,
+.journey-days {
+  font-weight: 500;
+}
+
+.journey-days {
+  color: #1976d2;
+}
+
+.journey-channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.journey-channel {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #fafafa;
+}
+
+.journey-channel-email {
+  border-left: 4px solid #1976d2;
+}
+
+.journey-channel-linkedin {
+  border-left: 4px solid #8e24aa;
+}
+
+.journey-channel-mail {
+  border-left: 4px solid #388e3c;
+}
+
+.channel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.channel-icon {
+  font-size: 1.5rem;
+}
+
+.channel-title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.channel-progress {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.channel-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.no-milestones {
+  color: #999;
+  font-style: italic;
+  padding: 1rem;
+  text-align: center;
+}
+
+.journey-milestone {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  transition: all 0.2s ease;
+}
+
+.journey-milestone:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-color: #bdbdbd;
+}
+
+.milestone-completed {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+
+.milestone-overdue {
+  background: #fff3e0;
+  border-color: #ff9800;
+}
+
+.milestone-skipped {
+  background: #f5f5f5;
+  border-color: #9e9e9e;
+  opacity: 0.7;
+}
+
+.milestone-pending {
+  background: white;
+}
+
+.milestone-status-icon {
+  font-size: 1.25rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.milestone-completed .milestone-status-icon {
+  color: #4caf50;
+}
+
+.milestone-overdue .milestone-status-icon {
+  color: #ff9800;
+}
+
+.milestone-skipped .milestone-status-icon {
+  color: #9e9e9e;
+}
+
+.milestone-pending .milestone-status-icon {
+  color: #9e9e9e;
+}
+
+.milestone-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.milestone-label {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.milestone-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.milestone-date {
+  color: #666;
+}
+
+.milestone-date.completed {
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.milestone-date.overdue {
+  color: #ff9800;
+  font-weight: 500;
+}
+
+.milestone-link {
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.milestone-link:hover {
+  text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .journey-channels {
+    grid-template-columns: 1fr;
+  }
+  
+  .journey-meta {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+

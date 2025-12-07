@@ -95,6 +95,37 @@ class ContactType(str, enum.Enum):
     heir = "heir"
 
 
+class JourneyStatus(str, enum.Enum):
+    active = "active"
+    completed = "completed"
+    paused = "paused"
+
+
+class JourneyMilestoneType(str, enum.Enum):
+    # Email milestones
+    email_1 = "email_1"
+    email_followup_1 = "email_followup_1"
+    email_followup_2 = "email_followup_2"
+    email_followup_3 = "email_followup_3"
+    # LinkedIn milestones
+    linkedin_connection = "linkedin_connection"
+    linkedin_message_1 = "linkedin_message_1"
+    linkedin_message_2 = "linkedin_message_2"
+    linkedin_message_3 = "linkedin_message_3"
+    linkedin_inmail = "linkedin_inmail"
+    # Mail milestones
+    mail_1 = "mail_1"
+    mail_2 = "mail_2"
+    mail_3 = "mail_3"
+
+
+class MilestoneStatus(str, enum.Enum):
+    pending = "pending"
+    completed = "completed"
+    skipped = "skipped"
+    overdue = "overdue"
+
+
 class BusinessLead(Base):
     __tablename__ = "business_lead"
 
@@ -119,6 +150,7 @@ class BusinessLead(Base):
     attempts = relationship("LeadAttempt", back_populates="lead", cascade="all, delete-orphan")
     comments = relationship("LeadComment", back_populates="lead", cascade="all, delete-orphan")
     print_logs = relationship("PrintLog", back_populates="lead", cascade="all, delete-orphan")
+    journey = relationship("LeadJourney", back_populates="lead", uselist=False, cascade="all, delete-orphan")
 
 
 class LeadContact(Base):
@@ -222,3 +254,44 @@ class PrintLog(Base):
     lead = relationship("BusinessLead", back_populates="print_logs")
     contact = relationship("LeadContact", foreign_keys=[contact_id])
     attempt = relationship("LeadAttempt", foreign_keys=[attempt_id])
+
+
+class LeadJourney(Base):
+    __tablename__ = "lead_journey"
+
+    id = Column(BigInteger, primary_key=True)
+    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False, unique=True)
+    started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    status = Column(Enum(JourneyStatus, name="journey_status"), nullable=False, default=JourneyStatus.active)
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    lead = relationship("BusinessLead", back_populates="journey")
+    milestones = relationship("JourneyMilestone", back_populates="journey", cascade="all, delete-orphan", order_by="JourneyMilestone.scheduled_day")
+
+
+class JourneyMilestone(Base):
+    __tablename__ = "journey_milestone"
+
+    id = Column(BigInteger, primary_key=True)
+    journey_id = Column(BigInteger, ForeignKey("lead_journey.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    
+    milestone_type = Column(Enum(JourneyMilestoneType, name="journey_milestone_type"), nullable=False)
+    channel = Column(Enum(ContactChannel, name="contact_channel"), nullable=False)
+    scheduled_day = Column(Integer, nullable=False)  # Day 0, 1, 3, 4, 7, etc.
+    status = Column(Enum(MilestoneStatus, name="milestone_status"), nullable=False, default=MilestoneStatus.pending)
+    
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    attempt_id = Column(BigInteger, ForeignKey("lead_attempt.id", ondelete="SET NULL"), nullable=True)
+    
+    parent_milestone_id = Column(BigInteger, ForeignKey("journey_milestone.id", ondelete="SET NULL"), nullable=True)
+    branch_condition = Column(Text, nullable=True)  # "if_connected", "if_not_connected", or None
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    journey = relationship("LeadJourney", back_populates="milestones")
+    attempt = relationship("LeadAttempt", foreign_keys=[attempt_id])
+    parent_milestone = relationship("JourneyMilestone", remote_side=[id], foreign_keys=[parent_milestone_id])

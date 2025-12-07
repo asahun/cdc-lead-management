@@ -166,6 +166,20 @@
     {% endif %}
 </form>
 
+{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+    <section id="journey-tracking" class="card journey-card">
+      <header>
+        <h2>Outreach Journey</h2>
+        <p class="section-subtitle">Track progress across email, LinkedIn, and mail channels</p>
+      </header>
+      <div class="section-content">
+        <div id="journey-display" data-lead-id="{{ lead.id }}" data-journey-data="{{ journey_data }}">
+          <div class="journey-loading">Loading journey data...</div>
+        </div>
+      </div>
+    </section>
+{% endif %}
+
 {% if mode != 'create' %}
     <section id="entity-intel" class="card insight-card">
       <header>
@@ -889,4 +903,8 @@
 <script src="/static/js/scheduled_emails.js?v=20241128" defer></script>
 <script src="/static/js/linkedin_templates.js?v=20241128" defer></script>
 <script src="/static/js/attempt_form.js?v=20241203" defer></script>
+{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+<link rel="stylesheet" href="/static/css/journey.css">
+<script src="/static/js/journey_display.js?v=20241203" defer></script>
+{% endif %}
 {% endblock %}
