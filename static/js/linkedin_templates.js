@@ -8,6 +8,9 @@
   const modal = document.getElementById('linkedin-modal');
   const templatesContainer = document.getElementById('linkedin-templates-container');
   const previewContent = document.getElementById('linkedin-preview-content');
+  const subjectSection = document.getElementById('linkedin-subject-section');
+  const subjectContent = document.getElementById('linkedin-subject-content');
+  const copySubjectBtn = document.getElementById('linkedin-copy-subject-btn');
   const copyBtn = document.getElementById('linkedin-copy-btn');
   const markSentBtn = document.getElementById('linkedin-mark-sent-btn');
   const followupIndicator = document.getElementById('linkedin-followup-indicator');
@@ -75,87 +78,42 @@
     if (!templatesData) return;
 
     const categoryTemplates = templatesData[currentTab] || [];
-    const contentDiv = document.querySelector('.linkedin-content');
     
-    // For inmail and connection_requests, always use single-template layout
-    const isSingleTemplateTab = currentTab === 'inmail' || currentTab === 'connection_requests';
+    // Always hide template list (we auto-load single templates)
+    templatesContainer.innerHTML = '';
     
     if (categoryTemplates.length === 0) {
-      // For inmail and connection_requests, still use single-template layout even if empty
-      if (isSingleTemplateTab && contentDiv) {
-        contentDiv.classList.add('single-template');
-        templatesContainer.innerHTML = '';
-        previewContent.innerHTML = '<p style="color: #666; padding: 20px;">No templates available for this category.</p>';
-        copyBtn.disabled = true;
-        if (markSentBtn) {
-          markSentBtn.disabled = true;
-          markSentBtn.style.display = 'none';
-        }
-        return;
+      // Show completion messages when appropriate
+      let completionMessage = null;
+      
+      if (currentTab === 'accepted_messages' && connectionStatus?.all_followups_complete) {
+        completionMessage = '<div style="padding: 40px 20px; text-align: center;"><div style="color: #4caf50; font-size: 48px; margin-bottom: 16px;">✓</div><h3 style="color: #111827; margin: 0 0 8px 0; font-size: 18px;">All Follow-up Messages Sent</h3><p style="color: #6b7280; margin: 0; font-size: 14px;">LinkedIn outreach complete for this contact.</p></div>';
+      } else if (currentTab === 'inmail' && connectionStatus?.inmail_sent) {
+        completionMessage = '<div style="padding: 40px 20px; text-align: center;"><div style="color: #4caf50; font-size: 48px; margin-bottom: 16px;">✓</div><h3 style="color: #111827; margin: 0 0 8px 0; font-size: 18px;">InMail Sent</h3><p style="color: #6b7280; margin: 0; font-size: 14px;">Waiting for connection acceptance to continue with follow-up messages.</p></div>';
       }
-      templatesContainer.innerHTML = '<p style="color: #666; padding: 20px;">No templates in this category.</p>';
-      if (contentDiv) contentDiv.classList.remove('single-template');
+      
+      previewContent.innerHTML = completionMessage || '<p style="color: #666; padding: 20px;">No templates available for this category.</p>';
+      copyBtn.disabled = true;
+      if (markSentBtn) {
+        markSentBtn.disabled = true;
+        markSentBtn.style.display = 'none';
+      }
+      if (subjectSection) {
+        subjectSection.style.display = 'none';
+      }
       return;
     }
 
-    // For tabs with only one template (connection_requests, inmail), hide list and auto-load
-    // Also treat inmail and connection_requests as single-template tabs even if multiple exist
-    const isSingleTemplate = categoryTemplates.length === 1 || isSingleTemplateTab;
+    // Auto-load the first (and only) template
+    const template = categoryTemplates[0];
+    currentTemplateName = template.name;
+    currentTemplateCategory = currentTab;
     
-    if (isSingleTemplate) {
-      // Hide template list and show full-width preview
-      if (contentDiv) {
-        contentDiv.classList.add('single-template');
-      }
-      templatesContainer.innerHTML = '';
-      
-      // Auto-select and load the first template (or only template)
-      const template = categoryTemplates[0];
-      currentTemplateName = template.name;
-      currentTemplateCategory = currentTab; // Set category before loading
-      
-      // Show follow-up indicator if applicable
-      updateFollowupIndicator(template);
-      
-      selectTemplate(template.name);
-      return;
-    }
-
-    // For multiple templates (accepted_messages), show list
-    if (contentDiv) {
-      contentDiv.classList.remove('single-template');
-    }
-
-    const html = categoryTemplates.map(template => {
-      const isSelected = currentTemplateName === template.name;
-      
-      // Extract follow-up number from attempt field (e.g., "followup_1" -> "1")
-      let followupNumber = null;
-      if (template.attempt && template.attempt.startsWith('followup_')) {
-        followupNumber = template.attempt.replace('followup_', '');
-      }
-      
-      return `
-        <div class="linkedin-template-item ${isSelected ? 'selected' : ''}" 
-             data-template-name="${template.name}"
-             data-template-display="${template.display_name}">
-          <div class="linkedin-template-name">
-            ${template.display_name}
-            ${followupNumber ? `<span class="linkedin-followup-badge">Follow-up ${followupNumber}</span>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    templatesContainer.innerHTML = html;
-
-    // Attach click handlers
-    document.querySelectorAll('.linkedin-template-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const templateName = item.dataset.templateName;
-        selectTemplate(templateName);
-      });
-    });
+    // Show follow-up indicator if applicable
+    updateFollowupIndicator(template);
+    
+    // Load template preview
+    selectTemplate(template.name);
   }
 
   /**
@@ -227,6 +185,12 @@
       markSentBtn.disabled = true;
       markSentBtn.style.display = 'none';
     }
+    if (subjectSection) {
+      subjectSection.style.display = 'none';
+    }
+    if (copySubjectBtn) {
+      copySubjectBtn.disabled = true;
+    }
 
     try {
       const profileKey = getActiveProfileKey();
@@ -240,6 +204,26 @@
       }
 
       const data = await response.json();
+      
+      // Handle subject line for InMail templates
+      if (data.has_subject && data.subject) {
+        if (subjectSection) {
+          subjectSection.style.display = 'block';
+        }
+        if (subjectContent) {
+          subjectContent.textContent = data.subject;
+        }
+        if (copySubjectBtn) {
+          copySubjectBtn.disabled = false;
+        }
+      } else {
+        if (subjectSection) {
+          subjectSection.style.display = 'none';
+        }
+        if (copySubjectBtn) {
+          copySubjectBtn.disabled = true;
+        }
+      }
       
       // Render preview (preserve line breaks)
       const previewText = data.preview.replace(/\n/g, '<br>');
@@ -258,6 +242,12 @@
       if (markSentBtn) {
         markSentBtn.disabled = true;
         markSentBtn.style.display = 'none';
+      }
+      if (subjectSection) {
+        subjectSection.style.display = 'none';
+      }
+      if (copySubjectBtn) {
+        copySubjectBtn.disabled = true;
       }
     }
   }
@@ -285,6 +275,30 @@
     } catch (error) {
       console.error('Error copying:', error);
       alert('Failed to copy message. Please select and copy manually.');
+    }
+  }
+
+  /**
+   * Copy subject line to clipboard
+   */
+  async function copySubject() {
+    if (!subjectContent || !subjectContent.textContent) return;
+
+    try {
+      await navigator.clipboard.writeText(subjectContent.textContent);
+      
+      // Show success feedback
+      const originalText = copySubjectBtn.textContent;
+      copySubjectBtn.textContent = 'Copied!';
+      copySubjectBtn.style.backgroundColor = '#4caf50';
+      
+      setTimeout(() => {
+        copySubjectBtn.textContent = originalText;
+        copySubjectBtn.style.backgroundColor = '';
+      }, 2000);
+    } catch (error) {
+      console.error('Error copying subject:', error);
+      alert('Failed to copy subject. Please select and copy manually.');
     }
   }
 
@@ -426,6 +440,12 @@
     currentTemplateName = null;
     previewContent.innerHTML = '<p style="color: #999; padding: 20px; text-align: center;">Select a template to preview</p>';
     copyBtn.disabled = true;
+    if (subjectSection) {
+      subjectSection.style.display = 'none';
+    }
+    if (copySubjectBtn) {
+      copySubjectBtn.disabled = true;
+    }
   }
 
   // Event listeners
@@ -460,6 +480,11 @@
   // Copy button
   if (copyBtn) {
     copyBtn.addEventListener('click', copyMessage);
+  }
+
+  // Copy Subject button
+  if (copySubjectBtn) {
+    copySubjectBtn.addEventListener('click', copySubject);
   }
 
   // Mark as Sent button

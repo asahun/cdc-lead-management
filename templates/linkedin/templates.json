@@ -1,0 +1,202 @@
+{
+  "connection_requests": {
+    "agent": {
+      "content": "Hi [FirstName], I work on unclaimed property and SOS-related cleanups for businesses and their advisors. Since you're connected to [Company Legal Name]/clients, I thought it made sense to connect.\n– [Profile First Name]",
+      "display_name": "For Registered Agents",
+      "category": "connection_requests",
+      "contact_type": "agent",
+      "attempt": "initial"
+    },
+    "leader": {
+      "active": {
+        "content": "Hi [FirstName], I help companies identify and recover state-held unclaimed funds that show up under their name. Thought it might be relevant for [Company Legal Name] and worth connecting.\n– [Profile First Name]",
+        "display_name": "For Active Businesses",
+        "category": "connection_requests",
+        "contact_type": "leader",
+        "business_status": "active",
+        "attempt": "initial"
+      },
+      "dissolved": {
+        "content": "Hi [FirstName], I help former owners and officers of dissolved companies recover state-held funds and clean up old SOS/unclaimed-property records. Given your connection to [Company Legal Name], I thought it might be useful to connect.\n– [Profile First Name]",
+        "display_name": "For Dissolved Businesses",
+        "category": "connection_requests",
+        "contact_type": "leader",
+        "business_status": "dissolved",
+        "attempt": "initial"
+      },
+      "acquired": {
+        "content": "Hi [FirstName], I help companies identify and recover state-held unclaimed funds tied to their current and legacy entities (prior names, acquired companies, mergers). Given [New Entity Name]'s connection to [Company Legal Name], I thought it might be useful to connect.\n– [Profile First Name]",
+        "display_name": "For Acquired/Merged Businesses",
+        "category": "connection_requests",
+        "contact_type": "leader",
+        "business_status": "acquired",
+        "attempt": "initial"
+      }
+    }
+  },
+  "accepted_messages": {
+    "leader": {
+      "active": {
+        "1": {
+          "content": "Hi [FirstName], thanks for connecting.\n\nI spend my time reviewing state unclaimed-property and SOS data to spot funds that are sitting with the state under a company's name and haven't been claimed yet.\n\nIf you'd like, I can do a quick check for [Company Legal Name] in [State] and share what I see, plus the steps to recover anything that's actually yours — whether you file directly with the state or want help.\n\nWould a short overview by email be better, or is LinkedIn fine?\n– [Profile First Name]",
+          "display_name": "First Follow-up - Active Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "active",
+          "attempt": "followup_1"
+        },
+        "2": {
+          "content": "Hi [FirstName], just following up in case my last note got buried.\n\nIn short, I may be able to flag potential unclaimed funds or cleanup items tied to [Company Legal Name] and outline steps the company can take directly with the state.\n\nIf this isn't something you typically handle, is there a best contact at [Company Legal Name] (finance/accounting or legal) that you'd suggest I reach out to?\n– [Profile First Name]",
+          "display_name": "Second Follow-up - Active Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "active",
+          "attempt": "followup_2"
+        },
+        "3": {
+          "content": "Hi [FirstName], I know you're busy so I'll keep this brief.\n\nI'll pause outreach here, but if you ever want a quick check of [Company Legal Name]'s unclaimed property in [State] and a straightforward outline of how to recover it (including doing it directly with the state), I'm happy to help.\n\nJust message me here if it becomes a priority.\n– [Profile First Name]",
+          "display_name": "Final Follow-up - Active Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "active",
+          "attempt": "followup_3"
+        }
+      },
+      "dissolved": {
+        "1": {
+          "content": "Hi [FirstName], thanks for connecting.\n\nI review state unclaimed-property and SOS data and sometimes find dissolved or inactive entities that still have funds or loose ends sitting with the state.\n\nFor [Company Legal Name], it looks like there may be items worth checking in [State]. If you'd like, I can share a short summary of what I'm seeing and what options exist to recover anything that belongs to the company or its former owners.\n\nWould you prefer I send that here, or by email?\n– [Profile First Name]",
+          "display_name": "First Follow-up - Dissolved Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "dissolved",
+          "attempt": "followup_1"
+        },
+        "2": {
+          "content": "Hi [FirstName], just following up in case my last note slipped through.\n\nIn short, I may have found potential unclaimed funds tied to [Company Legal Name] despite its dissolved status, and I can outline the steps to recover them if it's worth your time.\n\nIf you're not the right person for this anymore, is there someone else who handled the wind-down / accounting for the company that I should contact instead?\n– [Profile First Name]",
+          "display_name": "Second Follow-up - Dissolved Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "dissolved",
+          "attempt": "followup_2"
+        },
+        "3": {
+          "content": "Hi [FirstName], I'll keep this brief.\n\nI'll pause outreach here, but if you ever want to look into unclaimed funds or cleanup items related to [Company Legal Name], I'm happy to share a concise summary and the recovery steps with the state.\n\nJust message me here if it becomes relevant.\n– [Profile First Name]",
+          "display_name": "Final Follow-up - Dissolved Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "dissolved",
+          "attempt": "followup_3"
+        }
+      },
+      "acquired": {
+        "1": {
+          "content": "Hi [FirstName], thanks for connecting.\n\nI review state unclaimed-property and SOS data, including items that still sit under prior names or acquired entities, not just the current company name.\n\nFor [Company Legal Name] / [New Entity Name] in [State], it looks like there may be items worth checking that would belong to the current organization as successor. If you'd like, I can share a short summary of what I'm seeing and the steps to recover anything that's actually yours — including filing directly with the state if you prefer.\n\nWould you rather see that in a quick email, or here on LinkedIn?\n– [Profile First Name]",
+          "display_name": "First Follow-up - Acquired/Merged Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "acquired",
+          "attempt": "followup_1"
+        },
+        "2": {
+          "content": "Hi [FirstName], just following up in case my last note got buried.\n\nIn short, I'm looking at potential state-held funds tied to [Company Legal Name] and [New Entity Name] in [State], where the current company is the rightful successor after the merger / acquisition / rename. I can map out a simple path to recover anything that's there.\n\nIf this isn't on your plate, is there someone in treasury, finance, or accounting at [New Entity Name] you'd recommend I contact instead?\n– [Profile First Name]",
+          "display_name": "Second Follow-up - Acquired/Merged Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "acquired",
+          "attempt": "followup_2"
+        },
+        "3": {
+          "content": "Hi [FirstName], I'll keep this brief.\n\nI'll pause outreach here, but if you ever want a quick check on unclaimed property tied to [New Entity Name] and its legacy entities (like [Company Legal Name]) in [State], I'm happy to send a concise summary and the recovery steps.\n\nJust message me here if it becomes relevant.\n– [Profile First Name]",
+          "display_name": "Final Follow-up - Acquired/Merged Business",
+          "category": "accepted_messages",
+          "contact_type": "leader",
+          "business_status": "acquired",
+          "attempt": "followup_3"
+        }
+      }
+    },
+    "agent": {
+      "active": {
+        "1": {
+          "content": "Hi [FirstName], thanks for connecting.\n\nI help businesses identify state-held unclaimed funds and SOS issues tied to their entities. In some cases, the only reliable contact on record is the registered agent or firm that supports them.\n\nFor [Company Legal Name], I can put together a short summary of what I'm seeing in [State] and what the company would need to do to recover anything that belongs to them.\n\nWould you prefer I share that here so you can pass it along, or by email?\n– [Profile First Name]",
+          "display_name": "First Follow-up - Active Business",
+          "category": "accepted_messages",
+          "contact_type": "agent",
+          "business_status": "active",
+          "attempt": "followup_1"
+        },
+        "2": {
+          "content": "Hi [FirstName], just following up in case my last note got buried.\n\nIn short, I may be able to flag potential unclaimed funds or cleanup items tied to [Company Legal Name] and outline steps the company can take directly with the state.\n\nIf this isn't something you typically handle, is there a best contact at [Company Legal Name] (finance/accounting or legal) that you'd suggest I reach out to?\n– [Profile First Name]",
+          "display_name": "Second Follow-up - Active Business",
+          "category": "accepted_messages",
+          "contact_type": "agent",
+          "business_status": "active",
+          "attempt": "followup_2"
+        },
+        "3": {
+          "content": "Hi [FirstName], I'll keep this brief.\n\nI'll pause outreach here, but if questions ever come up around unclaimed property or SOS records for [Company Legal Name], I'm happy to provide a short summary you can forward, including how they can file directly with the state.\n\nYou can always message me here if needed.\n– [Profile First Name]",
+          "display_name": "Final Follow-up - Active Business",
+          "category": "accepted_messages",
+          "contact_type": "agent",
+          "business_status": "active",
+          "attempt": "followup_3"
+        }
+      },
+      "dissolved": {
+        "1": {
+          "content": "Hi [FirstName], thanks for connecting.\n\nI review state unclaimed-property and SOS data and often see dissolved or inactive entities that still have funds or loose ends sitting with the state. In those cases, the registered agent or filing firm is sometimes the only practical contact.\n\nFor [Company Legal Name], I can put together a short note on what I'm seeing in [State] and what options exist for the former owners/officers to recover any funds or clean up records.\n\nWould it be helpful if I send that here so you can pass it along, or by email?\n– [Profile First Name]",
+          "display_name": "First Follow-up - Dissolved Business",
+          "category": "accepted_messages",
+          "contact_type": "agent",
+          "business_status": "dissolved",
+          "attempt": "followup_1"
+        },
+        "2": {
+          "content": "Hi [FirstName], just following up in case my last message slipped through.\n\nIn short, I may have found potential unclaimed funds or cleanup items tied to [Company Legal Name] despite its dissolved status, and I can outline the steps for whoever handled the wind-down / ownership to recover anything that's theirs.\n\nIf you're not the right person for this, is there someone else (at the firm or connected to the former owners) you'd recommend I contact?\n– [Profile First Name]",
+          "display_name": "Second Follow-up - Dissolved Business",
+          "category": "accepted_messages",
+          "contact_type": "agent",
+          "business_status": "dissolved",
+          "attempt": "followup_2"
+        },
+        "3": {
+          "content": "Hi [FirstName], I'll keep this short.\n\nI'll pause outreach here, but if you ever need a quick check on unclaimed funds or SOS record cleanup for dissolved entities you've represented (including [Company Legal Name]), I'm happy to provide a concise summary you can forward to the appropriate party.\n\nJust message me here if it comes up.\n– [Profile First Name]",
+          "display_name": "Final Follow-up - Dissolved Business",
+          "category": "accepted_messages",
+          "contact_type": "agent",
+          "business_status": "dissolved",
+          "attempt": "followup_3"
+        }
+      }
+    }
+  },
+  "inmail": {
+    "leader": {
+      "active": {
+        "content": "Subject: Quick question about potential state-held funds for [Company Legal Name]\n\nHi [FirstName],\n\nI work with companies to identify state-held unclaimed funds (old credits, refunds, dormant accounts) that appear under their name in state databases and often go unnoticed.\n\nA preliminary check suggests there may be items reported under [Company Legal Name] in [State]'s unclaimed property records. You can always claim directly with the state, or I can help organize and track the recovery if you prefer support.\n\nIf this is worth a look, I can send a short summary of what I'm seeing and what the recovery steps would be so you can decide if it's worth pursuing. If someone else on your team (finance / accounting) is a better contact, I'm happy to reach out to them instead.\n\nBest,\n[Profile First Name]\nLoad Router – Unclaimed Property Recovery",
+        "display_name": "InMail - Active Business",
+        "category": "inmail",
+        "contact_type": "leader",
+        "business_status": "active",
+        "attempt": "alternative"
+      },
+      "dissolved": {
+        "content": "Subject: Possible state-held funds related to [Company Legal Name]\n\nHi [FirstName],\n\nI specialize in finding state-held unclaimed funds and loose ends tied to dissolved or inactive entities. In reviewing [State]'s records, it appears [Company Legal Name] may have items still sitting with the state under its name.\n\nIf this is something you'd want to tidy up, I can send a short summary of what I'm seeing and the steps a former owner/officer can take to recover anything that belongs to the company or its stakeholders, including filing directly with the state if you prefer.\n\nIf you're no longer the right contact, I'm happy to reach out to whoever handled the wind-down or finances instead.\n\nBest,\n[Profile First Name]\nLoad Router – Unclaimed Property Recovery",
+        "display_name": "InMail - Dissolved Business",
+        "category": "inmail",
+        "contact_type": "leader",
+        "business_status": "dissolved",
+        "attempt": "alternative"
+      },
+      "acquired": {
+        "content": "Subject: Possible state-held funds tied to [New Entity Name] & legacy entities\n\nHi [FirstName],\n\nI work with companies to locate state-held unclaimed funds not only under their current name, but also under prior names and acquired entities that sometimes remain in state records after mergers or name changes.\n\nIn reviewing [State]'s data, it appears that [Company Legal Name] / [New Entity Name] may have items still sitting with the state under a legacy record. As the successor, [New Entity Name] would generally be in position to recover those funds.\n\nIf this is worth a quick look, I can send a short summary of what I'm seeing and outline the recovery steps so you can decide if it's worth pursuing. If someone else in treasury/finance is a better contact, I'm happy to reach out to them instead.\n\nBest,\n[Profile First Name]\nLoad Router – Unclaimed Property Recovery",
+        "display_name": "InMail - Acquired/Merged Business",
+        "category": "inmail",
+        "contact_type": "leader",
+        "business_status": "acquired",
+        "attempt": "alternative"
+      }
+    }
+  }
+}
+

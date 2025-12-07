@@ -82,6 +82,11 @@ templates = Jinja2Templates(directory="templates")
 def bootstrap_assignment_flags():
     _sync_existing_property_assignments()
     start_scheduler()
+    # Pre-load LinkedIn templates from JSON at startup for instant access
+    global _LINKEDIN_TEMPLATES_METADATA_CACHE, _LINKEDIN_TEMPLATES_CONTENT_CACHE
+    if LINKEDIN_TEMPLATES_JSON.exists():
+        _LINKEDIN_TEMPLATES_METADATA_CACHE, _LINKEDIN_TEMPLATES_CONTENT_CACHE = _preload_linkedin_templates()
+        print(f"✓ Pre-loaded {len(_LINKEDIN_TEMPLATES_CONTENT_CACHE)} LinkedIn templates from JSON into memory")
 
 
 @app.on_event("shutdown")
@@ -2108,196 +2113,125 @@ def prep_email(
 
 # LinkedIn Templates
 LINKEDIN_TEMPLATE_DIR = Path(__file__).parent / "templates" / "linkedin"
+LINKEDIN_TEMPLATES_JSON = LINKEDIN_TEMPLATE_DIR / "templates.json"
 
-# Template metadata organized by category, contact type, and business status
-LINKEDIN_TEMPLATES = {
-    "connection_requests": [
-        {
-            "name": "agent_connection_request.txt",
-            "display_name": "For Registered Agents",
-            "category": "connection_requests",
-            "contact_type": "agent",
-            "attempt": "initial",
-        },
-        {
-            "name": "leader_active_connection_request.txt",
-            "display_name": "For Active Businesses",
-            "category": "connection_requests",
-            "contact_type": "leader",
-            "business_status": "active",
-            "attempt": "initial",
-        },
-        {
-            "name": "leader_dissolved_connection_request.txt",
-            "display_name": "For Dissolved Businesses",
-            "category": "connection_requests",
-            "contact_type": "leader",
-            "business_status": "dissolved",
-            "attempt": "initial",
-        },
-        {
-            "name": "leader_acquired_connection_request.txt",
-            "display_name": "For Acquired/Merged Businesses",
-            "category": "connection_requests",
-            "contact_type": "leader",
-            "business_status": "acquired",
-            "attempt": "initial",
-        },
-    ],
-    "accepted_messages": [
-        # Leader - Active
-        {
-            "name": "leader_active_message_1.txt",
-            "display_name": "First Follow-up - Active Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "active",
-            "attempt": "followup_1",
-        },
-        {
-            "name": "leader_active_message_2.txt",
-            "display_name": "Second Follow-up - Active Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "active",
-            "attempt": "followup_2",
-        },
-        {
-            "name": "leader_active_message_3.txt",
-            "display_name": "Final Follow-up - Active Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "active",
-            "attempt": "followup_3",
-        },
-        # Leader - Dissolved
-        {
-            "name": "leader_dissolved_message_1.txt",
-            "display_name": "First Follow-up - Dissolved Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "dissolved",
-            "attempt": "followup_1",
-        },
-        {
-            "name": "leader_dissolved_message_2.txt",
-            "display_name": "Second Follow-up - Dissolved Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "dissolved",
-            "attempt": "followup_2",
-        },
-        {
-            "name": "leader_dissolved_message_3.txt",
-            "display_name": "Final Follow-up - Dissolved Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "dissolved",
-            "attempt": "followup_3",
-        },
-        # Leader - Acquired/Merged
-        {
-            "name": "leader_acquired_message_1.txt",
-            "display_name": "First Follow-up - Acquired/Merged Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "acquired",
-            "attempt": "followup_1",
-        },
-        {
-            "name": "leader_acquired_message_2.txt",
-            "display_name": "Second Follow-up - Acquired/Merged Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "acquired",
-            "attempt": "followup_2",
-        },
-        {
-            "name": "leader_acquired_message_3.txt",
-            "display_name": "Final Follow-up - Acquired/Merged Business",
-            "category": "accepted_messages",
-            "contact_type": "leader",
-            "business_status": "acquired",
-            "attempt": "followup_3",
-        },
-        # Agent - Active
-        {
-            "name": "agent_active_message_1.txt",
-            "display_name": "First Follow-up - Active Business",
-            "category": "accepted_messages",
-            "contact_type": "agent",
-            "business_status": "active",
-            "attempt": "followup_1",
-        },
-        {
-            "name": "agent_active_message_2.txt",
-            "display_name": "Second Follow-up - Active Business",
-            "category": "accepted_messages",
-            "contact_type": "agent",
-            "business_status": "active",
-            "attempt": "followup_2",
-        },
-        {
-            "name": "agent_active_message_3.txt",
-            "display_name": "Final Follow-up - Active Business",
-            "category": "accepted_messages",
-            "contact_type": "agent",
-            "business_status": "active",
-            "attempt": "followup_3",
-        },
-        # Agent - Dissolved
-        {
-            "name": "agent_dissolved_message_1.txt",
-            "display_name": "First Follow-up - Dissolved Business",
-            "category": "accepted_messages",
-            "contact_type": "agent",
-            "business_status": "dissolved",
-            "attempt": "followup_1",
-        },
-        {
-            "name": "agent_dissolved_message_2.txt",
-            "display_name": "Second Follow-up - Dissolved Business",
-            "category": "accepted_messages",
-            "contact_type": "agent",
-            "business_status": "dissolved",
-            "attempt": "followup_2",
-        },
-        {
-            "name": "agent_dissolved_message_3.txt",
-            "display_name": "Final Follow-up - Dissolved Business",
-            "category": "accepted_messages",
-            "contact_type": "agent",
-            "business_status": "dissolved",
-            "attempt": "followup_3",
-        },
-    ],
-    "inmail": [
-        {
-            "name": "leader_active_inmail.txt",
-            "display_name": "InMail - Active Business",
-            "category": "inmail",
-            "contact_type": "leader",
-            "business_status": "active",
-            "attempt": "alternative",
-        },
-        {
-            "name": "leader_dissolved_inmail.txt",
-            "display_name": "InMail - Dissolved Business",
-            "category": "inmail",
-            "contact_type": "leader",
-            "business_status": "dissolved",
-            "attempt": "alternative",
-        },
-        {
-            "name": "leader_acquired_inmail.txt",
-            "display_name": "InMail - Acquired/Merged Business",
-            "category": "inmail",
-            "contact_type": "leader",
-            "business_status": "acquired",
-            "attempt": "alternative",
-        },
-    ],
-}
+
+def _load_linkedin_templates_from_json() -> tuple[dict, dict]:
+    """
+    Load LinkedIn templates from JSON file.
+    Returns (metadata_dict, content_dict) where:
+    - metadata_dict: structured like the old discovery format for compatibility
+    - content_dict: template_name -> content mapping
+    """
+    if not LINKEDIN_TEMPLATES_JSON.exists():
+        return {}, {}
+    
+    with open(LINKEDIN_TEMPLATES_JSON, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+    
+    # Convert JSON structure to flat metadata list (for compatibility)
+    metadata = {
+        "connection_requests": [],
+        "accepted_messages": [],
+        "inmail": []
+    }
+    content_cache = {}
+    
+    # Process connection_requests
+    if "connection_requests" in json_data:
+        cr_data = json_data["connection_requests"]
+        # Agent
+        if "agent" in cr_data:
+            template = cr_data["agent"].copy()
+            template["name"] = "agent_connection_request.txt"
+            metadata["connection_requests"].append(template)
+            content_cache["agent_connection_request.txt"] = template["content"]
+        
+        # Leader
+        if "leader" in cr_data:
+            for status in ["active", "dissolved", "acquired"]:
+                if status in cr_data["leader"]:
+                    template = cr_data["leader"][status].copy()
+                    template["name"] = f"leader_{status}_connection_request.txt"
+                    metadata["connection_requests"].append(template)
+                    content_cache[template["name"]] = template["content"]
+    
+    # Process accepted_messages
+    if "accepted_messages" in json_data:
+        am_data = json_data["accepted_messages"]
+        for contact_type in ["leader", "agent"]:
+            if contact_type in am_data:
+                for status in ["active", "dissolved", "acquired"]:
+                    if status in am_data[contact_type]:
+                        for msg_num in ["1", "2", "3"]:
+                            if msg_num in am_data[contact_type][status]:
+                                template = am_data[contact_type][status][msg_num].copy()
+                                template["name"] = f"{contact_type}_{status}_message_{msg_num}.txt"
+                                metadata["accepted_messages"].append(template)
+                                content_cache[template["name"]] = template["content"]
+    
+    # Process inmail
+    if "inmail" in json_data:
+        inmail_data = json_data["inmail"]
+        if "leader" in inmail_data:
+            for status in ["active", "dissolved", "acquired"]:
+                if status in inmail_data["leader"]:
+                    template = inmail_data["leader"][status].copy()
+                    template["name"] = f"leader_{status}_inmail.txt"
+                    metadata["inmail"].append(template)
+                    content_cache[template["name"]] = template["content"]
+    
+    # Sort for consistent ordering (same as before)
+    metadata["connection_requests"].sort(key=lambda x: (
+        0 if x["contact_type"] == "agent" else 1,
+        x.get("business_status") or ""
+    ))
+    metadata["accepted_messages"].sort(key=lambda x: (
+        x["contact_type"],
+        x.get("business_status") or "",
+        int(x["attempt"].split("_")[1]) if x["attempt"] and "_" in x["attempt"] else 0
+    ))
+    metadata["inmail"].sort(key=lambda x: x.get("business_status") or "")
+    
+    return metadata, content_cache
+
+
+def _discover_linkedin_templates() -> dict:
+    """
+    Load LinkedIn templates from JSON file.
+    Returns structured template metadata organized by category.
+    """
+    metadata, _ = _load_linkedin_templates_from_json()
+    return metadata
+
+
+# Cache templates metadata and content to avoid file I/O on every request
+_LINKEDIN_TEMPLATES_METADATA_CACHE = None
+_LINKEDIN_TEMPLATES_CONTENT_CACHE = None
+
+
+def _preload_linkedin_templates() -> tuple[dict, dict]:
+    """
+    Pre-load all LinkedIn templates (metadata + content) from JSON at startup.
+    Returns (metadata_dict, content_dict).
+    """
+    return _load_linkedin_templates_from_json()
+
+
+def _get_linkedin_templates_metadata() -> dict:
+    """Get LinkedIn templates metadata (cached, loaded at startup)."""
+    global _LINKEDIN_TEMPLATES_METADATA_CACHE, _LINKEDIN_TEMPLATES_CONTENT_CACHE
+    if _LINKEDIN_TEMPLATES_METADATA_CACHE is None:
+        _LINKEDIN_TEMPLATES_METADATA_CACHE, _LINKEDIN_TEMPLATES_CONTENT_CACHE = _preload_linkedin_templates()
+    return _LINKEDIN_TEMPLATES_METADATA_CACHE
+
+
+def _get_linkedin_template_content(template_name: str) -> str:
+    """Get LinkedIn template content from cache (no file I/O)."""
+    global _LINKEDIN_TEMPLATES_METADATA_CACHE, _LINKEDIN_TEMPLATES_CONTENT_CACHE
+    if _LINKEDIN_TEMPLATES_CONTENT_CACHE is None:
+        _LINKEDIN_TEMPLATES_METADATA_CACHE, _LINKEDIN_TEMPLATES_CONTENT_CACHE = _preload_linkedin_templates()
+    return _LINKEDIN_TEMPLATES_CONTENT_CACHE.get(template_name, "")
 
 
 def _get_linkedin_connection_status(db: Session, contact_id: int) -> dict:
@@ -2407,16 +2341,19 @@ def get_linkedin_templates(
         if business_status is None:
             business_status = "active"
         
+        # Get templates (use cached discovery)
+        templates = _get_linkedin_templates_metadata()
+        
         # Connection requests: only show if connection request hasn't been sent
         if connection_status["can_send_connection"]:
             if contact.contact_type == ContactType.agent:
                 filtered_templates["connection_requests"] = [
-                    t for t in LINKEDIN_TEMPLATES["connection_requests"]
+                    t for t in templates["connection_requests"]
                     if t.get("contact_type") == "agent"
                 ]
             else:
                 filtered_templates["connection_requests"] = [
-                    t for t in LINKEDIN_TEMPLATES["connection_requests"]
+                    t for t in templates["connection_requests"]
                     if t.get("contact_type") == "leader" and (
                         t.get("business_status") == business_status or 
                         t.get("business_status") is None
@@ -2430,7 +2367,7 @@ def get_linkedin_templates(
             all_messages = []
             if contact.contact_type == ContactType.agent:
                 all_messages = [
-                    t for t in LINKEDIN_TEMPLATES["accepted_messages"]
+                    t for t in templates["accepted_messages"]
                     if t.get("contact_type") == "agent" and (
                         t.get("business_status") == business_status or
                         t.get("business_status") is None
@@ -2438,7 +2375,7 @@ def get_linkedin_templates(
                 ]
             else:
                 all_messages = [
-                    t for t in LINKEDIN_TEMPLATES["accepted_messages"]
+                    t for t in templates["accepted_messages"]
                     if t.get("contact_type") == "leader" and (
                         t.get("business_status") == business_status or
                         t.get("business_status") is None
@@ -2457,12 +2394,12 @@ def get_linkedin_templates(
         else:
             filtered_templates["accepted_messages"] = []
         
-        # InMail templates: only show if connection request sent but not accepted
-        if connection_status["can_send_inmail"]:
+        # InMail templates: only show if connection request sent but not accepted, and InMail not already sent
+        if connection_status["can_send_inmail"] and not connection_status.get("inmail_sent", False):
             if contact.contact_type != ContactType.agent:
                 # Filter InMail templates by business status, but always return at least one
                 inmail_templates = []
-                all_inmail = LINKEDIN_TEMPLATES.get("inmail", [])
+                all_inmail = templates.get("inmail", [])
                 
                 # Try to find exact match first
                 for t in all_inmail:
@@ -2487,20 +2424,13 @@ def get_linkedin_templates(
         else:
             filtered_templates["inmail"] = []
         
-        # Ensure inmail is always in the response if can_send_inmail is true
-        if connection_status["can_send_inmail"] and not filtered_templates.get("inmail"):
-            # Last resort: return first available InMail template
-            all_inmail = LINKEDIN_TEMPLATES.get("inmail", [])
-            if all_inmail:
-                filtered_templates["inmail"] = [all_inmail[0]]
-        
         return JSONResponse(content={
             "templates": filtered_templates,
             "connection_status": connection_status
         })
     
     # If no contact_id, return all templates
-    return JSONResponse(content={"templates": LINKEDIN_TEMPLATES})
+    return JSONResponse(content={"templates": _get_linkedin_templates_metadata()})
 
 
 @app.get("/leads/{lead_id}/contacts/{contact_id}/linkedin-preview")
@@ -2529,21 +2459,36 @@ def preview_linkedin_template(
     # Build context with profile for LinkedIn placeholders
     context = _build_template_context(lead, contact, prop, profile=profile_data)
     
-    # Load and render template
-    template_path = LINKEDIN_TEMPLATE_DIR / template_name
-    if not template_path.exists():
+    # Get template content from cache (no file I/O)
+    content = _get_linkedin_template_content(template_name)
+    if not content:
         raise HTTPException(status_code=404, detail=f"Template {template_name} not found")
     
-    # Read template file
-    with open(template_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    # Extract subject line for InMail templates (first line if it starts with "Subject:")
+    subject = None
+    body = content
+    if content.startswith("Subject:"):
+        lines = content.split("\n", 1)
+        if len(lines) == 2:
+            subject_line = lines[0].replace("Subject:", "").strip()
+            body = lines[1].strip()
+            # Replace placeholders in subject
+            for key, value in context.items():
+                placeholder = f"[{key}]"
+                subject_line = subject_line.replace(placeholder, str(value) if value else "")
+            subject = subject_line
     
-    # Replace placeholders manually (LinkedIn templates are .txt, not HTML)
+    # Replace placeholders in body
     for key, value in context.items():
         placeholder = f"[{key}]"
-        content = content.replace(placeholder, str(value) if value else "")
+        body = body.replace(placeholder, str(value) if value else "")
     
-    return JSONResponse(content={"preview": content})
+    response_data = {"preview": body}
+    if subject:
+        response_data["subject"] = subject
+        response_data["has_subject"] = True
+    
+    return JSONResponse(content=response_data)
 
 
 @app.post("/leads/{lead_id}/contacts/{contact_id}/linkedin-mark-sent")
