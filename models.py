@@ -54,6 +54,7 @@ class LeadStatus(str, enum.Enum):
     no_response = "no_response"
     invalid = "invalid"
     competitor_claimed = "competitor_claimed"
+    ready = "ready"
 
 
 class OwnerType(str, enum.Enum):

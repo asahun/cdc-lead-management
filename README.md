@@ -107,6 +107,7 @@ The app will be available at `http://localhost:8000`
 ## Mgration tasks
 
 ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'competitor_claimed';
+ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'ready';
 
 WITH cutoff AS (
     SELECT date_trunc('week', now())  -- Monday 00:00 (DB timezone)
