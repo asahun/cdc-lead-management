@@ -33,10 +33,24 @@
         input.value = '';
       });
 
+      // Reset page to 1 when clearing filters
+      const pageInput = filtersForm.querySelector('input[name="page"]');
+      if (pageInput) {
+        pageInput.value = '1';
+      }
+
       // Submit form to apply cleared filters
       filtersForm.submit();
     });
   }
+
+  // Reset page to 1 when filters form is submitted
+  filtersForm.addEventListener('submit', function(e) {
+    const pageInput = filtersForm.querySelector('input[name="page"]');
+    if (pageInput) {
+      pageInput.value = '1';
+    }
+  });
 
   // Sync search form with filter form
   if (searchForm && filtersForm) {
@@ -55,6 +69,12 @@
           hiddenInput.value = input.value;
         }
       });
+      
+      // Reset page to 1 when search is submitted with filters
+      const pageInput = searchForm.querySelector('input[name="page"]');
+      if (pageInput) {
+        pageInput.value = '1';
+      }
     });
   }
 

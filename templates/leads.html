@@ -32,6 +32,7 @@
             <option value="email" {% if attempt_type == 'email' %}selected{% endif %}>Email</option>
             <option value="phone" {% if attempt_type == 'phone' %}selected{% endif %}>Phone</option>
             <option value="mail" {% if attempt_type == 'mail' %}selected{% endif %}>Mail</option>
+            <option value="linkedin" {% if attempt_type == 'linkedin' %}selected{% endif %}>LinkedIn</option>
           </select>
           <select name="attempt_operator" id="attempt_operator" class="filter-select">
             <option value="">—</option>
@@ -136,10 +137,36 @@
       </form>
     </div>
 
+    <!-- Bulk Actions Bar -->
+    <div id="bulk-actions-bar" class="bulk-actions-bar" style="display: none;">
+      <div class="bulk-actions-info">
+        <span id="bulk-selection-count">0</span> lead(s) selected
+      </div>
+      <div class="bulk-actions-buttons">
+        <select id="bulk-status-select" class="bulk-action-select">
+          <option value="">Change Status...</option>
+          <option value="new">New</option>
+          <option value="researching">Researching</option>
+          <option value="contact_in_progress">Contact In Progress</option>
+          <option value="response_received">Response Received</option>
+          <option value="won">Won</option>
+          <option value="lost">Lost</option>
+          <option value="no_response">No Response</option>
+          <option value="invalid">Invalid</option>
+          <option value="competitor_claimed">Competitor Claimed</option>
+        </select>
+        <button type="button" id="bulk-mark-mail-sent" class="btn btn-secondary btn-sm">Mark Mail Sent</button>
+        <button type="button" id="bulk-clear-selection" class="btn btn-ghost btn-sm">Clear Selection</button>
+      </div>
+    </div>
+
     <div class="card">
       <table class="data-table leads-table">
   <thead>
     <tr>
+      <th class="checkbox-column">
+        <input type="checkbox" id="select-all-leads" title="Select all on this page">
+      </th>
       <th>ID</th>
       <th>Property ID</th>
       <th>Owner</th>
@@ -150,8 +177,14 @@
     </tr>
   </thead>
   <tbody>
+        {% if not leads_with_flags %}
+          <tr><td colspan="8" style="text-align: center; padding: 20px;">No leads found matching the filters.</td></tr>
+        {% endif %}
         {% for l, is_editable in leads_with_flags %}
           <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
+      <td class="checkbox-column">
+        <input type="checkbox" class="lead-checkbox" data-lead-id="{{ l.id }}" {% if not is_editable %}disabled title="This lead cannot be edited"{% endif %}>
+      </td>
       <td>{{ l.id }}</td>
       <td>{{ l.property_id }}</td>
       <td>{{ l.owner_name }}</td>
@@ -205,7 +238,20 @@
   </div>
 </div>
 
+<!-- Bulk Action Confirmation Modal -->
+<div id="bulk-confirm-modal" class="modal">
+  <div class="modal-content">
+    <h3 id="bulk-confirm-title">Confirm Bulk Action</h3>
+    <div id="bulk-confirm-message" class="bulk-confirm-message"></div>
+    <div class="modal-actions">
+      <button type="button" id="bulk-confirm-cancel" class="btn btn-ghost">Cancel</button>
+      <button type="button" id="bulk-confirm-ok" class="btn btn-primary">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/leads_filters.js?v=20241203"></script>
 <script src="/static/js/leads_filters_persistence.js?v=20241203"></script>
 <script src="/static/js/leads_state.js?v=20241128"></script>
+<script src="/static/js/leads_bulk_actions.js?v=20241203"></script>
 {% endblock %}

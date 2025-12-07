@@ -820,17 +820,28 @@ def _build_lead_filters(
     if attempt_type and attempt_operator and attempt_count_int is not None:
         attempt_filter = []
         if attempt_type != "all":
-            attempt_filter.append(LeadAttempt.channel == ContactChannel[attempt_type])
-        attempt_count_subq = (
-            select(func.count(LeadAttempt.id))
-            .where(LeadAttempt.lead_id == BusinessLead.id)
-            .where(*attempt_filter)
-            .correlate(BusinessLead)
-            .scalar_subquery()
-        )
-        filter_condition = _build_count_filter(attempt_operator, attempt_count_int, attempt_count_subq)
-        if filter_condition:
-            filters.append(filter_condition)
+            try:
+                attempt_filter.append(LeadAttempt.channel == ContactChannel[attempt_type])
+            except (KeyError, ValueError):
+                # Invalid attempt type, skip this filter
+                pass
+        
+        # Build subquery only if we have valid attempt_type or it's "all"
+        if attempt_filter or attempt_type == "all":
+            # Build base subquery
+            attempt_count_subq_base = (
+                select(func.coalesce(func.count(LeadAttempt.id), 0))
+                .where(LeadAttempt.lead_id == BusinessLead.id)
+                .correlate(BusinessLead)
+            )
+            # Add channel filter only if attempt_type is not "all"
+            if attempt_filter:
+                attempt_count_subq_base = attempt_count_subq_base.where(*attempt_filter)
+            
+            attempt_count_subq = attempt_count_subq_base.scalar_subquery()
+            filter_condition = _build_count_filter(attempt_operator, attempt_count_int, attempt_count_subq)
+            if filter_condition is not None:
+                filters.append(filter_condition)
 
     # Print log count filter
     if print_log_operator and print_log_count_int is not None:
@@ -839,45 +850,46 @@ def _build_lead_filters(
             print_log_filter.append(PrintLog.mailed == True)
         elif print_log_mailed == "not_mailed":
             print_log_filter.append(PrintLog.mailed == False)
+        # Note: if print_log_mailed is "all" or empty, no additional filter is applied
         print_log_count_subq = (
-            select(func.count(PrintLog.id))
+            select(func.coalesce(func.count(PrintLog.id), 0))
             .where(PrintLog.lead_id == BusinessLead.id)
             .where(*print_log_filter)
             .correlate(BusinessLead)
             .scalar_subquery()
         )
         filter_condition = _build_count_filter(print_log_operator, print_log_count_int, print_log_count_subq)
-        if filter_condition:
+        if filter_condition is not None:
             filters.append(filter_condition)
 
     # Scheduled email count filter (pending + sent)
     if scheduled_email_operator and scheduled_email_count_int is not None:
         scheduled_email_count_subq = (
-            select(func.count(ScheduledEmail.id))
+            select(func.coalesce(func.count(ScheduledEmail.id), 0))
             .where(ScheduledEmail.lead_id == BusinessLead.id)
             .where(ScheduledEmail.status.in_([ScheduledEmailStatus.pending, ScheduledEmailStatus.sent]))
             .correlate(BusinessLead)
             .scalar_subquery()
         )
         filter_condition = _build_count_filter(scheduled_email_operator, scheduled_email_count_int, scheduled_email_count_subq)
-        if filter_condition:
+        if filter_condition is not None:
             filters.append(filter_condition)
 
     # Failed email count filter
     if failed_email_operator and failed_email_count_int is not None:
         failed_email_count_subq = (
-            select(func.count(ScheduledEmail.id))
+            select(func.coalesce(func.count(ScheduledEmail.id), 0))
             .where(ScheduledEmail.lead_id == BusinessLead.id)
             .where(ScheduledEmail.status == ScheduledEmailStatus.failed)
             .correlate(BusinessLead)
             .scalar_subquery()
         )
         filter_condition = _build_count_filter(failed_email_operator, failed_email_count_int, failed_email_count_subq)
-        if filter_condition:
+        if filter_condition is not None:
             filters.append(filter_condition)
 
     # Status filter
-    if status:
+    if status and status.strip():
         try:
             status_enum = LeadStatus[status]
             filters.append(BusinessLead.status == status_enum)
@@ -1541,17 +1553,27 @@ def list_leads(
 ):
     # Convert string count parameters to integers, handling empty strings
     def parse_count(value: str | None) -> int | None:
-        if value is None or value == "":
+        if value is None or value == "" or (isinstance(value, str) and value.strip() == ""):
             return None
         try:
             return int(value)
         except (ValueError, TypeError):
             return None
     
+    # Normalize empty strings to None for filter parameters (before parsing counts)
+    attempt_type = attempt_type.strip() if attempt_type and isinstance(attempt_type, str) and attempt_type.strip() else None
+    attempt_operator = attempt_operator.strip() if attempt_operator and isinstance(attempt_operator, str) and attempt_operator.strip() else None
+    print_log_operator = print_log_operator.strip() if print_log_operator and isinstance(print_log_operator, str) and print_log_operator.strip() else None
+    print_log_mailed = print_log_mailed.strip() if print_log_mailed and isinstance(print_log_mailed, str) and print_log_mailed.strip() else None
+    scheduled_email_operator = scheduled_email_operator.strip() if scheduled_email_operator and isinstance(scheduled_email_operator, str) and scheduled_email_operator.strip() else None
+    failed_email_operator = failed_email_operator.strip() if failed_email_operator and isinstance(failed_email_operator, str) and failed_email_operator.strip() else None
+    status = status.strip() if status and isinstance(status, str) and status.strip() else None
+    
     attempt_count_int = parse_count(attempt_count)
     print_log_count_int = parse_count(print_log_count)
     scheduled_email_count_int = parse_count(scheduled_email_count)
     failed_email_count_int = parse_count(failed_email_count)
+    
     if page < 1:
         page = 1
 
@@ -1595,11 +1617,12 @@ def list_leads(
     
     # Add year filter to filters list
     filters.append(year_filter)
-
+    
     # Apply all filters
     if filters:
-        stmt = stmt.where(and_(*filters))
-        count_stmt = count_stmt.where(and_(*filters))
+        combined_filter = and_(*filters)
+        stmt = stmt.where(combined_filter)
+        count_stmt = count_stmt.where(combined_filter)
 
     total = db.scalar(count_stmt) or 0
     stmt = stmt.order_by(BusinessLead.created_at.desc()).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
@@ -1622,14 +1645,14 @@ def list_leads(
             # Filter values for template
             "attempt_type": attempt_type or "all",
             "attempt_operator": attempt_operator or "",
-            "attempt_count": attempt_count_int,
+            "attempt_count": attempt_count_int,  # Pass int (could be None)
             "print_log_operator": print_log_operator or "",
-            "print_log_count": print_log_count_int,
+            "print_log_count": print_log_count_int,  # Pass int (could be None)
             "print_log_mailed": print_log_mailed or "all",
             "scheduled_email_operator": scheduled_email_operator or "",
-            "scheduled_email_count": scheduled_email_count_int,
+            "scheduled_email_count": scheduled_email_count_int,  # Pass int (could be None)
             "failed_email_operator": failed_email_operator or "",
-            "failed_email_count": failed_email_count_int,
+            "failed_email_count": failed_email_count_int,  # Pass int (could be None)
             "status": status or "",
             "year": year or DEFAULT_YEAR,
             "available_years": _get_available_years(db),
@@ -2027,7 +2050,7 @@ def create_lead_contact(
     db: Session = Depends(get_db),
 ):
     lead = _get_lead_or_404(db, lead_id)
-    
+
     contact = LeadContact(
         lead_id=lead.id,
         contact_name=contact_name,
@@ -2201,6 +2224,127 @@ def mark_print_log_as_mailed(
     db.refresh(log)
 
     return _serialize_print_log(log)
+
+
+# ---------- BULK ACTIONS ----------
+
+@app.post("/leads/bulk/change-status")
+async def bulk_change_status(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Bulk change status for multiple leads."""
+    body = await request.json()
+    lead_ids = body.get("lead_ids", [])
+    status = body.get("status")
+    
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="No leads selected")
+    
+    if not status:
+        raise HTTPException(status_code=400, detail="Status is required")
+    
+    try:
+        status_enum = LeadStatus[status]
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    
+    updated = 0
+    skipped = 0
+    
+    for lead_id in lead_ids:
+        lead = db.get(BusinessLead, lead_id)
+        if not lead:
+            skipped += 1
+            continue
+        
+        # Skip if lead is not editable (read-only)
+        if not _is_lead_editable(lead):
+            skipped += 1
+            continue
+        
+        lead.status = status_enum
+        lead.updated_at = datetime.utcnow()
+        updated += 1
+    
+    db.commit()
+    
+    return JSONResponse(content={
+        "updated": updated,
+        "skipped": skipped,
+        "total": len(lead_ids)
+    })
+
+
+@app.post("/leads/bulk/mark-mail-sent")
+async def bulk_mark_mail_sent(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Bulk mark all unmailed print logs as mailed for multiple leads."""
+    body = await request.json()
+    lead_ids = body.get("lead_ids", [])
+    
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="No leads selected")
+    
+    leads_processed = 0
+    print_logs_marked = 0
+    attempts_created = 0
+    skipped = 0
+    
+    for lead_id in lead_ids:
+        lead = db.get(BusinessLead, lead_id)
+        if not lead:
+            skipped += 1
+            continue
+        
+        # Find all unmailed print logs for this lead
+        unmailed_logs = db.query(PrintLog).filter(
+            PrintLog.lead_id == lead_id,
+            PrintLog.mailed == False
+        ).all()
+        
+        if not unmailed_logs:
+            skipped += 1
+            continue
+        
+        leads_processed += 1
+        
+        # Mark each print log as mailed and create attempt
+        for log in unmailed_logs:
+            if log.mailed:
+                continue
+            
+            next_attempt_number = _get_next_attempt_number(db, lead_id)
+            
+            attempt = LeadAttempt(
+                lead_id=lead_id,
+                contact_id=log.contact_id,
+                channel=ContactChannel.mail,
+                attempt_number=next_attempt_number,
+                outcome="Letter mailed",
+                notes=f"Letter mailed ({log.filename})",
+            )
+            db.add(attempt)
+            db.flush()
+            
+            log.mailed = True
+            log.mailed_at = datetime.utcnow()
+            log.attempt_id = attempt.id
+            
+            print_logs_marked += 1
+            attempts_created += 1
+    
+    db.commit()
+    
+    return JSONResponse(content={
+        "leads_processed": leads_processed,
+        "print_logs_marked": print_logs_marked,
+        "attempts_created": attempts_created,
+        "skipped": skipped,
+        "total": len(lead_ids)
+    })
 
 
 @app.delete("/leads/{lead_id}/print-logs/{log_id}")
