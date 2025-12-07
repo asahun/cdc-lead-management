@@ -1028,6 +1028,93 @@ def _update_milestone_statuses(db: Session, lead_id: int):
                 milestone.updated_at = datetime.utcnow()
 
 
+def _get_journey_status_summary(db: Session, lead_id: int) -> dict | None:
+    """Get a summary of journey status for a lead (for list view indicators)."""
+    journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
+    if not journey:
+        return None
+    
+    # Update statuses before checking
+    _update_milestone_statuses(db, lead_id)
+    
+    # Get all milestones
+    milestones = db.query(JourneyMilestone).filter(
+        JourneyMilestone.journey_id == journey.id
+    ).all()
+    
+    now = datetime.now(timezone.utc)
+    journey_start = journey.started_at
+    
+    overdue = []
+    due_soon = []  # 0-2 days
+    upcoming = []  # 3-7 days
+    
+    milestone_labels = {
+        JourneyMilestoneType.email_1: "Email #1 Initial",
+        JourneyMilestoneType.email_followup_1: "Follow-up #1",
+        JourneyMilestoneType.email_followup_2: "Follow-up #2",
+        JourneyMilestoneType.email_followup_3: "Final Nudge",
+        JourneyMilestoneType.linkedin_connection: "Connection Request",
+        JourneyMilestoneType.linkedin_message_1: "Message #1",
+        JourneyMilestoneType.linkedin_message_2: "Message #2",
+        JourneyMilestoneType.linkedin_message_3: "Message #3",
+        JourneyMilestoneType.linkedin_inmail: "InMail",
+        JourneyMilestoneType.mail_1: "Mail #1",
+        JourneyMilestoneType.mail_2: "Mail #2",
+        JourneyMilestoneType.mail_3: "Mail #3",
+    }
+    
+    channel_icons = {
+        ContactChannel.email: "📧",
+        ContactChannel.linkedin: "💼",
+        ContactChannel.mail: "📮",
+    }
+    
+    for milestone in milestones:
+        # Skip completed and skipped milestones
+        if milestone.status == MilestoneStatus.completed or milestone.status == MilestoneStatus.skipped:
+            continue
+        
+        expected_date = journey_start + timedelta(days=milestone.scheduled_day)
+        days_until = (expected_date - now).days
+        
+        milestone_data = {
+            "label": milestone_labels.get(milestone.milestone_type, milestone.milestone_type.value),
+            "channel": milestone.channel.value,
+            "channel_icon": channel_icons.get(milestone.channel, "•"),
+            "expected_date": expected_date.isoformat(),
+            "days_until": days_until,
+        }
+        
+        if milestone.status == MilestoneStatus.overdue or days_until < 0:
+            overdue.append(milestone_data)
+        elif days_until <= 2:  # 0-2 days
+            due_soon.append(milestone_data)
+        elif days_until <= 7:  # 3-7 days
+            upcoming.append(milestone_data)
+    
+    # Determine priority status
+    priority = None
+    if overdue:
+        priority = "overdue"
+    elif due_soon:
+        priority = "due_soon"
+    elif upcoming:
+        priority = "upcoming"
+    else:
+        priority = "none"
+    
+    return {
+        "priority": priority,
+        "overdue_count": len(overdue),
+        "due_soon_count": len(due_soon),
+        "upcoming_count": len(upcoming),
+        "overdue": overdue,
+        "due_soon": due_soon,
+        "upcoming": upcoming,
+    }
+
+
 def _get_journey_data(db: Session, lead_id: int) -> dict | None:
     """Get journey data for a lead, including all milestones."""
     journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
@@ -3589,3 +3676,36 @@ def get_lead_journey(
     
     journey_data = _get_journey_data(db, lead_id)
     return JSONResponse(content=journey_data)
+
+
+@app.post("/api/leads/batch/journey-status")
+async def get_batch_journey_status(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Get journey status summaries for multiple leads (for list view indicators)."""
+    body = await request.json()
+    lead_ids = body.get("lead_ids", [])
+    
+    if not lead_ids:
+        return JSONResponse(content={})
+    
+    # Get journey status for each lead
+    status_map = {}
+    journey_hidden_statuses = {
+        LeadStatus.new,
+        LeadStatus.researching,
+        LeadStatus.invalid,
+        LeadStatus.competitor_claimed
+    }
+    
+    for lead_id in lead_ids:
+        lead = db.get(BusinessLead, lead_id)
+        if not lead or lead.status in journey_hidden_statuses:
+            continue
+        
+        summary = _get_journey_status_summary(db, lead_id)
+        if summary:
+            status_map[str(lead_id)] = summary
+    
+    return JSONResponse(content=status_map)

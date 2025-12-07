@@ -169,6 +169,7 @@
       <th class="checkbox-column">
         <input type="checkbox" id="select-all-leads" title="Select all on this page">
       </th>
+      <th>Tasks</th>
       <th>ID</th>
       <th>Property ID</th>
       <th>Owner</th>
@@ -180,12 +181,19 @@
   </thead>
   <tbody>
         {% if not leads_with_flags %}
-          <tr><td colspan="8" style="text-align: center; padding: 20px;">No leads found matching the filters.</td></tr>
+          <tr><td colspan="9" style="text-align: center; padding: 20px;">No leads found matching the filters.</td></tr>
         {% endif %}
         {% for l, is_editable in leads_with_flags %}
           <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
       <td class="checkbox-column">
         <input type="checkbox" class="lead-checkbox" data-lead-id="{{ l.id }}" {% if not is_editable %}disabled title="This lead cannot be edited"{% endif %}>
+      </td>
+      <td class="tasks-column">
+        {% if l.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+          <button type="button" class="task-bell" data-lead-id="{{ l.id }}" title="View tasks">
+            <span class="bell-icon">🔔</span>
+          </button>
+        {% endif %}
       </td>
       <td>{{ l.id }}</td>
       <td>{{ l.property_id }}</td>
@@ -252,8 +260,40 @@
   </div>
 </div>
 
+<!-- Task Details Popup -->
+<div id="task-popup" class="task-popup" style="display: none;">
+  <div class="task-popup-content">
+    <div class="task-popup-header">
+      <h3>Outreach Tasks</h3>
+      <button type="button" class="task-popup-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="task-popup-body">
+      <div id="task-popup-loading" class="task-popup-loading">Loading tasks...</div>
+      <div id="task-popup-content" style="display: none;">
+        <div id="task-overdue-section" class="task-section" style="display: none;">
+          <h4 class="task-section-title task-overdue">🔴 Overdue</h4>
+          <ul id="task-overdue-list" class="task-list"></ul>
+        </div>
+        <div id="task-due-soon-section" class="task-section" style="display: none;">
+          <h4 class="task-section-title task-due-soon">🟡 Due Soon (0-2 days)</h4>
+          <ul id="task-due-soon-list" class="task-list"></ul>
+        </div>
+        <div id="task-upcoming-section" class="task-section" style="display: none;">
+          <h4 class="task-section-title task-upcoming">🔵 Upcoming (3-7 days)</h4>
+          <ul id="task-upcoming-list" class="task-list"></ul>
+        </div>
+        <div id="task-empty" class="task-empty" style="display: none;">
+          <p>No active tasks. All milestones are completed or not yet due.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/leads_filters.js?v=20241203"></script>
 <script src="/static/js/leads_filters_persistence.js?v=20241203"></script>
+<link rel="stylesheet" href="/static/css/task_indicator.css">
+<script src="/static/js/task_indicator.js?v=20241203" defer></script>
 <script src="/static/js/leads_state.js?v=20241128"></script>
 <script src="/static/js/leads_bulk_actions.js?v=20241203"></script>
 {% endblock %}

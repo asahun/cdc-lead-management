@@ -1,0 +1,258 @@
+/* Task Indicator Styles */
+
+.tasks-column {
+  width: 60px;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.task-bell {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 1.25rem;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  position: relative;
+}
+
+.task-bell:hover {
+  transform: scale(1.1);
+  opacity: 0.8;
+}
+
+.task-bell:active {
+  transform: scale(0.95);
+}
+
+.bell-icon {
+  display: inline-block;
+  filter: grayscale(100%);
+  opacity: 0.5;
+  transition: all 0.2s ease;
+}
+
+/* Color coding for bell icons */
+.task-bell.bell-overdue .bell-icon {
+  filter: grayscale(0%);
+  opacity: 1;
+  color: #d32f2f;
+  text-shadow: 0 0 4px rgba(211, 47, 47, 0.5);
+}
+
+.task-bell.bell-due-soon .bell-icon {
+  filter: grayscale(0%);
+  opacity: 1;
+  color: #f57c00;
+  text-shadow: 0 0 4px rgba(245, 124, 0, 0.5);
+}
+
+.task-bell.bell-upcoming .bell-icon {
+  filter: grayscale(0%);
+  opacity: 1;
+  color: #1976d2;
+  text-shadow: 0 0 4px rgba(25, 118, 210, 0.5);
+}
+
+/* Task Popup */
+.task-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.task-popup-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 100%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.task-popup-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.task-popup-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.task-popup-close:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.task-popup-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.task-popup-loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.task-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+  font-style: italic;
+}
+
+.task-section {
+  margin-bottom: 1.5rem;
+}
+
+.task-section:last-child {
+  margin-bottom: 0;
+}
+
+.task-section-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid;
+}
+
+.task-section-title.task-overdue {
+  color: #d32f2f;
+  border-bottom-color: #d32f2f;
+}
+
+.task-section-title.task-due-soon {
+  color: #f57c00;
+  border-bottom-color: #f57c00;
+}
+
+.task-section-title.task-upcoming {
+  color: #1976d2;
+  border-bottom-color: #1976d2;
+}
+
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #fafafa;
+  border-radius: 6px;
+  border-left: 3px solid;
+  transition: background 0.2s ease;
+}
+
+.task-item:hover {
+  background: #f0f0f0;
+}
+
+.task-item.task-item-overdue {
+  border-left-color: #d32f2f;
+}
+
+.task-item.task-item-due-soon {
+  border-left-color: #f57c00;
+}
+
+.task-item.task-item-upcoming {
+  border-left-color: #1976d2;
+}
+
+.task-channel-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.task-label {
+  flex: 1;
+  font-weight: 500;
+  color: #333;
+}
+
+.task-date {
+  font-size: 0.85rem;
+  color: #666;
+  white-space: nowrap;
+}
+
+.task-days {
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.task-item-overdue .task-days {
+  color: #d32f2f;
+}
+
+.task-item-due-soon .task-days {
+  color: #f57c00;
+}
+
+.task-item-upcoming .task-days {
+  color: #1976d2;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .task-popup-content {
+    max-width: 90%;
+    max-height: 90vh;
+  }
+  
+  .task-item {
+    flex-wrap: wrap;
+  }
+  
+  .task-date,
+  .task-days {
+    width: 100%;
+    margin-top: 0.25rem;
+  }
+}
+

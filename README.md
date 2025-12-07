@@ -109,6 +109,29 @@ The app will be available at `http://localhost:8000`
 ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'competitor_claimed';
 ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'ready';
 
+-- Create ENUM types for journey tracking
+CREATE TYPE journey_status AS ENUM ('active', 'completed', 'paused');
+
+CREATE TYPE journey_milestone_type AS ENUM (
+    'email_1',
+    'email_followup_1',
+    'email_followup_2',
+    'email_followup_3',
+    'linkedin_connection',
+    'linkedin_message_1',
+    'linkedin_message_2',
+    'linkedin_message_3',
+    'linkedin_inmail',
+    'mail_1',
+    'mail_2',
+    'mail_3'
+);
+
+CREATE TYPE milestone_status AS ENUM ('pending', 'completed', 'skipped', 'overdue');
+
+-- Note: The tables `lead_journey` and `journey_milestone` will be created automatically
+-- by SQLAlchemy's Base.metadata.create_all() when the application starts.
+
 WITH cutoff AS (
     SELECT date_trunc('week', now())  -- Monday 00:00 (DB timezone)
            - interval '7 days'        -- previous Monday
