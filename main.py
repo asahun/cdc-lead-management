@@ -2123,19 +2123,19 @@ def _load_linkedin_templates_from_json() -> tuple[dict, dict]:
     - metadata_dict: structured like the old discovery format for compatibility
     - content_dict: template_name -> content mapping
     """
-    if not LINKEDIN_TEMPLATES_JSON.exists():
-        return {}, {}
-    
-    with open(LINKEDIN_TEMPLATES_JSON, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
-    
-    # Convert JSON structure to flat metadata list (for compatibility)
+    # Initialize with proper structure even if JSON doesn't exist
     metadata = {
         "connection_requests": [],
         "accepted_messages": [],
         "inmail": []
     }
     content_cache = {}
+    
+    if not LINKEDIN_TEMPLATES_JSON.exists():
+        return metadata, content_cache
+    
+    with open(LINKEDIN_TEMPLATES_JSON, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
     
     # Process connection_requests
     if "connection_requests" in json_data:
@@ -2242,11 +2242,13 @@ def _get_linkedin_connection_status(db: Session, contact_id: int) -> dict:
     {
         "is_connected": bool,
         "has_connection_request": bool,
+        "inmail_sent": bool,
         "last_message_number": int | None,  # 1, 2, or 3
         "can_send_connection": bool,
         "can_send_messages": bool,
         "can_send_inmail": bool,
-        "next_message_number": int | None  # Which message to show next (1, 2, or 3)
+        "next_message_number": int | None,  # Which message to show next (1, 2, or 3)
+        "all_followups_complete": bool
     }
     """
     # Get all LinkedIn attempts for this contact
@@ -2257,6 +2259,7 @@ def _get_linkedin_connection_status(db: Session, contact_id: int) -> dict:
     
     is_connected = False
     has_connection_request = False
+    inmail_sent = False
     last_message_number = None
     
     for attempt in linkedin_attempts:
@@ -2267,6 +2270,10 @@ def _get_linkedin_connection_status(db: Session, contact_id: int) -> dict:
             is_connected = True
         elif "Connection Request Sent" in outcome:
             has_connection_request = True
+        
+        # Check for InMail sent
+        if "InMail Sent" in outcome or "inmail" in outcome.lower():
+            inmail_sent = True
         
         # Check for message numbers
         if "Message 1" in outcome or "Follow-up 1" in outcome:
@@ -2282,9 +2289,10 @@ def _get_linkedin_connection_status(db: Session, contact_id: int) -> dict:
     # Determine what can be sent
     can_send_connection = not has_connection_request and not is_connected
     can_send_messages = is_connected
-    can_send_inmail = has_connection_request and not is_connected
+    can_send_inmail = has_connection_request and not is_connected and not inmail_sent
     
-    # Determine next message number
+    # Determine next message number and completion status
+    all_followups_complete = False
     if is_connected:
         if last_message_number is None:
             next_message_number = 1
@@ -2292,17 +2300,20 @@ def _get_linkedin_connection_status(db: Session, contact_id: int) -> dict:
             next_message_number = last_message_number + 1
         else:
             next_message_number = None  # All messages sent
+            all_followups_complete = True
     else:
         next_message_number = None
     
     return {
         "is_connected": is_connected,
         "has_connection_request": has_connection_request,
+        "inmail_sent": inmail_sent,
         "last_message_number": last_message_number,
         "can_send_connection": can_send_connection,
         "can_send_messages": can_send_messages,
         "can_send_inmail": can_send_inmail,
-        "next_message_number": next_message_number
+        "next_message_number": next_message_number,
+        "all_followups_complete": all_followups_complete
     }
 
 
@@ -2469,14 +2480,15 @@ def preview_linkedin_template(
     body = content
     if content.startswith("Subject:"):
         lines = content.split("\n", 1)
-        if len(lines) == 2:
-            subject_line = lines[0].replace("Subject:", "").strip()
-            body = lines[1].strip()
-            # Replace placeholders in subject
-            for key, value in context.items():
-                placeholder = f"[{key}]"
-                subject_line = subject_line.replace(placeholder, str(value) if value else "")
-            subject = subject_line
+        # Extract subject from first line (handles both with and without newline)
+        subject_line = lines[0].replace("Subject:", "").strip()
+        # Body is the rest (if newline exists) or empty string (if no newline)
+        body = lines[1].strip() if len(lines) == 2 else ""
+        # Replace placeholders in subject
+        for key, value in context.items():
+            placeholder = f"[{key}]"
+            subject_line = subject_line.replace(placeholder, str(value) if value else "")
+        subject = subject_line
     
     # Replace placeholders in body
     for key, value in context.items():
