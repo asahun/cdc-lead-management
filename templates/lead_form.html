@@ -493,11 +493,6 @@
               </div>
 
               <div>
-                <label>Attempt #</label>
-                <input name="attempt_number" type="number" min="1" value="1">
-              </div>
-
-              <div>
                 <label>Contact (optional)</label>
                 <select name="contact_id">
                   <option value="">-- none --</option>
@@ -509,7 +504,26 @@
 
               <div>
                 <label>Outcome</label>
-                <input name="outcome" placeholder="e.g. left voicemail, no answer, spoke with CFO">
+                <!-- Text input for non-LinkedIn channels -->
+                <input 
+                  id="outcome-text-input" 
+                  name="outcome" 
+                  placeholder="e.g. left voicemail, no answer, spoke with CFO"
+                  style="display: block;">
+                <!-- Dropdown for LinkedIn channel -->
+                <select 
+                  id="outcome-dropdown" 
+                  style="display: none;">
+                  <option value="">-- Select Outcome --</option>
+                  {% for outcome in linkedin_outcomes %}
+                    <option value="{{ outcome }}">{{ outcome }}</option>
+                  {% endfor %}
+                </select>
+                <!-- Custom input for "Other" option -->
+                <input 
+                  id="outcome-other-input" 
+                  placeholder="Specify outcome..."
+                  style="display: none;">
               </div>
 
               <div>
@@ -874,4 +888,5 @@
 <script src="/static/js/email_compose.js?v=20241128" defer></script>
 <script src="/static/js/scheduled_emails.js?v=20241128" defer></script>
 <script src="/static/js/linkedin_templates.js?v=20241128" defer></script>
+<script src="/static/js/attempt_form.js?v=20241203" defer></script>
 {% endblock %}

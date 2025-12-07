@@ -1729,6 +1729,7 @@ def edit_lead(
             "contacts": contacts,
             "attempts": attempts,
             "channels": list(ContactChannel),
+            "linkedin_outcomes": LINKEDIN_OUTCOMES,
             "comments": comments,
             "contact_edit_target": contact_edit_target,
             "owner_types": list(OwnerType),
@@ -2114,6 +2115,19 @@ def prep_email(
 # LinkedIn Templates
 LINKEDIN_TEMPLATE_DIR = Path(__file__).parent / "templates" / "linkedin"
 LINKEDIN_TEMPLATES_JSON = LINKEDIN_TEMPLATE_DIR / "templates.json"
+
+# Predefined LinkedIn attempt outcomes
+LINKEDIN_OUTCOMES = [
+    "Connection Request Sent",
+    "Connection Accepted",
+    "LinkedIn Message 1 Sent",
+    "LinkedIn Message 2 Sent",
+    "LinkedIn Message 3 Sent",
+    "InMail Sent",
+    "No Response",
+    "Connection Declined",
+    "Other",
+]
 
 
 def _load_linkedin_templates_from_json() -> tuple[dict, dict]:
@@ -2978,7 +2992,6 @@ def lead_attempts(
 def create_lead_attempt(
     lead_id: int,
     channel: ContactChannel = Form(...),
-    attempt_number: int = Form(1),
     contact_id: str | None = Form(None),
     outcome: str | None = Form(None),
     notes: str | None = Form(None),
@@ -2994,11 +3007,20 @@ def create_lead_attempt(
     else:
         contact_id_val = int(contact_id)
 
+    # Auto-calculate next attempt number (same logic as programmatic attempts)
+    last_attempt = db.scalar(
+        select(LeadAttempt)
+        .where(LeadAttempt.lead_id == lead_id)
+        .order_by(LeadAttempt.attempt_number.desc())
+        .limit(1)
+    )
+    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+
     attempt = LeadAttempt(
         lead_id=lead.id,
         contact_id=contact_id_val,
         channel=channel,
-        attempt_number=attempt_number,
+        attempt_number=next_attempt_number,
         outcome=outcome,
         notes=notes,
     )
@@ -3034,6 +3056,34 @@ def create_lead_comment(
 
 
 @app.post("/leads/{lead_id}/comments/{comment_id}/delete")
+def delete_lead_comment(
+    lead_id: int,
+    comment_id: int,
+    db: Session = Depends(get_db),
+):
+    comment = db.get(LeadComment, comment_id)
+    if not comment or comment.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    db.delete(comment)
+    db.commit()
+    return RedirectResponse(url=f"/leads/{lead_id}/edit#comments", status_code=303)
+
+
+def delete_lead_comment(
+    lead_id: int,
+    comment_id: int,
+    db: Session = Depends(get_db),
+):
+    comment = db.get(LeadComment, comment_id)
+    if not comment or comment.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    db.delete(comment)
+    db.commit()
+    return RedirectResponse(url=f"/leads/{lead_id}/edit#comments", status_code=303)
+
+
 def delete_lead_comment(
     lead_id: int,
     comment_id: int,
