@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from db import SessionLocal
 from models import ScheduledEmail, ScheduledEmailStatus, LeadAttempt, ContactChannel
 from email_service import send_email, resolve_profile, extract_profile_marker
+from utils import get_next_attempt_number
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +56,7 @@ def _process_scheduled_emails():
                 db.commit()
                 
                 # Create attempt record
-                last_attempt = db.query(LeadAttempt).filter(
-                    LeadAttempt.lead_id == scheduled_email.lead_id
-                ).order_by(LeadAttempt.attempt_number.desc()).first()
-                
-                next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+                next_attempt_number = get_next_attempt_number(db, scheduled_email.lead_id)
                 
                 attempt = LeadAttempt(
                     lead_id=scheduled_email.lead_id,

@@ -50,8 +50,6 @@ from email_service import (
     embed_profile_marker,
     _build_template_context,
     _render_template,
-    _build_template_context,
-    _render_template,
     extract_profile_marker,
     PROFILE_REGISTRY,
 )
@@ -293,6 +291,201 @@ def _is_lead_editable(lead: BusinessLead) -> bool:
     return lead.status not in read_only_statuses
 
 
+# ---------- VALIDATION HELPERS ----------
+
+def _get_lead_or_404(db: Session, lead_id: int) -> BusinessLead:
+    """Get lead by ID or raise 404 HTTPException."""
+    lead = db.get(BusinessLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+def _get_contact_or_404(db: Session, contact_id: int, lead_id: int) -> LeadContact:
+    """Get contact by ID or raise 404 HTTPException, ensuring it belongs to the lead."""
+    contact = db.get(LeadContact, contact_id)
+    if not contact or contact.lead_id != lead_id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return contact
+
+
+def _normalize_contact_id(contact_id: str | None) -> int | None:
+    """Normalize contact_id from form (empty string -> None, otherwise int)."""
+    if not contact_id:
+        return None
+    return int(contact_id)
+
+
+# ---------- ATTEMPT NUMBER HELPERS ----------
+
+from utils import get_next_attempt_number as _get_next_attempt_number
+
+
+# ---------- OWNER FIELDS NORMALIZATION ----------
+
+def _normalize_owner_fields(
+    owner_type: OwnerType,
+    business_owner_status: BusinessOwnerStatus | None,
+    owner_size: OwnerSize | None,
+    new_business_name: str | None,
+    individual_owner_status: IndividualOwnerStatus | None,
+    validate: bool = True
+) -> dict:
+    """
+    Normalize owner-related fields based on owner_type.
+    Returns dict with normalized values.
+    """
+    if owner_type == OwnerType.business:
+        normalized = {
+            "individual_owner_status": None,
+            "business_owner_status": business_owner_status or BusinessOwnerStatus.active,
+            "owner_size": owner_size or OwnerSize.corporate,
+        }
+        # Handle new_business_name validation
+        if normalized["business_owner_status"] in (
+            BusinessOwnerStatus.acquired_or_merged,
+            BusinessOwnerStatus.active_renamed,
+        ):
+            if validate and (not new_business_name or not new_business_name.strip()):
+                raise HTTPException(
+                    status_code=400,
+                    detail="New owner name is required when status is acquired_or_merged or active_renamed."
+                )
+            normalized["new_business_name"] = new_business_name
+        else:
+            normalized["new_business_name"] = None
+    else:
+        # Individual logic
+        normalized = {
+            "business_owner_status": None,
+            "owner_size": None,
+            "new_business_name": None,
+            "individual_owner_status": individual_owner_status or IndividualOwnerStatus.alive,
+        }
+    
+    return normalized
+
+
+# ---------- LINKEDIN HELPERS ----------
+
+def _determine_business_status(lead: BusinessLead) -> str:
+    """Determine business status string from lead."""
+    if lead.business_owner_status == BusinessOwnerStatus.dissolved:
+        return "dissolved"
+    elif lead.business_owner_status in (BusinessOwnerStatus.acquired_or_merged, BusinessOwnerStatus.active_renamed):
+        return "acquired"
+    elif lead.business_owner_status == BusinessOwnerStatus.active:
+        return "active"
+    return "active"  # Default
+
+
+def _filter_templates_by_contact_type(
+    templates: list[dict],
+    contact_type: ContactType,
+    business_status: str
+) -> list[dict]:
+    """Filter templates by contact type and business status."""
+    if contact_type == ContactType.agent:
+        return [t for t in templates if t.get("contact_type") == "agent"]
+    else:
+        return [
+            t for t in templates
+            if t.get("contact_type") == "leader" and (
+                t.get("business_status") == business_status or
+                t.get("business_status") is None
+            )
+        ]
+
+
+def _filter_connection_request_templates(
+    templates: dict,
+    contact: LeadContact,
+    business_status: str,
+    can_send: bool
+) -> list[dict]:
+    """Filter connection request templates."""
+    if not can_send:
+        return []
+    return _filter_templates_by_contact_type(
+        templates.get("connection_requests", []),
+        contact.contact_type,
+        business_status
+    )
+
+
+def _filter_accepted_message_templates(
+    templates: dict,
+    contact: LeadContact,
+    business_status: str,
+    connection_status: dict
+) -> list[dict]:
+    """Filter accepted message templates to show only next message."""
+    if not connection_status["can_send_messages"]:
+        return []
+    
+    all_messages = _filter_templates_by_contact_type(
+        templates.get("accepted_messages", []),
+        contact.contact_type,
+        business_status
+    )
+    
+    if connection_status["next_message_number"]:
+        return [
+            t for t in all_messages
+            if t.get("attempt") == f"followup_{connection_status['next_message_number']}"
+        ]
+    return []
+
+
+def _filter_inmail_templates(
+    templates: dict,
+    contact: LeadContact,
+    business_status: str,
+    connection_status: dict
+) -> list[dict]:
+    """Filter InMail templates with fallback logic."""
+    if not connection_status["can_send_inmail"] or connection_status.get("inmail_sent", False):
+        return []
+    
+    if contact.contact_type == ContactType.agent:
+        return []
+    
+    all_inmail = templates.get("inmail", [])
+    
+    # Try exact match
+    for t in all_inmail:
+        if t.get("business_status") == business_status:
+            return [t]
+    
+    # Try active as fallback
+    for t in all_inmail:
+        if t.get("business_status") == "active":
+            return [t]
+    
+    # Final fallback
+    return [all_inmail[0]] if all_inmail else []
+
+
+def _determine_linkedin_outcome(template_category: str, template_name: str) -> str:
+    """Determine LinkedIn attempt outcome from template category and name."""
+    OUTCOME_MAP = {
+        "connection_requests": "Connection Request Sent",
+        "inmail": "InMail Sent",
+    }
+    
+    if template_category in OUTCOME_MAP:
+        return OUTCOME_MAP[template_category]
+    
+    if template_category == "accepted_messages":
+        # Extract message number from template name
+        for num in ["1", "2", "3"]:
+            if f"message_{num}" in template_name or f"followup_{num}" in template_name:
+                return f"LinkedIn Message {num} Sent"
+        return "LinkedIn Message Sent"
+    
+    return "LinkedIn Message Sent"  # Default fallback
+
+
 def _load_phone_scripts():
     scripts = []
     for key, label, path in PHONE_SCRIPT_SOURCES:
@@ -420,6 +613,28 @@ def _sync_existing_property_assignments():
         db.close()
 
 
+def _build_property_select(prop_table):
+    """Build the common SELECT statement for property lookups."""
+    return select(
+        prop_table.c.row_hash.label("raw_hash"),  # Label as raw_hash for consistency
+        prop_table.c.propertyid,
+        prop_table.c.ownername,
+        prop_table.c.propertyamount,
+        prop_table.c.assigned_to_lead,
+        prop_table.c.owneraddress1,
+        prop_table.c.owneraddress2,
+        prop_table.c.owneraddress3,
+        prop_table.c.ownercity,
+        prop_table.c.ownerstate,
+        prop_table.c.ownerzipcode,
+        prop_table.c.ownerrelation,
+        prop_table.c.lastactivitydate,
+        prop_table.c.reportyear,
+        prop_table.c.holdername,
+        prop_table.c.propertytypedescription,
+    ).where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+
+
 def _get_property_by_id(db: Session, property_id: str, year: str | None = None) -> dict | None:
     """Get property by ID from the specified year's table. Returns dict with property data."""
     if not year:
@@ -428,25 +643,7 @@ def _get_property_by_id(db: Session, property_id: str, year: str | None = None) 
     prop_table = _get_property_table_for_year(year)
     
     result = db.execute(
-        select(
-            prop_table.c.row_hash.label("raw_hash"),  # Label as raw_hash for consistency
-            prop_table.c.propertyid,
-            prop_table.c.ownername,
-            prop_table.c.propertyamount,
-            prop_table.c.assigned_to_lead,
-            prop_table.c.owneraddress1,
-            prop_table.c.owneraddress2,
-            prop_table.c.owneraddress3,
-            prop_table.c.ownercity,
-            prop_table.c.ownerstate,
-            prop_table.c.ownerzipcode,
-            prop_table.c.ownerrelation,
-            prop_table.c.lastactivitydate,
-            prop_table.c.reportyear,
-            prop_table.c.holdername,
-            prop_table.c.propertytypedescription,
-        )
-        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+        _build_property_select(prop_table)
         .where(cast(prop_table.c.propertyid, String) == property_id)  # Cast to match text type
         .limit(1)
     ).first()
@@ -475,25 +672,7 @@ def _get_property_by_raw_hash(db: Session, raw_hash: str, year: str | None = Non
     prop_table = _get_property_table_for_year(year)
     
     result = db.execute(
-        select(
-            prop_table.c.row_hash.label("raw_hash"),  # Label as raw_hash for consistency
-            prop_table.c.propertyid,
-            prop_table.c.ownername,
-            prop_table.c.propertyamount,
-            prop_table.c.assigned_to_lead,
-            prop_table.c.owneraddress1,
-            prop_table.c.owneraddress2,
-            prop_table.c.owneraddress3,
-            prop_table.c.ownercity,
-            prop_table.c.ownerstate,
-            prop_table.c.ownerzipcode,
-            prop_table.c.ownerrelation,
-            prop_table.c.lastactivitydate,
-            prop_table.c.reportyear,
-            prop_table.c.holdername,
-            prop_table.c.propertytypedescription,
-        )
-        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+        _build_property_select(prop_table)
         .where(prop_table.c.row_hash == raw_hash)  # Database column is "row_hash"
         .limit(1)
     ).first()
@@ -592,6 +771,24 @@ def _get_print_logs_for_lead(db: Session, lead_id: int):
     return result.scalars().all()
 
 
+def _build_count_filter(
+    operator: str | None,
+    count: int | None,
+    subquery: Any
+) -> Any | None:
+    """Build a count filter condition from operator, count, and subquery."""
+    if not operator or count is None:
+        return None
+    
+    if operator == ">=":
+        return subquery >= count
+    elif operator == "=":
+        return subquery == count
+    elif operator == "<=":
+        return subquery <= count
+    return None
+
+
 def _build_lead_filters(
     q: str | None,
     attempt_type: str | None,
@@ -631,12 +828,9 @@ def _build_lead_filters(
             .correlate(BusinessLead)
             .scalar_subquery()
         )
-        if attempt_operator == ">=":
-            filters.append(attempt_count_subq >= attempt_count_int)
-        elif attempt_operator == "=":
-            filters.append(attempt_count_subq == attempt_count_int)
-        elif attempt_operator == "<=":
-            filters.append(attempt_count_subq <= attempt_count_int)
+        filter_condition = _build_count_filter(attempt_operator, attempt_count_int, attempt_count_subq)
+        if filter_condition:
+            filters.append(filter_condition)
 
     # Print log count filter
     if print_log_operator and print_log_count_int is not None:
@@ -652,12 +846,9 @@ def _build_lead_filters(
             .correlate(BusinessLead)
             .scalar_subquery()
         )
-        if print_log_operator == ">=":
-            filters.append(print_log_count_subq >= print_log_count_int)
-        elif print_log_operator == "=":
-            filters.append(print_log_count_subq == print_log_count_int)
-        elif print_log_operator == "<=":
-            filters.append(print_log_count_subq <= print_log_count_int)
+        filter_condition = _build_count_filter(print_log_operator, print_log_count_int, print_log_count_subq)
+        if filter_condition:
+            filters.append(filter_condition)
 
     # Scheduled email count filter (pending + sent)
     if scheduled_email_operator and scheduled_email_count_int is not None:
@@ -668,12 +859,9 @@ def _build_lead_filters(
             .correlate(BusinessLead)
             .scalar_subquery()
         )
-        if scheduled_email_operator == ">=":
-            filters.append(scheduled_email_count_subq >= scheduled_email_count_int)
-        elif scheduled_email_operator == "=":
-            filters.append(scheduled_email_count_subq == scheduled_email_count_int)
-        elif scheduled_email_operator == "<=":
-            filters.append(scheduled_email_count_subq <= scheduled_email_count_int)
+        filter_condition = _build_count_filter(scheduled_email_operator, scheduled_email_count_int, scheduled_email_count_subq)
+        if filter_condition:
+            filters.append(filter_condition)
 
     # Failed email count filter
     if failed_email_operator and failed_email_count_int is not None:
@@ -684,12 +872,9 @@ def _build_lead_filters(
             .correlate(BusinessLead)
             .scalar_subquery()
         )
-        if failed_email_operator == ">=":
-            filters.append(failed_email_count_subq >= failed_email_count_int)
-        elif failed_email_operator == "=":
-            filters.append(failed_email_count_subq == failed_email_count_int)
-        elif failed_email_operator == "<=":
-            filters.append(failed_email_count_subq <= failed_email_count_int)
+        filter_condition = _build_count_filter(failed_email_operator, failed_email_count_int, failed_email_count_subq)
+        if filter_condition:
+            filters.append(filter_condition)
 
     # Status filter
     if status:
@@ -1306,29 +1491,10 @@ def create_lead(
     individual_owner_status: IndividualOwnerStatus | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    if owner_type == OwnerType.business:
-        individual_owner_status = None
-        if not business_owner_status:
-            business_owner_status = BusinessOwnerStatus.active
-        if not owner_size:
-            owner_size = OwnerSize.corporate
-        if business_owner_status not in (
-            BusinessOwnerStatus.acquired_or_merged,
-            BusinessOwnerStatus.active_renamed,
-        ):
-            new_business_name = None
-        else:
-            if not new_business_name or not new_business_name.strip():
-                raise HTTPException(
-                    status_code=400,
-                    detail="New owner name is required when status is acquired_or_merged or active_renamed.",
-                )
-    else:
-        business_owner_status = None
-        owner_size = None
-        new_business_name = None
-        if not individual_owner_status:
-            individual_owner_status = IndividualOwnerStatus.alive
+    normalized = _normalize_owner_fields(
+        owner_type, business_owner_status, owner_size, new_business_name,
+        individual_owner_status, validate=True
+    )
 
     lead = BusinessLead(
         property_id=property_id,
@@ -1337,10 +1503,10 @@ def create_lead(
         status=status,
         notes=notes,
         owner_type=owner_type,
-        business_owner_status=business_owner_status,
-        owner_size=owner_size,
-        new_business_name=new_business_name,
-        individual_owner_status=individual_owner_status,
+        business_owner_status=normalized["business_owner_status"],
+        owner_size=normalized["owner_size"],
+        new_business_name=normalized["new_business_name"],
+        individual_owner_status=normalized["individual_owner_status"],
         property_raw_hash=property_raw_hash,
     )
     db.add(lead)
@@ -1476,9 +1642,7 @@ async def lead_entity_intelligence(
     lead_id: int,
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = _get_lead_or_404(db, lead_id)
 
     # Try to find property in any available year
     prop = _get_property_details_for_lead(db, lead)
@@ -1786,33 +1950,12 @@ def update_lead(
     individual_owner_status: IndividualOwnerStatus | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = _get_lead_or_404(db, lead_id)
 
-    if owner_type == OwnerType.business:
-        individual_owner_status = None
-        if not business_owner_status:
-            business_owner_status = BusinessOwnerStatus.active
-        if not owner_size:
-            owner_size = OwnerSize.corporate
-        if business_owner_status not in (
-            BusinessOwnerStatus.acquired_or_merged,
-            BusinessOwnerStatus.active_renamed,
-        ):
-            new_business_name = None
-        else:
-            if not new_business_name or not new_business_name.strip():
-                raise HTTPException(
-                    status_code=400,
-                    detail="New owner name is required when status is acquired_or_merged or active_renamed.",
-                )
-    else:
-        business_owner_status = None
-        owner_size = None
-        if not individual_owner_status:
-            individual_owner_status = IndividualOwnerStatus.alive
-        new_business_name = None
+    normalized = _normalize_owner_fields(
+        owner_type, business_owner_status, owner_size, new_business_name,
+        individual_owner_status, validate=True
+    )
 
     lead.property_id = property_id
     lead.owner_name = owner_name
@@ -1820,10 +1963,10 @@ def update_lead(
     lead.status = status
     lead.notes = notes
     lead.owner_type = owner_type
-    lead.business_owner_status = business_owner_status
-    lead.owner_size = owner_size
-    lead.new_business_name = new_business_name
-    lead.individual_owner_status = individual_owner_status
+    lead.business_owner_status = normalized["business_owner_status"]
+    lead.owner_size = normalized["owner_size"]
+    lead.new_business_name = normalized["new_business_name"]
+    lead.individual_owner_status = normalized["individual_owner_status"]
     lead.property_raw_hash = property_raw_hash
 
     lead.updated_at = datetime.utcnow()
@@ -1837,9 +1980,7 @@ def delete_lead(
     lead_id: int,
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = _get_lead_or_404(db, lead_id)
     
     property_raw_hash = lead.property_raw_hash
     property_id = lead.property_id
@@ -1885,10 +2026,8 @@ def create_lead_contact(
     contact_type: ContactType = Form(ContactType.employee),
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-
+    lead = _get_lead_or_404(db, lead_id)
+    
     contact = LeadContact(
         lead_id=lead.id,
         contact_name=contact_name,
@@ -1939,9 +2078,7 @@ def update_lead_contact(
     contact_type: ContactType = Form(ContactType.employee),
     db: Session = Depends(get_db),
 ):
-    contact = db.get(LeadContact, contact_id)
-    if not contact or contact.lead_id != lead_id:
-        raise HTTPException(status_code=404, detail="Contact not found")
+    contact = _get_contact_or_404(db, contact_id, lead_id)
 
     contact.contact_name = contact_name
     contact.title = title
@@ -2044,13 +2181,7 @@ def mark_print_log_as_mailed(
     if log.mailed:
         return _serialize_print_log(log)
 
-    last_attempt = db.execute(
-        select(LeadAttempt)
-        .where(LeadAttempt.lead_id == lead_id)
-        .order_by(LeadAttempt.attempt_number.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+    next_attempt_number = _get_next_attempt_number(db, lead_id)
 
     attempt = LeadAttempt(
         lead_id=lead_id,
@@ -2338,124 +2469,31 @@ def get_linkedin_templates(
     db: Session = Depends(get_db),
 ):
     """Get list of available LinkedIn templates, filtered by contact type and connection status."""
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-    
-    # If contact_id is provided, filter templates based on contact type and connection status
-    if contact_id:
-        contact = db.get(LeadContact, contact_id)
-        if not contact or contact.lead_id != lead_id:
-            raise HTTPException(status_code=404, detail="Contact not found")
-        
-        # Get LinkedIn connection status
-        connection_status = _get_linkedin_connection_status(db, contact_id)
-        
-        # Filter templates based on contact type and business status
-        filtered_templates = {}
-        
-        # Determine business status
-        business_status = None
-        if lead.business_owner_status == BusinessOwnerStatus.dissolved:
-            business_status = "dissolved"
-        elif lead.business_owner_status in (BusinessOwnerStatus.acquired_or_merged, BusinessOwnerStatus.active_renamed):
-            business_status = "acquired"
-        elif lead.business_owner_status == BusinessOwnerStatus.active:
-            business_status = "active"
-        # Default to active if status is None or unknown
-        if business_status is None:
-            business_status = "active"
-        
-        # Get templates (use cached discovery)
-        templates = _get_linkedin_templates_metadata()
-        
-        # Connection requests: only show if connection request hasn't been sent
-        if connection_status["can_send_connection"]:
-            if contact.contact_type == ContactType.agent:
-                filtered_templates["connection_requests"] = [
-                    t for t in templates["connection_requests"]
-                    if t.get("contact_type") == "agent"
-                ]
-            else:
-                filtered_templates["connection_requests"] = [
-                    t for t in templates["connection_requests"]
-                    if t.get("contact_type") == "leader" and (
-                        t.get("business_status") == business_status or 
-                        t.get("business_status") is None
-                    )
-                ]
-        else:
-            filtered_templates["connection_requests"] = []
-        
-        # Accepted messages: only show if connected, and filter to show only next message
-        if connection_status["can_send_messages"]:
-            all_messages = []
-            if contact.contact_type == ContactType.agent:
-                all_messages = [
-                    t for t in templates["accepted_messages"]
-                    if t.get("contact_type") == "agent" and (
-                        t.get("business_status") == business_status or
-                        t.get("business_status") is None
-                    )
-                ]
-            else:
-                all_messages = [
-                    t for t in templates["accepted_messages"]
-                    if t.get("contact_type") == "leader" and (
-                        t.get("business_status") == business_status or
-                        t.get("business_status") is None
-                    )
-                ]
-            
-            # Filter to show only the next message based on progression
-            if connection_status["next_message_number"]:
-                filtered_templates["accepted_messages"] = [
-                    t for t in all_messages
-                    if t.get("attempt") == f"followup_{connection_status['next_message_number']}"
-                ]
-            else:
-                # All messages sent
-                filtered_templates["accepted_messages"] = []
-        else:
-            filtered_templates["accepted_messages"] = []
-        
-        # InMail templates: only show if connection request sent but not accepted, and InMail not already sent
-        if connection_status["can_send_inmail"] and not connection_status.get("inmail_sent", False):
-            if contact.contact_type != ContactType.agent:
-                # Filter InMail templates by business status, but always return at least one
-                inmail_templates = []
-                all_inmail = templates.get("inmail", [])
-                
-                # Try to find exact match first
-                for t in all_inmail:
-                    if t.get("business_status") == business_status:
-                        inmail_templates.append(t)
-                        break
-                
-                # If no exact match, use active template as fallback
-                if not inmail_templates:
-                    for t in all_inmail:
-                        if t.get("business_status") == "active":
-                            inmail_templates.append(t)
-                            break
-                
-                # Final fallback: return first available template (should always have at least one)
-                if not inmail_templates and all_inmail:
-                    inmail_templates = [all_inmail[0]]
-                
-                filtered_templates["inmail"] = inmail_templates
-            else:
-                filtered_templates["inmail"] = []
-        else:
-            filtered_templates["inmail"] = []
-        
-        return JSONResponse(content={
-            "templates": filtered_templates,
-            "connection_status": connection_status
-        })
+    lead = _get_lead_or_404(db, lead_id)
     
     # If no contact_id, return all templates
-    return JSONResponse(content={"templates": _get_linkedin_templates_metadata()})
+    if not contact_id:
+        return JSONResponse(content={"templates": _get_linkedin_templates_metadata()})
+    
+    contact = _get_contact_or_404(db, contact_id, lead_id)
+    connection_status = _get_linkedin_connection_status(db, contact_id)
+    business_status = _determine_business_status(lead)
+    templates = _get_linkedin_templates_metadata()
+    
+    return JSONResponse(content={
+        "templates": {
+            "connection_requests": _filter_connection_request_templates(
+                templates, contact, business_status, connection_status["can_send_connection"]
+            ),
+            "accepted_messages": _filter_accepted_message_templates(
+                templates, contact, business_status, connection_status
+            ),
+            "inmail": _filter_inmail_templates(
+                templates, contact, business_status, connection_status
+            ),
+        },
+        "connection_status": connection_status
+    })
 
 
 @app.get("/leads/{lead_id}/contacts/{contact_id}/linkedin-preview")
@@ -2526,41 +2564,14 @@ def mark_linkedin_message_sent(
     db: Session = Depends(get_db),
 ):
     """Mark a LinkedIn message as sent and create an attempt record."""
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-    
-    contact = db.get(LeadContact, contact_id)
-    if not contact or contact.lead_id != lead_id:
-        raise HTTPException(status_code=404, detail="Contact not found")
+    lead = _get_lead_or_404(db, lead_id)
+    contact = _get_contact_or_404(db, contact_id, lead_id)
     
     # Determine outcome based on template category and name
-    outcome = None
-    if template_category == "connection_requests":
-        outcome = "Connection Request Sent"
-    elif template_category == "accepted_messages":
-        # Determine message number from template name
-        if "message_1" in template_name or "followup_1" in template_name:
-            outcome = "LinkedIn Message 1 Sent"
-        elif "message_2" in template_name or "followup_2" in template_name:
-            outcome = "LinkedIn Message 2 Sent"
-        elif "message_3" in template_name or "followup_3" in template_name:
-            outcome = "LinkedIn Message 3 Sent"
-        else:
-            outcome = "LinkedIn Message Sent"
-    elif template_category == "inmail":
-        outcome = "InMail Sent"
-    else:
-        outcome = "LinkedIn Message Sent"
+    outcome = _determine_linkedin_outcome(template_category, template_name)
     
     # Get the next attempt number for this lead
-    last_attempt = db.scalar(
-        select(LeadAttempt)
-        .where(LeadAttempt.lead_id == lead_id)
-        .order_by(LeadAttempt.attempt_number.desc())
-        .limit(1)
-    )
-    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+    next_attempt_number = _get_next_attempt_number(db, lead_id)
     
     # Create attempt record
     attempt = LeadAttempt(
@@ -2588,22 +2599,11 @@ def mark_linkedin_connection_accepted(
     db: Session = Depends(get_db),
 ):
     """Mark LinkedIn connection as accepted and create an attempt record."""
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-    
-    contact = db.get(LeadContact, contact_id)
-    if not contact or contact.lead_id != lead_id:
-        raise HTTPException(status_code=404, detail="Contact not found")
+    lead = _get_lead_or_404(db, lead_id)
+    contact = _get_contact_or_404(db, contact_id, lead_id)
     
     # Get the next attempt number for this lead
-    last_attempt = db.scalar(
-        select(LeadAttempt)
-        .where(LeadAttempt.lead_id == lead_id)
-        .order_by(LeadAttempt.attempt_number.desc())
-        .limit(1)
-    )
-    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+    next_attempt_number = _get_next_attempt_number(db, lead_id)
     
     # Create attempt record
     attempt = LeadAttempt(
@@ -2634,13 +2634,8 @@ def send_contact_email(
     db: Session = Depends(get_db),
 ):
     """Send email to a contact and create attempt record."""
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-    
-    contact = db.get(LeadContact, contact_id)
-    if not contact or contact.lead_id != lead_id:
-        raise HTTPException(status_code=404, detail="Contact not found")
+    lead = _get_lead_or_404(db, lead_id)
+    contact = _get_contact_or_404(db, contact_id, lead_id)
     
     if not contact.email:
         raise HTTPException(status_code=400, detail="Contact has no email address")
@@ -2660,13 +2655,7 @@ def send_contact_email(
         )
         
         # Get the next attempt number
-        last_attempt = db.scalar(
-            select(LeadAttempt)
-            .where(LeadAttempt.lead_id == lead_id)
-            .order_by(LeadAttempt.attempt_number.desc())
-            .limit(1)
-        )
-        next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+        next_attempt_number = _get_next_attempt_number(db, lead_id)
         
         # Create attempt record
         attempt = LeadAttempt(
@@ -2868,13 +2857,7 @@ def send_scheduled_email_now(
         db.commit()
         
         # Create attempt record
-        last_attempt = db.scalar(
-            select(LeadAttempt)
-            .where(LeadAttempt.lead_id == lead_id)
-            .order_by(LeadAttempt.attempt_number.desc())
-            .limit(1)
-        )
-        next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+        next_attempt_number = _get_next_attempt_number(db, lead_id)
         
         attempt = LeadAttempt(
             lead_id=lead_id,
@@ -2997,24 +2980,13 @@ def create_lead_attempt(
     notes: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = _get_lead_or_404(db, lead_id)
 
     # Normalize contact_id from empty string
-    if not contact_id:
-        contact_id_val = None
-    else:
-        contact_id_val = int(contact_id)
+    contact_id_val = _normalize_contact_id(contact_id)
 
     # Auto-calculate next attempt number (same logic as programmatic attempts)
-    last_attempt = db.scalar(
-        select(LeadAttempt)
-        .where(LeadAttempt.lead_id == lead_id)
-        .order_by(LeadAttempt.attempt_number.desc())
-        .limit(1)
-    )
-    next_attempt_number = (last_attempt.attempt_number + 1) if last_attempt else 1
+    next_attempt_number = _get_next_attempt_number(db, lead_id)
 
     attempt = LeadAttempt(
         lead_id=lead.id,
