@@ -170,7 +170,6 @@
     <section id="journey-tracking" class="card journey-card">
       <header>
         <h2>Outreach Journey</h2>
-        <p class="section-subtitle">Track progress across email, LinkedIn, and mail channels</p>
       </header>
       <div class="section-content">
         <div id="journey-display" data-lead-id="{{ lead.id }}" data-journey-data="{{ journey_data }}">
@@ -184,7 +183,6 @@
     <section id="entity-intel" class="card insight-card">
       <header>
         <h2>Entity Intelligence</h2>
-        <p class="section-subtitle">Pull GPT-backed successor insights on demand.</p>
       </header>
 
       <div class="section-content">
@@ -208,7 +206,6 @@
     <section id="comments" class="card comment-card">
       <header>
         <h2>Comment Log</h2>
-        <p class="section-subtitle">Capture review notes without overwriting history.</p>
       </header>
 
       <div class="section-content">
@@ -261,7 +258,6 @@
         <header>
           <div>
             <h2>Contacts</h2>
-            <p class="section-subtitle">Capture everyone tied to this opportunity.</p>
           </div>
           {% set editing_contact = contact_edit_target %}
           {% set contact_form_open = editing_contact is not none %}
@@ -473,7 +469,6 @@
         <header>
           <div>
             <h2>Outreach Attempts</h2>
-            <p class="section-subtitle">Track every touchpoint for this lead.</p>
           </div>
           {% set attempt_form_open = False %}
           {% if mode != 'view' %}
@@ -603,7 +598,6 @@
         data-lead-id="{{ lead.id }}">
         <header>
           <h2>Print Log</h2>
-          <p class="section-subtitle">Letters you generate are tracked here so you can mark them mailed later.</p>
         </header>
 
         <div class="section-content">
@@ -617,7 +611,6 @@
     <section id="scheduled-emails" class="lead-section card full-width">
       <header>
         <h2>Scheduled & Failed Emails</h2>
-        <p class="section-subtitle">Manage scheduled and failed email sends.</p>
       </header>
 
       <div class="section-content">
@@ -635,7 +628,6 @@
       <header class="phone-scripts-header">
         <div>
           <h2>Phone Scripts</h2>
-          <p class="section-subtitle">Keep talking points handy during live calls.</p>
         </div>
         <button
           type="button"
