@@ -13,11 +13,10 @@
           Create Lead
 {% else %}
           Lead #{{ lead.id }}
+          <span class="status-pill">{{ lead.status.value }}</span>
+          {% if mode == 'view' %}<span class="readonly-badge">(Read Only)</span>{% endif %}
         {% endif %}
       </h1>
-      {% if mode != "create" %}
-        <p class="page-subtitle">Status: <span class="status-pill">{{ lead.status.value }}</span>{% if mode == 'view' %} <span class="readonly-badge">(Read Only)</span>{% endif %}</p>
-{% endif %}
     </div>
     <div class="header-actions">
       {% if mode != "create" and (prev_lead_id or next_lead_id) %}
@@ -183,10 +182,7 @@
     <section id="entity-intel" class="card insight-card">
       <header>
         <h2>Entity Intelligence</h2>
-      </header>
-
-      <div class="section-content">
-        <div class="intel-actions">
+        <div class="header-actions">
           <button
             id="run-entity-intel"
             class="btn btn-secondary"
@@ -197,8 +193,11 @@
           </button>
           <span id="entity-intel-progress" class="inline-progress" hidden>Gathering data…</span>
         </div>
+      </header>
+
+      <div class="section-content">
         <div id="entity-intel-result" class="intel-result empty-state">
-          Click “Run Analysis” to fetch the latest entity snapshot.
+          Click "Run Analysis" to fetch the latest entity snapshot.
         </div>
       </div>
     </section>
@@ -256,9 +255,7 @@
       {% set existing_contacts = contacts | default([]) %}
       <section id="contacts" class="lead-section card">
         <header>
-          <div>
-            <h2>Contacts</h2>
-          </div>
+          <h2>Contacts</h2>
           {% set editing_contact = contact_edit_target %}
           {% set contact_form_open = editing_contact is not none %}
           {% if mode != 'view' %}
@@ -467,9 +464,7 @@
 
       <section id="attempts" class="lead-section card">
         <header>
-          <div>
-            <h2>Outreach Attempts</h2>
-          </div>
+          <h2>Outreach Attempts</h2>
           {% set attempt_form_open = False %}
           {% if mode != 'view' %}
           <button
