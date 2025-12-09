@@ -17,6 +17,9 @@
   const profileLabel = document.getElementById('linkedin-profile-label');
   const tabs = document.querySelectorAll('.linkedin-tab');
   const closeButtons = document.querySelectorAll('#linkedin-modal .modal-close');
+  const connectionStatusContainer = document.getElementById('linkedin-connection-status');
+  const connectionStatusText = document.getElementById('linkedin-connection-status-text');
+  const markConnectionAcceptedBtn = document.getElementById('linkedin-mark-connection-accepted-btn');
 
   let currentLeadId = null;
   let currentContactId = null;
@@ -65,6 +68,7 @@
       connectionStatus = data.connection_status || null;
       renderTemplates();
       updateTabVisibility();
+      updateConnectionStatusDisplay();
     } catch (error) {
       console.error('Error loading templates:', error);
       templatesContainer.innerHTML = '<p style="color: #d32f2f; padding: 20px;">Failed to load templates. Please refresh the page.</p>';
@@ -349,6 +353,108 @@
   }
 
   /**
+   * Update connection status display
+   */
+  function updateConnectionStatusDisplay() {
+    if (!connectionStatusContainer || !connectionStatus) return;
+
+    const { is_connected, has_connection_request } = connectionStatus;
+
+    if (is_connected) {
+      // Connection is accepted - show success status
+      connectionStatusContainer.style.display = 'flex';
+      connectionStatusText.textContent = '✓ Connection Accepted';
+      connectionStatusText.style.color = '#4caf50';
+      // Hide the button since connection is already accepted
+      markConnectionAcceptedBtn.style.display = 'none';
+    } else if (has_connection_request) {
+      // Connection request sent but not yet accepted - show pending status with toggle button
+      connectionStatusContainer.style.display = 'flex';
+      connectionStatusText.textContent = '⏳ Connection Request Pending';
+      connectionStatusText.style.color = '#ff9800';
+      markConnectionAcceptedBtn.style.display = 'inline-block';
+      // Reset button to default state
+      markConnectionAcceptedBtn.textContent = 'Mark as Accepted';
+      markConnectionAcceptedBtn.style.backgroundColor = '';
+      markConnectionAcceptedBtn.style.color = '';
+      markConnectionAcceptedBtn.disabled = false;
+    } else {
+      // No connection request sent yet
+      connectionStatusContainer.style.display = 'none';
+    }
+  }
+
+  /**
+   * Mark connection as accepted (no confirmation popup - immediate action with visual feedback)
+   */
+  async function markConnectionAccepted() {
+    if (!currentLeadId || !currentContactId) return;
+
+    // Check current state - if already accepted, don't do anything
+    const isCurrentlyAccepted = connectionStatus?.is_connected || false;
+    if (isCurrentlyAccepted) {
+      return;
+    }
+
+    try {
+      // Disable button during request
+      const originalText = markConnectionAcceptedBtn.textContent;
+      markConnectionAcceptedBtn.disabled = true;
+      markConnectionAcceptedBtn.textContent = 'Processing...';
+
+      const response = await fetch(
+        `/leads/${currentLeadId}/contacts/${currentContactId}/linkedin-connection-accepted`,
+        {
+          method: 'POST'
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to mark connection as accepted');
+      }
+
+      const data = await response.json();
+      
+      // Show success feedback - green flash
+      markConnectionAcceptedBtn.textContent = '✓ Accepted';
+      markConnectionAcceptedBtn.style.backgroundColor = '#4caf50';
+      markConnectionAcceptedBtn.style.color = '#ffffff';
+      markConnectionAcceptedBtn.disabled = false;
+      
+      // Reload templates to update UI state (this will update connectionStatus)
+      await loadTemplates();
+      
+      // The updateConnectionStatusDisplay will hide the button after reload
+      // But keep the green state for a moment for visual feedback
+      setTimeout(() => {
+        // Button will be hidden by updateConnectionStatusDisplay if connected
+        // If still visible, reset to normal state
+        if (markConnectionAcceptedBtn.style.display !== 'none') {
+          markConnectionAcceptedBtn.textContent = originalText;
+          markConnectionAcceptedBtn.style.backgroundColor = '';
+          markConnectionAcceptedBtn.style.color = '';
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('Error marking connection as accepted:', error);
+      
+      // Show inline error instead of alert
+      const originalText = markConnectionAcceptedBtn.textContent;
+      markConnectionAcceptedBtn.textContent = 'Error - Try Again';
+      markConnectionAcceptedBtn.style.backgroundColor = '#f44336';
+      markConnectionAcceptedBtn.style.color = '#ffffff';
+      markConnectionAcceptedBtn.disabled = false;
+      
+      setTimeout(() => {
+        markConnectionAcceptedBtn.textContent = originalText;
+        markConnectionAcceptedBtn.style.backgroundColor = '';
+        markConnectionAcceptedBtn.style.color = '';
+      }, 3000);
+    }
+  }
+
+  /**
    * Update tab visibility based on connection status
    */
   function updateTabVisibility() {
@@ -490,6 +596,11 @@
   // Mark as Sent button
   if (markSentBtn) {
     markSentBtn.addEventListener('click', markAsSent);
+  }
+
+  // Mark Connection Accepted button
+  if (markConnectionAcceptedBtn) {
+    markConnectionAcceptedBtn.addEventListener('click', markConnectionAccepted);
   }
 
   // Close buttons

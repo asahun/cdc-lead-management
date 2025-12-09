@@ -42,10 +42,15 @@
     const now = new Date();
     const startedAt = new Date(data.started_at);
     const daysElapsed = data.days_elapsed;
+    
+    const primaryContactInfo = data.primary_contact 
+      ? `<span class="journey-primary-contact">Primary Contact: ${data.primary_contact.name}${data.primary_contact.title ? ` (${data.primary_contact.title})` : ''}</span>`
+      : '';
 
     let html = `
       <div class="journey-header">
         <div class="journey-meta">
+          ${primaryContactInfo}
           <span class="journey-started">Started: ${formatDate(startedAt)}</span>
           <span class="journey-days">Day ${daysElapsed} of 42</span>
         </div>

@@ -38,7 +38,7 @@
     "leader": {
       "active": {
         "1": {
-          "content": "Hi [FirstName], thanks for connecting.\n\nI spend my time reviewing state unclaimed-property and SOS data to spot funds that are sitting with the state under a company's name and haven't been claimed yet.\n\nIf you'd like, I can do a quick check for [Company Legal Name] in [State] and share what I see, plus the steps to recover anything that's actually yours — whether you file directly with the state or want help.\n\nWould a short overview by email be better, or is LinkedIn fine?\n– [Profile First Name]",
+          "content": "Hi [FirstName], thanks for connecting.\n\nThe State of Georgia is holding an unclaimed-property item reported under [Company Legal Name].\n\nI'm with Load Router, a Georgia-based unclaimed-property compliance firm.\n\nIf you'd like, I can send a brief summary or the state's verification link so you can review it directly.\n– [Profile First Name]",
           "display_name": "First Follow-up - Active Business",
           "category": "accepted_messages",
           "contact_type": "leader",

@@ -26,6 +26,25 @@
   gap: 1.5rem;
   font-size: 0.9rem;
   color: #666;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.journey-primary-contact {
+  font-weight: 600;
+  color: #6366f1;
+  font-size: 0.95rem;
+}
+
+.journey-no-primary {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.journey-no-primary p {
+  margin: 0;
+  font-size: 14px;
 }
 
 .journey-started,

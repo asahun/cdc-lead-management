@@ -423,7 +423,7 @@ def send_email(
     msg["To"] = to_email
     msg["Subject"] = Header(subject, "utf-8")
     msg["Reply-To"] = reply_to
-    msg["X-Mailer"] = "LoadRouter Lead Management System"
+    msg["X-Mailer"] = "Load Router Lead Management System"
     msg["X-Priority"] = "3"  # Normal priority
     
     # Create plain text version (simple HTML strip)

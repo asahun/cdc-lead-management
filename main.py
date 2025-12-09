@@ -3,7 +3,8 @@ import os
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, List, Callable, Optional
+from dataclasses import dataclass
 from pathlib import Path
 import json
 import re
@@ -798,21 +799,86 @@ def _build_count_filter(
 
 # ---------- JOURNEY TRACKING HELPERS ----------
 
-def _initialize_lead_journey(db: Session, lead_id: int) -> LeadJourney:
-    """Initialize a journey for a lead when status becomes 'ready'."""
+def _initialize_lead_journey(db: Session, lead_id: int, primary_contact_id: int | None = None) -> LeadJourney | None:
+    """Initialize a journey for a lead when a primary contact is set.
+    
+    Args:
+        db: Database session
+        lead_id: Lead ID
+        primary_contact_id: Primary contact ID (if None, will find existing primary contact)
+    
+    Returns:
+        LeadJourney if primary contact exists, None otherwise
+    """
+    # Find primary contact if not provided
+    if primary_contact_id is None:
+        primary_contact = db.query(LeadContact).filter(
+            LeadContact.lead_id == lead_id,
+            LeadContact.is_primary == True
+        ).first()
+        if not primary_contact:
+            return None
+        primary_contact_id = primary_contact.id
+    else:
+        # Verify the contact exists and belongs to this lead
+        primary_contact = db.query(LeadContact).filter(
+            LeadContact.id == primary_contact_id,
+            LeadContact.lead_id == lead_id
+        ).first()
+        if not primary_contact:
+            return None
+    
     # Check if journey already exists
     existing_journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
-    if existing_journey:
-        return existing_journey
     
-    # Create journey
-    journey = LeadJourney(
-        lead_id=lead_id,
-        started_at=datetime.utcnow(),
-        status=JourneyStatus.active
+    # Get the first attempt date for the primary contact to set journey start date
+    first_attempt_query = db.query(LeadAttempt).filter(
+        LeadAttempt.lead_id == lead_id
     )
-    db.add(journey)
-    db.flush()
+    if primary_contact_id:
+        first_attempt_query = first_attempt_query.filter(LeadAttempt.contact_id == primary_contact_id)
+    first_attempt = first_attempt_query.order_by(LeadAttempt.created_at.asc()).first()
+    
+    # Set started_at to first attempt date if it exists and is in the past, otherwise use now
+    if first_attempt and first_attempt.created_at:
+        started_at = first_attempt.created_at
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        # Only use first attempt date if it's in the past (within reason, not too far back)
+        if started_at < now and (now - started_at).days <= 90:  # Allow up to 90 days back
+            journey_start_date = started_at
+        else:
+            journey_start_date = now
+    else:
+        journey_start_date = datetime.now(timezone.utc)
+    
+    if existing_journey:
+        # Update existing journey with new primary contact
+        # Delete old milestones to start fresh
+        db.query(JourneyMilestone).filter(
+            JourneyMilestone.journey_id == existing_journey.id
+        ).delete()
+        
+        # Update the journey with new primary contact and set start date
+        existing_journey.primary_contact_id = primary_contact_id
+        existing_journey.started_at = journey_start_date
+        existing_journey.status = JourneyStatus.active
+        existing_journey.updated_at = datetime.now(timezone.utc)
+        db.flush()
+        
+        # Use existing journey for milestone creation
+        journey = existing_journey
+    else:
+        # Create new journey
+        journey = LeadJourney(
+            lead_id=lead_id,
+            primary_contact_id=primary_contact_id,
+            started_at=journey_start_date,
+            status=JourneyStatus.active
+        )
+        db.add(journey)
+        db.flush()
     
     # Define all milestones
     milestones_config = [
@@ -861,11 +927,12 @@ def _initialize_lead_journey(db: Session, lead_id: int) -> LeadJourney:
                 milestone.parent_milestone_id = parent.id
                 db.flush()
     
+    # After creating milestones, try to match existing attempts BEFORE committing
+    # This ensures we're working with the same session
+    _backfill_journey_milestones(db, lead_id)
+    
     db.commit()
     db.refresh(journey)
-    
-    # After creating milestones, try to match existing attempts
-    _backfill_journey_milestones(db, lead_id)
     
     return journey
 
@@ -876,16 +943,28 @@ def _backfill_journey_milestones(db: Session, lead_id: int):
     if not journey:
         return
     
-    # Get all milestones for this journey
+    # Get all milestones for this journey that can be matched (pending or overdue, not already linked)
     milestones = db.query(JourneyMilestone).filter(
         JourneyMilestone.journey_id == journey.id,
-        JourneyMilestone.status == MilestoneStatus.pending
+        JourneyMilestone.status.in_([MilestoneStatus.pending, MilestoneStatus.overdue]),
+        JourneyMilestone.attempt_id.is_(None)  # Not already linked
     ).all()
     
-    # Get all attempts for this lead, ordered by creation date
-    attempts = db.query(LeadAttempt).filter(
+    # Get all attempts for primary contact, ordered by creation date
+    attempts_query = db.query(LeadAttempt).filter(
         LeadAttempt.lead_id == lead_id
-    ).order_by(LeadAttempt.created_at.asc()).all()
+    )
+    if journey.primary_contact_id:
+        # Only get attempts that match the primary contact
+        # Exclude attempts with None contact_id
+        attempts_query = attempts_query.filter(
+            LeadAttempt.contact_id == journey.primary_contact_id
+        )
+    else:
+        # If no primary contact is set, can't backfill
+        return
+    
+    attempts = attempts_query.order_by(LeadAttempt.created_at.asc()).all()
     
     # Get journey start date
     journey_start = journey.started_at
@@ -960,11 +1039,20 @@ def _backfill_journey_milestones(db: Session, lead_id: int):
             
             # If matched and date is reasonable (within 5 days of expected or before journey start is OK for backfill)
             if matched:
+                # Ensure attempt.created_at is timezone-aware for comparison
+                attempt_created_at = attempt.created_at
+                if attempt_created_at.tzinfo is None:
+                    attempt_created_at = attempt_created_at.replace(tzinfo=timezone.utc)
+                
+                # Ensure expected_date is timezone-aware
+                if expected_date.tzinfo is None:
+                    expected_date = expected_date.replace(tzinfo=timezone.utc)
+                
                 # Allow matches if attempt is within 5 days of expected date, or if it's before journey start (backfill case)
-                days_diff = (attempt.created_at - expected_date).days
-                if days_diff <= 5 or attempt.created_at < journey_start:
+                days_diff = (attempt_created_at - expected_date).days
+                if days_diff <= 5 or attempt_created_at < journey_start:
                     milestone.status = MilestoneStatus.completed
-                    milestone.completed_at = attempt.created_at
+                    milestone.completed_at = attempt_created_at
                     milestone.attempt_id = attempt.id
                     milestone.updated_at = datetime.utcnow()
                     db.flush()
@@ -973,7 +1061,324 @@ def _backfill_journey_milestones(db: Session, lead_id: int):
     # Update milestone statuses based on current date and LinkedIn connection status
     _update_milestone_statuses(db, lead_id)
     
-    db.commit()
+    # Note: Don't commit here - let the caller handle the commit
+    # This allows backfill to be called before the main transaction commits
+
+
+@dataclass
+class MilestoneMatchingRule:
+    """Configuration for matching attempts to milestones."""
+    milestone_type: JourneyMilestoneType
+    channel: ContactChannel
+    outcome_patterns: List[str]  # Patterns to match in outcome text (case-insensitive substring match)
+    sequence_matcher: Optional[Callable[[List[LeadAttempt], LeadAttempt], bool]] = None  # Function to check sequence position
+    require_all_patterns: bool = False  # If True, all patterns must match; if False, any pattern matches
+    
+    def matches_outcome(self, outcome: str) -> bool:
+        """Check if outcome text matches patterns."""
+        if not outcome:
+            return False
+        outcome_lower = outcome.lower()
+        
+        if self.require_all_patterns:
+            # All patterns must be present
+            return all(pattern.lower() in outcome_lower for pattern in self.outcome_patterns)
+        else:
+            # For email followups, require "follow" AND one of the number patterns
+            if self.milestone_type in (JourneyMilestoneType.email_followup_1, 
+                                       JourneyMilestoneType.email_followup_2, 
+                                       JourneyMilestoneType.email_followup_3):
+                has_follow = "follow" in outcome_lower
+                number_patterns = [p for p in self.outcome_patterns if p.lower() != "follow"]
+                has_number = any(pattern.lower() in outcome_lower for pattern in number_patterns)
+                return has_follow and has_number
+            # For mail, require "mail" AND one of the number patterns (or "letter mailed")
+            elif self.milestone_type in (JourneyMilestoneType.mail_1,
+                                         JourneyMilestoneType.mail_2,
+                                         JourneyMilestoneType.mail_3):
+                has_mail = "mail" in outcome_lower or "letter mailed" in outcome_lower
+                number_patterns = [p for p in self.outcome_patterns if p.lower() not in ("mail", "letter mailed")]
+                has_number = any(pattern.lower() in outcome_lower for pattern in number_patterns) if number_patterns else True
+                return has_mail and (has_number or "letter mailed" in outcome_lower)
+            else:
+                # Any pattern matches
+                return any(pattern.lower() in outcome_lower for pattern in self.outcome_patterns)
+
+
+def _is_nth_message_attempt(attempts: List[LeadAttempt], attempt: LeadAttempt, message_number: int) -> bool:
+    """
+    Check if attempt is the nth message attempt (excluding connection-related attempts).
+    For LinkedIn, messages come after connection, so we count only message attempts.
+    """
+    # Filter out connection-related attempts
+    message_attempts = [
+        a for a in attempts
+        if "connection" not in (a.outcome or "").lower()
+    ]
+    
+    # Message 1 should be the 1st message attempt, Message 2 the 2nd, etc.
+    return (
+        len(message_attempts) == message_number and
+        message_attempts[message_number - 1].id == attempt.id
+    )
+
+
+# Define matching rules for all milestones
+MILESTONE_MATCHING_RULES: dict[JourneyMilestoneType, MilestoneMatchingRule] = {
+    # Email milestones
+    JourneyMilestoneType.email_1: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.email_1,
+        channel=ContactChannel.email,
+        outcome_patterns=["initial", "email #1", "email 1"],
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) > 0 and attempts[0].id == attempt.id
+        ),
+    ),
+    JourneyMilestoneType.email_followup_1: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.email_followup_1,
+        channel=ContactChannel.email,
+        outcome_patterns=["follow", "1", "one", "first"],
+        require_all_patterns=False,  # "follow" AND ("1" OR "one" OR "first")
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) == 2 and attempts[1].id == attempt.id
+        ),
+    ),
+    JourneyMilestoneType.email_followup_2: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.email_followup_2,
+        channel=ContactChannel.email,
+        outcome_patterns=["follow", "2", "two", "second"],
+        require_all_patterns=False,
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) == 3 and attempts[2].id == attempt.id
+        ),
+    ),
+    JourneyMilestoneType.email_followup_3: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.email_followup_3,
+        channel=ContactChannel.email,
+        outcome_patterns=["follow", "3", "three", "third", "final", "nudge"],
+        require_all_patterns=False,
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) == 4 and attempts[3].id == attempt.id
+        ),
+    ),
+    
+    # LinkedIn milestones
+    JourneyMilestoneType.linkedin_connection: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.linkedin_connection,
+        channel=ContactChannel.linkedin,
+        outcome_patterns=["connection request", "connection sent", "connection accepted", "connection"],
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) > 0 and attempts[0].id == attempt.id
+        ),
+    ),
+    JourneyMilestoneType.linkedin_message_1: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.linkedin_message_1,
+        channel=ContactChannel.linkedin,
+        outcome_patterns=["message 1", "follow-up 1", "message #1", "first message", "linkedin message 1"],
+        sequence_matcher=lambda attempts, attempt: _is_nth_message_attempt(attempts, attempt, 1),
+    ),
+    JourneyMilestoneType.linkedin_message_2: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.linkedin_message_2,
+        channel=ContactChannel.linkedin,
+        outcome_patterns=["message 2", "follow-up 2", "message #2", "second message", "linkedin message 2"],
+        sequence_matcher=lambda attempts, attempt: _is_nth_message_attempt(attempts, attempt, 2),
+    ),
+    JourneyMilestoneType.linkedin_message_3: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.linkedin_message_3,
+        channel=ContactChannel.linkedin,
+        outcome_patterns=["message 3", "follow-up 3", "message #3", "third message", "linkedin message 3"],
+        sequence_matcher=lambda attempts, attempt: _is_nth_message_attempt(attempts, attempt, 3),
+    ),
+    JourneyMilestoneType.linkedin_inmail: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.linkedin_inmail,
+        channel=ContactChannel.linkedin,
+        outcome_patterns=["inmail", "in-mail"],
+        sequence_matcher=None,  # No sequence matching for InMail
+    ),
+    
+    # Mail milestones
+    JourneyMilestoneType.mail_1: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.mail_1,
+        channel=ContactChannel.mail,
+        outcome_patterns=["mail", "1", "first", "letter mailed"],
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) > 0 and attempts[0].id == attempt.id
+        ),
+    ),
+    JourneyMilestoneType.mail_2: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.mail_2,
+        channel=ContactChannel.mail,
+        outcome_patterns=["mail", "2", "second"],
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) == 2 and attempts[1].id == attempt.id
+        ),
+    ),
+    JourneyMilestoneType.mail_3: MilestoneMatchingRule(
+        milestone_type=JourneyMilestoneType.mail_3,
+        channel=ContactChannel.mail,
+        outcome_patterns=["mail", "3", "third", "final"],
+        sequence_matcher=lambda attempts, attempt: (
+            len(attempts) == 3 and attempts[2].id == attempt.id
+        ),
+    ),
+}
+
+
+def _check_prerequisite_milestones(db: Session, journey_id: int, milestone_type: JourneyMilestoneType) -> bool:
+    """Check if prerequisite milestones are completed before allowing a match.
+    Returns True if prerequisites are met, False otherwise."""
+    # Define prerequisite chain for email milestones
+    email_prerequisites = {
+        JourneyMilestoneType.email_followup_1: [JourneyMilestoneType.email_1],
+        JourneyMilestoneType.email_followup_2: [JourneyMilestoneType.email_1, JourneyMilestoneType.email_followup_1],
+        JourneyMilestoneType.email_followup_3: [JourneyMilestoneType.email_1, JourneyMilestoneType.email_followup_1, JourneyMilestoneType.email_followup_2],
+    }
+    
+    # Define prerequisite chain for mail milestones
+    mail_prerequisites = {
+        JourneyMilestoneType.mail_2: [JourneyMilestoneType.mail_1],
+        JourneyMilestoneType.mail_3: [JourneyMilestoneType.mail_1, JourneyMilestoneType.mail_2],
+    }
+    
+    # Define prerequisite chain for LinkedIn milestones
+    linkedin_prerequisites = {
+        JourneyMilestoneType.linkedin_message_1: [JourneyMilestoneType.linkedin_connection],
+        JourneyMilestoneType.linkedin_message_2: [JourneyMilestoneType.linkedin_connection, JourneyMilestoneType.linkedin_message_1],
+        JourneyMilestoneType.linkedin_message_3: [JourneyMilestoneType.linkedin_connection, JourneyMilestoneType.linkedin_message_1, JourneyMilestoneType.linkedin_message_2],
+        JourneyMilestoneType.linkedin_inmail: [JourneyMilestoneType.linkedin_connection],  # InMail requires connection attempt (but not acceptance)
+    }
+    
+    # Check if this milestone has prerequisites
+    prerequisites = (email_prerequisites.get(milestone_type) or 
+                    mail_prerequisites.get(milestone_type) or 
+                    linkedin_prerequisites.get(milestone_type))
+    if not prerequisites:
+        return True  # No prerequisites, always allow
+    
+    # Check if all prerequisites are completed
+    for prereq_type in prerequisites:
+        prereq = db.query(JourneyMilestone).filter(
+            JourneyMilestone.journey_id == journey_id,
+            JourneyMilestone.milestone_type == prereq_type,
+            JourneyMilestone.status == MilestoneStatus.completed
+        ).first()
+        if not prereq:
+            return False  # Prerequisite not completed
+    
+    return True  # All prerequisites completed
+
+
+def _link_attempt_to_milestone(db: Session, attempt: LeadAttempt):
+    """Link a newly created attempt to a matching journey milestone and mark it as completed.
+    Only attempts for the primary contact count toward milestones."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    lead_id = attempt.lead_id
+    
+    # Check if lead has a journey
+    journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
+    if not journey:
+        logger.debug(f"_link_attempt_to_milestone: No journey found for lead {lead_id}")
+        return
+    
+    logger.debug(f"_link_attempt_to_milestone: Found journey {journey.id} for lead {lead_id}, primary_contact_id={journey.primary_contact_id}, attempt.contact_id={attempt.contact_id}, attempt.channel={attempt.channel}")
+    
+    # Update milestone statuses FIRST to un-skip any milestones that should be active
+    # This is critical for LinkedIn milestones that may have been skipped before connection was accepted
+    _update_milestone_statuses(db, lead_id)
+    
+    # Only count attempts for the primary contact
+    # If journey has a primary contact, the attempt must match it
+    # If attempt has no contact_id, it can't be matched to a primary contact
+    if journey.primary_contact_id:
+        if attempt.contact_id is None:
+            logger.debug(f"_link_attempt_to_milestone: Attempt {attempt.id} has no contact_id, skipping")
+            return
+        if attempt.contact_id != journey.primary_contact_id:
+            logger.debug(f"_link_attempt_to_milestone: Attempt {attempt.id} contact_id {attempt.contact_id} doesn't match primary_contact_id {journey.primary_contact_id}, skipping")
+            return
+    elif attempt.contact_id is not None:
+        # If journey has no primary contact but attempt has a contact_id, don't match
+        # (journey should have a primary contact set)
+        logger.debug(f"_link_attempt_to_milestone: Journey has no primary_contact_id but attempt has contact_id, skipping")
+        return
+    
+    # Get the NEXT milestone in sequence (first incomplete one for this channel)
+    # This ensures we only check the next milestone, not all of them
+    # We include overdue milestones because they can still be completed retroactively
+    milestone = db.query(JourneyMilestone).filter(
+        JourneyMilestone.journey_id == journey.id,
+        JourneyMilestone.channel == attempt.channel,
+        JourneyMilestone.status.in_([MilestoneStatus.pending, MilestoneStatus.overdue]),
+        JourneyMilestone.attempt_id.is_(None)  # Not already linked
+    ).order_by(JourneyMilestone.scheduled_day.asc()).first()
+    
+    if not milestone:
+        logger.debug(f"_link_attempt_to_milestone: No pending milestones found for channel {attempt.channel}, journey_id={journey.id}")
+        return
+    
+    logger.debug(f"_link_attempt_to_milestone: Checking next milestone {milestone.id} (type: {milestone.milestone_type}, scheduled_day: {milestone.scheduled_day}) for channel {attempt.channel}")
+    
+    journey_start = journey.started_at
+    # Ensure attempt_date is timezone-aware
+    if attempt.created_at:
+        attempt_date = attempt.created_at
+        if attempt_date.tzinfo is None:
+            # If naive, assume UTC
+            attempt_date = attempt_date.replace(tzinfo=timezone.utc)
+    else:
+        attempt_date = datetime.now(timezone.utc)
+    
+    # Get matching rule for this milestone type
+    rule = MILESTONE_MATCHING_RULES.get(milestone.milestone_type)
+    if not rule:
+        logger.debug(f"_link_attempt_to_milestone: No matching rule found for milestone type {milestone.milestone_type}")
+        return
+    
+    # Check if prerequisite milestones are completed (must complete in order)
+    if not _check_prerequisite_milestones(db, journey.id, milestone.milestone_type):
+        logger.debug(f"_link_attempt_to_milestone: Prerequisites not met for milestone {milestone.id} (type: {milestone.milestone_type}) - cannot complete until previous milestones are done")
+        return
+    
+    # Try to match using outcome text
+    matched = rule.matches_outcome(attempt.outcome or "")
+    is_sequence_match = False
+    
+    # Try sequence-based matching if rule has a sequence matcher and outcome didn't match
+    if not matched and rule.sequence_matcher and journey.primary_contact_id:
+        # Get all attempts for this channel and primary contact
+        attempts_query = db.query(LeadAttempt).filter(
+            LeadAttempt.lead_id == lead_id,
+            LeadAttempt.channel == attempt.channel,
+            LeadAttempt.contact_id == journey.primary_contact_id
+        )
+        attempts = attempts_query.order_by(LeadAttempt.created_at.asc()).all()
+        
+        if rule.sequence_matcher(attempts, attempt):
+            matched = True
+            is_sequence_match = True
+            logger.debug(f"_link_attempt_to_milestone: Matched {milestone.milestone_type} by sequence")
+    
+    if matched:
+        # For sequence-based matches, only require that attempt is after journey start
+        # No date constraints - we trust the sequence and prerequisites
+        if is_sequence_match:
+            if attempt_date < journey_start:
+                logger.debug(f"_link_attempt_to_milestone: Sequence match rejected - attempt before journey start")
+                return
+        
+        logger.debug(f"_link_attempt_to_milestone: ✓ Matched attempt {attempt.id} to milestone {milestone.id} (type: {milestone.milestone_type}, scheduled_day: {milestone.scheduled_day}, sequence_match: {is_sequence_match})")
+        milestone.status = MilestoneStatus.completed
+        milestone.completed_at = attempt_date
+        milestone.attempt_id = attempt.id
+        milestone.updated_at = datetime.now(timezone.utc)
+        db.flush()
+        
+        # Update milestone statuses to handle any overdue/skipped logic
+        _update_milestone_statuses(db, lead_id)
+    else:
+        logger.debug(f"_link_attempt_to_milestone: ✗ No match for milestone {milestone.id} (type: {milestone.milestone_type}, scheduled_day: {milestone.scheduled_day}, outcome: '{attempt.outcome}')")
 
 
 def _update_milestone_statuses(db: Session, lead_id: int):
@@ -989,43 +1394,81 @@ def _update_milestone_statuses(db: Session, lead_id: int):
     now = datetime.now(timezone.utc)
     journey_start = journey.started_at
     
-    # Get LinkedIn connection status
-    linkedin_attempts = db.query(LeadAttempt).filter(
-        LeadAttempt.lead_id == lead_id,
-        LeadAttempt.channel == ContactChannel.linkedin
-    ).all()
-    
+    # Get LinkedIn connection status - only check primary contact's attempts
     is_connected = False
-    for attempt in linkedin_attempts:
-        outcome = (attempt.outcome or "").lower()
-        if "connection accepted" in outcome:
-            is_connected = True
-            break
+    if journey.primary_contact_id:
+        linkedin_attempts = db.query(LeadAttempt).filter(
+            LeadAttempt.lead_id == lead_id,
+            LeadAttempt.contact_id == journey.primary_contact_id,
+            LeadAttempt.channel == ContactChannel.linkedin
+        ).all()
+        
+        for attempt in linkedin_attempts:
+            outcome = (attempt.outcome or "").lower()
+            if "connection accepted" in outcome:
+                is_connected = True
+                break
     
     for milestone in milestones:
-        if milestone.status == MilestoneStatus.completed:
-            continue
-        
         # Calculate expected date
         expected_date = journey_start + timedelta(days=milestone.scheduled_day)
         days_elapsed = (now - journey_start).days
         
         # Handle LinkedIn branching
         if milestone.channel == ContactChannel.linkedin:
-            if milestone.branch_condition == "if_connected" and not is_connected:
-                milestone.status = MilestoneStatus.skipped
-                milestone.updated_at = datetime.utcnow()
-            elif milestone.branch_condition == "if_not_connected" and is_connected:
-                milestone.status = MilestoneStatus.skipped
-                milestone.updated_at = datetime.utcnow()
-            elif days_elapsed >= milestone.scheduled_day:
-                milestone.status = MilestoneStatus.overdue
-                milestone.updated_at = datetime.utcnow()
+            # Don't modify completed milestones
+            if milestone.status == MilestoneStatus.completed:
+                continue
+            
+            # Handle branch conditions
+            if milestone.branch_condition == "if_connected":
+                if not is_connected:
+                    # Connection not accepted - skip message milestones
+                    if milestone.status != MilestoneStatus.skipped:
+                        milestone.status = MilestoneStatus.skipped
+                        milestone.updated_at = datetime.now(timezone.utc)
+                else:
+                    # Connection is accepted - un-skip message milestones if they were skipped
+                    if milestone.status == MilestoneStatus.skipped:
+                        # Reset to pending or overdue based on date
+                        if days_elapsed >= milestone.scheduled_day:
+                            milestone.status = MilestoneStatus.overdue
+                        else:
+                            milestone.status = MilestoneStatus.pending
+                        milestone.updated_at = datetime.now(timezone.utc)
+                    elif days_elapsed >= milestone.scheduled_day and milestone.status == MilestoneStatus.pending:
+                        milestone.status = MilestoneStatus.overdue
+                        milestone.updated_at = datetime.now(timezone.utc)
+            elif milestone.branch_condition == "if_not_connected":
+                if is_connected:
+                    # Connection is accepted - skip InMail (but only if not already completed)
+                    if milestone.status != MilestoneStatus.completed and milestone.status != MilestoneStatus.skipped:
+                        milestone.status = MilestoneStatus.skipped
+                        milestone.updated_at = datetime.now(timezone.utc)
+                else:
+                    # Connection not accepted - InMail can proceed
+                    if milestone.status == MilestoneStatus.skipped:
+                        # Un-skip if it was previously skipped
+                        if days_elapsed >= milestone.scheduled_day:
+                            milestone.status = MilestoneStatus.overdue
+                        else:
+                            milestone.status = MilestoneStatus.pending
+                        milestone.updated_at = datetime.now(timezone.utc)
+                    elif days_elapsed >= milestone.scheduled_day and milestone.status == MilestoneStatus.pending:
+                        milestone.status = MilestoneStatus.overdue
+                        milestone.updated_at = datetime.now(timezone.utc)
+            else:
+                # No branch condition (like linkedin_connection) - just check if overdue
+                if days_elapsed >= milestone.scheduled_day and milestone.status == MilestoneStatus.pending:
+                    milestone.status = MilestoneStatus.overdue
+                    milestone.updated_at = datetime.now(timezone.utc)
         else:
             # For non-LinkedIn milestones, check if overdue
-            if days_elapsed >= milestone.scheduled_day:
+            if milestone.status == MilestoneStatus.completed:
+                continue
+            if days_elapsed >= milestone.scheduled_day and milestone.status == MilestoneStatus.pending:
                 milestone.status = MilestoneStatus.overdue
-                milestone.updated_at = datetime.utcnow()
+                milestone.updated_at = datetime.now(timezone.utc)
 
 
 def _get_journey_status_summary(db: Session, lead_id: int) -> dict | None:
@@ -1174,11 +1617,23 @@ def _get_journey_data(db: Session, lead_id: int) -> dict | None:
         elif milestone.channel == ContactChannel.mail:
             mail_milestones.append(milestone_data)
     
+    # Get primary contact info
+    primary_contact = None
+    if journey.primary_contact_id:
+        primary_contact_obj = db.get(LeadContact, journey.primary_contact_id)
+        if primary_contact_obj:
+            primary_contact = {
+                "id": primary_contact_obj.id,
+                "name": primary_contact_obj.contact_name,
+                "title": primary_contact_obj.title,
+            }
+    
     return {
         "journey_id": journey.id,
         "started_at": journey.started_at.isoformat(),
         "status": journey.status.value,
         "days_elapsed": days_elapsed,
+        "primary_contact": primary_contact,
         "email": email_milestones,
         "linkedin": linkedin_milestones,
         "mail": mail_milestones,
@@ -1922,10 +2377,8 @@ def create_lead(
     db.commit()
     db.refresh(lead)
     
-    # Initialize journey if status is 'ready'
-    if status == LeadStatus.ready:
-        _initialize_lead_journey(db, lead.id)
-        db.commit()
+    # Journey will be initialized when a primary contact is marked
+    # No longer auto-initialize when status becomes ready
     
     return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
 
@@ -2174,7 +2627,7 @@ def view_lead(
             "statuses": list(LeadStatus),
             "contacts": contacts,
             "attempts": attempts,
-            "channels": list(ContactChannel),
+            "channels": list(ContactChannel),  # Include all channels including LinkedIn
             "comments": comments,
             "contact_edit_target": None,
             "owner_types": list(OwnerType),
@@ -2316,12 +2769,9 @@ def edit_lead(
     
     journey_data = None
     if lead.status not in journey_hidden_statuses:
-        # Ensure journey exists (backfill for existing leads)
+        # Journey only exists if primary contact is set
         journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
-        if not journey:
-            _initialize_lead_journey(db, lead.id)
-            db.commit()
-        journey_data = _get_journey_data(db, lead_id)
+        journey_data = _get_journey_data(db, lead_id) if journey else None
     
     journey_json = json.dumps(journey_data, default=str) if journey_data else "null"
 
@@ -2338,8 +2788,7 @@ def edit_lead(
             "contacts": contacts,
             "attempts": attempts,
             "journey_data": journey_json,
-            "channels": list(ContactChannel),
-            "linkedin_outcomes": LINKEDIN_OUTCOMES,
+            "channels": list(ContactChannel),  # Include all channels including LinkedIn
             "comments": comments,
             "contact_edit_target": contact_edit_target,
             "owner_types": list(OwnerType),
@@ -2421,10 +2870,9 @@ def update_lead(
 
     _mark_property_assigned(db, property_raw_hash, property_id)
     
-    # Initialize journey if status changed to 'ready'
-    if status == LeadStatus.ready and old_status != LeadStatus.ready:
-        _initialize_lead_journey(db, lead.id)
-    
+    # Journey will be initialized when a primary contact is marked
+    # No longer auto-initialize when status becomes ready
+
     db.commit()
     return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
 
@@ -2549,6 +2997,41 @@ def update_lead_contact(
     return RedirectResponse(url=f"/leads/{lead_id}/edit#contacts", status_code=303)
 
 
+@app.post("/leads/{lead_id}/contacts/{contact_id}/mark-primary")
+def mark_contact_as_primary(
+    lead_id: int,
+    contact_id: int,
+    db: Session = Depends(get_db),
+):
+    """Mark a contact as primary and initialize/update journey."""
+    lead = _get_lead_or_404(db, lead_id)
+    contact = _get_contact_or_404(db, contact_id, lead_id)
+    
+    # Unset primary flag on all other contacts for this lead
+    db.query(LeadContact).filter(
+        LeadContact.lead_id == lead_id,
+        LeadContact.id != contact_id,
+        LeadContact.is_primary == True
+    ).update({"is_primary": False})
+    
+    # Set this contact as primary
+    contact.is_primary = True
+    contact.updated_at = datetime.utcnow()
+    db.flush()
+    
+    # Initialize or update journey for this primary contact
+    if lead.status not in {LeadStatus.new, LeadStatus.researching, LeadStatus.invalid, LeadStatus.competitor_claimed}:
+        journey = _initialize_lead_journey(db, lead_id, primary_contact_id=contact_id)
+        if not journey:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Failed to initialize journey")
+    
+    # Commit all changes (contact update + journey initialization)
+    db.commit()
+    
+    return RedirectResponse(url=f"/leads/{lead_id}/edit#contacts", status_code=303)
+
+
 @app.post("/leads/{lead_id}/contacts/{contact_id}/letters")
 def generate_contact_letter(
     lead_id: int,
@@ -2646,6 +3129,9 @@ def mark_print_log_as_mailed(
     )
     db.add(attempt)
     db.flush()
+    
+    # Link attempt to milestone if applicable
+    _link_attempt_to_milestone(db, attempt)
 
     log.mailed = True
     log.mailed_at = datetime.utcnow()
@@ -2758,6 +3244,9 @@ async def bulk_mark_mail_sent(
             )
             db.add(attempt)
             db.flush()
+            
+            # Link attempt to milestone if applicable
+            _link_attempt_to_milestone(db, attempt)
             
             log.mailed = True
             log.mailed_at = datetime.utcnow()
@@ -3157,6 +3646,11 @@ def mark_linkedin_message_sent(
         notes=f"Template: {template_name}",
     )
     db.add(attempt)
+    db.flush()  # Flush to get attempt.id
+    
+    # Link attempt to milestone if applicable
+    _link_attempt_to_milestone(db, attempt)
+    
     db.commit()
     
     return JSONResponse(content={
@@ -3189,6 +3683,11 @@ def mark_linkedin_connection_accepted(
         notes="LinkedIn connection request was accepted",
     )
     db.add(attempt)
+    db.flush()  # Flush to get attempt.id
+    
+    # Link attempt to milestone if applicable
+    _link_attempt_to_milestone(db, attempt)
+    
     db.commit()
     
     return JSONResponse(content={
@@ -3241,6 +3740,11 @@ def send_contact_email(
             notes=f"Subject: {subject[:100]}",
         )
         db.add(attempt)
+        db.flush()  # Flush to get attempt.id
+        
+        # Link attempt to milestone if applicable
+        _link_attempt_to_milestone(db, attempt)
+        
         db.commit()
         
         return JSONResponse(content={"status": "success", "message": "Email sent successfully"})
@@ -3442,6 +3946,11 @@ def send_scheduled_email_now(
             notes=f"Originally scheduled for {scheduled_email.scheduled_at.isoformat()}. Subject: {scheduled_email.subject[:100]}",
         )
         db.add(attempt)
+        db.flush()  # Flush to get attempt.id
+        
+        # Link attempt to milestone if applicable
+        _link_attempt_to_milestone(db, attempt)
+        
         db.commit()
         
         return JSONResponse(content={"status": "success", "message": "Email sent successfully"})
@@ -3571,6 +4080,11 @@ def create_lead_attempt(
         notes=notes,
     )
     db.add(attempt)
+    db.flush()  # Flush to get attempt.id
+    
+    # Link attempt to milestone if applicable
+    _link_attempt_to_milestone(db, attempt)
+    
     db.commit()
 
     return RedirectResponse(url=f"/leads/{lead.id}/edit#attempts", status_code=303)
@@ -3630,26 +4144,13 @@ def delete_lead_comment(
     return RedirectResponse(url=f"/leads/{lead_id}/edit#comments", status_code=303)
 
 
-def delete_lead_comment(
-    lead_id: int,
-    comment_id: int,
-    db: Session = Depends(get_db),
-):
-    comment = db.get(LeadComment, comment_id)
-    if not comment or comment.lead_id != lead_id:
-        raise HTTPException(status_code=404, detail="Comment not found")
-
-    db.delete(comment)
-    db.commit()
-    return RedirectResponse(url=f"/leads/{lead_id}/edit#comments", status_code=303)
-
-
 # ---------- JOURNEY TRACKING API ----------
 
 @app.get("/api/leads/{lead_id}/journey")
 def get_lead_journey(
     lead_id: int,
     db: Session = Depends(get_db),
+    debug: bool = Query(False, description="Include debug information"),
 ):
     """Get journey data for a lead."""
     lead = _get_lead_or_404(db, lead_id)
@@ -3668,14 +4169,142 @@ def get_lead_journey(
             status_code=400
         )
     
-    # Ensure journey exists
+    # Journey only exists if primary contact is set
     journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
     if not journey:
-        _initialize_lead_journey(db, lead_id)
-        db.commit()
+        return JSONResponse(
+            content={"error": "Journey not available. Please mark a contact as primary first."},
+            status_code=400
+        )
     
     journey_data = _get_journey_data(db, lead_id)
+    
+    # Add debug info if requested
+    if debug:
+        # Get all attempts for this lead
+        all_attempts = db.query(LeadAttempt).filter(
+            LeadAttempt.lead_id == lead_id
+        ).order_by(LeadAttempt.created_at.asc()).all()
+        
+        # Get primary contact attempts
+        primary_attempts = []
+        if journey.primary_contact_id:
+            primary_attempts = db.query(LeadAttempt).filter(
+                LeadAttempt.lead_id == lead_id,
+                LeadAttempt.contact_id == journey.primary_contact_id
+            ).order_by(LeadAttempt.created_at.asc()).all()
+        
+        journey_data["_debug"] = {
+            "journey_id": journey.id,
+            "primary_contact_id": journey.primary_contact_id,
+            "started_at": journey.started_at.isoformat() if journey.started_at else None,
+            "total_attempts": len(all_attempts),
+            "primary_contact_attempts": len(primary_attempts),
+            "all_attempts": [
+                {
+                    "id": a.id,
+                    "contact_id": a.contact_id,
+                    "channel": a.channel.value,
+                    "outcome": a.outcome,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in all_attempts[:10]  # Limit to first 10
+            ],
+            "primary_attempts": [
+                {
+                    "id": a.id,
+                    "contact_id": a.contact_id,
+                    "channel": a.channel.value,
+                    "outcome": a.outcome,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in primary_attempts[:10]  # Limit to first 10
+            ],
+        }
+    
     return JSONResponse(content=journey_data)
+
+
+@app.post("/api/leads/{lead_id}/journey/relink-attempts")
+def relink_attempts_to_milestones(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    """Manually relink existing attempts to milestones. Useful for fixing missed links.
+    Also fixes discrepancies by unlinking milestones that violate prerequisites."""
+    lead = _get_lead_or_404(db, lead_id)
+    
+    journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
+    if not journey:
+        return JSONResponse(
+            content={"error": "Journey not found. Please mark a contact as primary first."},
+            status_code=400
+        )
+    
+    if not journey.primary_contact_id:
+        return JSONResponse(
+            content={"error": "Journey has no primary contact set."},
+            status_code=400
+        )
+    
+    # First, unlink milestones that violate prerequisites
+    all_milestones = db.query(JourneyMilestone).filter(
+        JourneyMilestone.journey_id == journey.id
+    ).all()
+    
+    unlinked_count = 0
+    for milestone in all_milestones:
+        if milestone.status == MilestoneStatus.completed and milestone.attempt_id:
+            # Check if prerequisites are met
+            if not _check_prerequisite_milestones(db, journey.id, milestone.milestone_type):
+                # Unlink this milestone - prerequisites not met
+                milestone.status = MilestoneStatus.pending
+                milestone.completed_at = None
+                milestone.attempt_id = None
+                milestone.updated_at = datetime.now(timezone.utc)
+                unlinked_count += 1
+    
+    # Get all attempts for the primary contact
+    attempts = db.query(LeadAttempt).filter(
+        LeadAttempt.lead_id == lead_id,
+        LeadAttempt.contact_id == journey.primary_contact_id
+    ).order_by(LeadAttempt.created_at.asc()).all()
+    
+    # Unlink all attempts first to start fresh
+    for attempt in attempts:
+        existing_link = db.query(JourneyMilestone).filter(
+            JourneyMilestone.attempt_id == attempt.id
+        ).first()
+        if existing_link:
+            existing_link.status = MilestoneStatus.pending
+            existing_link.completed_at = None
+            existing_link.attempt_id = None
+            existing_link.updated_at = datetime.now(timezone.utc)
+    
+    db.flush()
+    
+    # Now relink attempts in order - process each attempt and commit after each successful link
+    # This ensures prerequisites are met as we go
+    linked_count = 0
+    for attempt in attempts:
+        # Expire all objects to ensure we get fresh data from DB (not cached)
+        db.expire_all()
+        _link_attempt_to_milestone(db, attempt)
+        # Check if it got linked
+        linked = db.query(JourneyMilestone).filter(
+            JourneyMilestone.attempt_id == attempt.id
+        ).first()
+        if linked:
+            linked_count += 1
+            # Commit after each successful link to ensure prerequisites are updated
+            db.commit()
+    
+    db.commit()
+    
+    return JSONResponse(content={
+        "status": "success",
+        "message": f"Processed {len(attempts)} attempts, unlinked {unlinked_count} invalid links, linked {linked_count} to milestones"
+    })
 
 
 @app.post("/api/leads/batch/journey-status")

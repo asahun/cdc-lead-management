@@ -166,6 +166,7 @@
 </form>
 
 {% if mode != 'create' and lead.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+    {% if journey_data and journey_data != 'null' %}
     <section id="journey-tracking" class="card journey-card">
       <header>
         <h2>Outreach Journey</h2>
@@ -176,6 +177,18 @@
         </div>
       </div>
     </section>
+    {% else %}
+    <section id="journey-tracking" class="card journey-card">
+      <header>
+        <h2>Outreach Journey</h2>
+      </header>
+      <div class="section-content">
+        <div class="journey-no-primary">
+          <p>No primary contact set. Mark a contact as primary to start tracking the outreach journey.</p>
+        </div>
+      </div>
+    </section>
+    {% endif %}
 {% endif %}
 
 {% if mode != 'create' %}
@@ -367,7 +380,12 @@
               {% for c in existing_contacts %}
                 <article class="contact-card">
                   <header>
-                    <div class="contact-name">{{ c.contact_name }}</div>
+                    <div class="contact-name">
+                      {{ c.contact_name }}
+                      {% if c.is_primary %}
+                        <span class="primary-badge" title="Primary Contact">⭐ Primary</span>
+                      {% endif %}
+                    </div>
                     <span class="contact-title">{{ c.title or '—' }}</span>
                     <span class="contact-type-pill">
                       {{ c.contact_type.value if c.contact_type else 'unspecified' }}
@@ -417,6 +435,11 @@
                   {% if mode != 'view' %}
                   <footer>
                     <div class="contact-actions">
+                      {% if not c.is_primary %}
+                        <form method="post" action="/leads/{{ lead.id }}/contacts/{{ c.id }}/mark-primary" style="display: inline;">
+                          <button type="submit" class="btn btn-secondary btn-sm" title="Mark as Primary Contact">Mark Primary</button>
+                        </form>
+                      {% endif %}
                       <a class="btn btn-ghost" href="/leads/{{ lead.id }}/edit?edit_contact_id={{ c.id }}#contacts">Edit</a>
                       {% if c.email %}
                         <button 
@@ -508,26 +531,10 @@
 
               <div>
                 <label>Outcome</label>
-                <!-- Text input for non-LinkedIn channels -->
                 <input 
                   id="outcome-text-input" 
                   name="outcome" 
-                  placeholder="e.g. left voicemail, no answer, spoke with CFO"
-                  style="display: block;">
-                <!-- Dropdown for LinkedIn channel -->
-                <select 
-                  id="outcome-dropdown" 
-                  style="display: none;">
-                  <option value="">-- Select Outcome --</option>
-                  {% for outcome in linkedin_outcomes %}
-                    <option value="{{ outcome }}">{{ outcome }}</option>
-                  {% endfor %}
-                </select>
-                <!-- Custom input for "Other" option -->
-                <input 
-                  id="outcome-other-input" 
-                  placeholder="Specify outcome..."
-                  style="display: none;">
+                  placeholder="e.g. left voicemail, no answer, spoke with CFO, Connection Request Sent">
               </div>
 
               <div>
@@ -848,10 +855,16 @@
           Sending as: <span class="profile-chip" id="linkedin-profile-label">Abby</span>
         </p>
       </div>
-      <div class="linkedin-tabs">
-        <button type="button" class="linkedin-tab active" data-tab="connection_requests">Connection Requests</button>
-        <button type="button" class="linkedin-tab" data-tab="accepted_messages">Follow-up Messages</button>
-        <button type="button" class="linkedin-tab" data-tab="inmail">InMail</button>
+      <div class="linkedin-tabs-container">
+        <div class="linkedin-tabs">
+          <button type="button" class="linkedin-tab active" data-tab="connection_requests">Connection Requests</button>
+          <button type="button" class="linkedin-tab" data-tab="accepted_messages">Follow-up Messages</button>
+          <button type="button" class="linkedin-tab" data-tab="inmail">InMail</button>
+        </div>
+        <div id="linkedin-connection-status" class="linkedin-connection-status" style="display: none;">
+          <span id="linkedin-connection-status-text" class="linkedin-connection-status-text"></span>
+          <button type="button" id="linkedin-mark-connection-accepted-btn" class="btn btn-secondary btn-sm" style="display: none;">Mark Connection Accepted</button>
+        </div>
       </div>
       <div class="linkedin-content">
         <div class="linkedin-template-list">

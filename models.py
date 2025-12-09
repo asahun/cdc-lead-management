@@ -169,6 +169,7 @@ class LeadContact(Base):
     address_state = Column(Text)
     address_zipcode = Column(Text)
     contact_type = Column(Enum(ContactType, name="lead_contact_type"), nullable=False, default=ContactType.employee)
+    is_primary = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -261,6 +262,7 @@ class LeadJourney(Base):
 
     id = Column(BigInteger, primary_key=True)
     lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False, unique=True)
+    primary_contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
     started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     status = Column(Enum(JourneyStatus, name="journey_status"), nullable=False, default=JourneyStatus.active)
     
@@ -268,6 +270,7 @@ class LeadJourney(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     lead = relationship("BusinessLead", back_populates="journey")
+    primary_contact = relationship("LeadContact", foreign_keys=[primary_contact_id])
     milestones = relationship("JourneyMilestone", back_populates="journey", cascade="all, delete-orphan", order_by="JourneyMilestone.scheduled_day")
 
 

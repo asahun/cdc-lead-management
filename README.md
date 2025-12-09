@@ -132,6 +132,10 @@ CREATE TYPE milestone_status AS ENUM ('pending', 'completed', 'skipped', 'overdu
 -- Note: The tables `lead_journey` and `journey_milestone` will be created automatically
 -- by SQLAlchemy's Base.metadata.create_all() when the application starts.
 
+-- Add primary contact tracking columns
+ALTER TABLE lead_contact ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE lead_journey ADD COLUMN IF NOT EXISTS primary_contact_id BIGINT REFERENCES lead_contact(id) ON DELETE SET NULL;
+
 WITH cutoff AS (
     SELECT date_trunc('week', now())  -- Monday 00:00 (DB timezone)
            - interval '7 days'        -- previous Monday
