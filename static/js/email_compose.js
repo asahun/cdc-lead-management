@@ -65,8 +65,8 @@
       );
       
       if (!nextMilestone) {
-        // All emails completed - default to final nudge
-        return { variant: 'followup_2', label: 'Final Nudge' };
+        // All emails completed - return completion indicator
+        return { completed: true, label: 'All Emails Sent' };
       }
       
       // Map milestone type to template variant
@@ -92,6 +92,8 @@
     const templateDisplay = document.getElementById('email-template-display');
     if (templateDisplay) {
       templateDisplay.textContent = '';
+      templateDisplay.style.color = '';
+      templateDisplay.style.fontWeight = '';
     }
     const scheduleGroup = document.getElementById('schedule-group');
     if (scheduleGroup) {
@@ -100,6 +102,16 @@
     }
     if (scheduleBtn) {
       toggleScheduleMode(false);
+      scheduleBtn.disabled = false;
+      scheduleBtn.style.display = 'inline-flex';
+    }
+    // Reset button states
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+    }
+    if (subjectInput) {
+      subjectInput.disabled = false;
     }
     window.emailComposeModule.clearContext();
   }
@@ -204,8 +216,55 @@
     // Determine next template from journey
     const nextTemplate = await getNextEmailTemplate(leadId);
     const templateDisplay = document.getElementById('email-template-display');
+    
+    // Check if all emails are completed
+    if (nextTemplate.completed) {
+      // Show completion message instead of loading template
+      if (templateDisplay) {
+        templateDisplay.textContent = nextTemplate.label;
+        templateDisplay.style.color = '#4caf50';
+        templateDisplay.style.fontWeight = '600';
+      }
+      
+      // Show completion message in body editor
+      bodyEditor.innerHTML = `
+        <div style="padding: 40px 20px; text-align: center;">
+          <div style="color: #4caf50; font-size: 48px; margin-bottom: 16px;">✓</div>
+          <h3 style="color: #111827; margin: 0 0 8px 0; font-size: 18px;">All Emails Sent</h3>
+          <p style="color: #6b7280; margin: 0; font-size: 14px;">All email outreach milestones have been completed for this contact.</p>
+        </div>
+      `;
+      bodyHidden.value = bodyEditor.innerHTML;
+      
+      // Disable send and schedule buttons
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'All Emails Sent';
+      if (scheduleBtn) {
+        scheduleBtn.disabled = true;
+        scheduleBtn.style.display = 'none';
+      }
+      
+      // Clear subject
+      subjectInput.value = '';
+      subjectInput.disabled = true;
+      
+      return; // Don't load template
+    }
+    
+    // Normal flow - load template
     if (templateDisplay) {
       templateDisplay.textContent = nextTemplate.label;
+      templateDisplay.style.color = '';
+      templateDisplay.style.fontWeight = '';
+    }
+    
+    // Enable inputs
+    subjectInput.disabled = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send';
+    if (scheduleBtn) {
+      scheduleBtn.disabled = false;
+      scheduleBtn.style.display = 'inline-flex';
     }
     
     // Load the determined template
@@ -277,9 +336,24 @@
         }
 
         showSuccess('Email updated and sent successfully!');
-        resetModal();
+        
+        // Show success feedback briefly
+        const originalText = sendBtn.textContent;
+        const originalBgColor = sendBtn.style.backgroundColor;
+        sendBtn.textContent = 'Sent!';
+        sendBtn.style.backgroundColor = '#4caf50';
+        sendBtn.disabled = true;
+        
+        if (scheduleBtn) {
+          scheduleBtn.style.display = 'none';
+        }
+        
         window.currentScheduledEmailId = null;
-        window.location.reload();
+        
+        // Close modal after brief delay (notification already provides feedback)
+        setTimeout(() => {
+          resetModal();
+        }, 1500); // 1.5 seconds to show "Sent!" feedback, then close
       } catch (error) {
         console.error('Error updating/sending email:', error);
         showError('Failed to update/send email: ' + error.message);
@@ -320,10 +394,23 @@
 
       const result = await response.json();
       showSuccess('Email sent successfully!');
-      resetModal();
-
-      // Reload page to show new attempt
-      window.location.reload();
+      
+      // Show success feedback briefly
+      const originalText = sendBtn.textContent;
+      const originalBgColor = sendBtn.style.backgroundColor;
+      sendBtn.textContent = 'Sent!';
+      sendBtn.style.backgroundColor = '#4caf50';
+      sendBtn.disabled = true;
+      
+      // Hide schedule button
+      if (scheduleBtn) {
+        scheduleBtn.style.display = 'none';
+      }
+      
+      // Close modal after brief delay (notification already provides feedback)
+      setTimeout(() => {
+        resetModal();
+      }, 1500); // 1.5 seconds to show "Sent!" feedback, then close
     } catch (error) {
       console.error('Error sending email:', error);
       showError('Failed to send email: ' + error.message);

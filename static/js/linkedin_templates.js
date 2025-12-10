@@ -332,20 +332,23 @@
 
       const data = await response.json();
       
-      // Show success feedback
+      // Show success notification
+      if (typeof showSuccess === 'function') {
+        showSuccess('LinkedIn message marked as sent!');
+      }
+      
+      // Show success feedback briefly
       const originalText = markSentBtn.textContent;
       markSentBtn.textContent = 'Sent!';
       markSentBtn.style.backgroundColor = '#4caf50';
       markSentBtn.disabled = true;
       
-      // Reload templates to update UI state
-      await loadTemplates();
-      
+      // Close modal after brief delay (notification already provides feedback)
       setTimeout(() => {
-        markSentBtn.textContent = originalText;
-        markSentBtn.style.backgroundColor = '';
-        markSentBtn.style.display = 'none';
-      }, 2000);
+        if (modal) {
+          modal.style.display = 'none';
+        }
+      }, 1500); // 1.5 seconds to show "Sent!" feedback, then close
     } catch (error) {
       console.error('Error marking as sent:', error);
       alert(`Failed to mark message as sent: ${error.message}`);
