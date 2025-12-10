@@ -76,47 +76,22 @@ EMAIL_MILESTONE_RULES: dict[JourneyMilestoneType, MilestoneMatchingRule] = {
 }
 
 
-def _get_attempt_sequence_position_scheduler(db: Session, lead_id: int, contact_id: int, channel, attempt: LeadAttempt, milestone_type=None) -> int | None:
+def _get_email_sequence_position_scheduler(db: Session, lead_id: int, contact_id: int, attempt: LeadAttempt) -> int | None:
     """
-    Get the sequence position (1-indexed) of an attempt for a given contact + channel.
-    Returns None if attempt not found or doesn't match contact/channel.
-    Duplicate of function in main.py to avoid circular imports.
-    
-    For LinkedIn, if milestone_type is a message milestone, filters out connection-related attempts
-    before calculating position. For connection milestone, counts all attempts.
+    Get sequence position for email path (scheduler version).
+    Returns: 1, 2, or 3 for email_1, email_followup_1, email_followup_2.
     """
-    from models import LeadAttempt, JourneyMilestoneType
+    from models import LeadAttempt, ContactChannel
     
-    # Get all attempts for this contact + channel, ordered chronologically
     all_attempts = db.query(LeadAttempt).filter(
         LeadAttempt.lead_id == lead_id,
         LeadAttempt.contact_id == contact_id,
-        LeadAttempt.channel == channel
+        LeadAttempt.channel == ContactChannel.email
     ).order_by(LeadAttempt.created_at.asc()).all()
     
-    # For LinkedIn message milestones, filter out connection-related attempts
-    if channel.value == "linkedin" and milestone_type in [
-        JourneyMilestoneType.linkedin_message_1,
-        JourneyMilestoneType.linkedin_message_2,
-        JourneyMilestoneType.linkedin_message_3,
-        JourneyMilestoneType.linkedin_inmail,
-    ]:
-        # Filter out connection-related attempts (connection request, connection accepted)
-        filtered_attempts = [
-            a for a in all_attempts
-            if "connection" not in (a.outcome or "").lower()
-        ]
-        # Find this attempt's position in the filtered list (1-indexed)
-        for i, a in enumerate(filtered_attempts, 1):
-            if a.id == attempt.id:
-                return i
-    else:
-        # For all other cases (email, mail, LinkedIn connection), count all attempts
-        # Find this attempt's position (1-indexed)
-        for i, a in enumerate(all_attempts, 1):
-            if a.id == attempt.id:
-                return i
-    
+    for i, a in enumerate(all_attempts, 1):
+        if a.id == attempt.id:
+            return i
     return None
 
 
@@ -200,27 +175,27 @@ def _link_attempt_to_milestone_scheduler(db: Session, attempt: LeadAttempt):
     if not _check_prerequisite_milestones_scheduler(db, journey.id, milestone.milestone_type):
         return
     
-    # Use simple sequence-based matching: count attempts chronologically for contact + channel
-    # This is reliable because all attempts are automated (or manual ones don't affect journey)
+    # Scheduler only handles email path - use email-specific sequence logic
     if not journey.primary_contact_id:
         return
     
-    # Get sequence position (1-indexed) for this attempt
-    attempt_position = _get_attempt_sequence_position_scheduler(
-        db, lead_id, journey.primary_contact_id, attempt.channel, attempt, milestone.milestone_type
+    if attempt.channel != ContactChannel.email:
+        return  # Scheduler only handles emails
+    
+    # Get email sequence position
+    attempt_position = _get_email_sequence_position_scheduler(
+        db, lead_id, journey.primary_contact_id, attempt
     )
     
     if not attempt_position:
         return
     
-    # Map position to milestone type based on channel (only email for scheduler)
-    position_to_milestone = {}
-    if attempt.channel == ContactChannel.email:
-        position_to_milestone = {
-            1: JourneyMilestoneType.email_1,
-            2: JourneyMilestoneType.email_followup_1,
-            3: JourneyMilestoneType.email_followup_2,
-        }
+    # Map position to milestone type for email path
+    position_to_milestone = {
+        1: JourneyMilestoneType.email_1,
+        2: JourneyMilestoneType.email_followup_1,
+        3: JourneyMilestoneType.email_followup_2,
+    }
     
     expected_milestone_type = position_to_milestone.get(attempt_position)
     

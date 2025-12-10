@@ -1163,44 +1163,101 @@ def _is_nth_message_attempt(attempts: List[LeadAttempt], attempt: LeadAttempt, m
     )
 
 
-def _get_attempt_sequence_position(db: Session, lead_id: int, contact_id: int, channel: ContactChannel, attempt: LeadAttempt, milestone_type: JourneyMilestoneType | None = None) -> int | None:
+# ========== PATH-SPECIFIC SEQUENCE POSITION FUNCTIONS ==========
+
+def _get_all_linkedin_attempts_position(db: Session, lead_id: int, contact_id: int, attempt: LeadAttempt) -> int | None:
     """
-    Get the sequence position (1-indexed) of an attempt for a given contact + channel.
-    Returns None if attempt not found or doesn't match contact/channel.
-    
-    For LinkedIn, if milestone_type is a message milestone, filters out connection-related attempts
-    before calculating position. For connection milestone, counts all attempts.
+    Get position of attempt in ALL LinkedIn attempts (no filtering).
+    Used for connection milestone matching.
     """
-    # Get all attempts for this contact + channel, ordered chronologically
     all_attempts = db.query(LeadAttempt).filter(
         LeadAttempt.lead_id == lead_id,
         LeadAttempt.contact_id == contact_id,
-        LeadAttempt.channel == channel
+        LeadAttempt.channel == ContactChannel.linkedin
     ).order_by(LeadAttempt.created_at.asc()).all()
     
-    # For LinkedIn message milestones, filter out connection-related attempts
-    if channel == ContactChannel.linkedin and milestone_type in [
-        JourneyMilestoneType.linkedin_message_1,
-        JourneyMilestoneType.linkedin_message_2,
-        JourneyMilestoneType.linkedin_message_3,
-        JourneyMilestoneType.linkedin_inmail,
-    ]:
-        # Filter out connection-related attempts (connection request, connection accepted)
-        filtered_attempts = [
-            a for a in all_attempts
-            if "connection" not in (a.outcome or "").lower()
-        ]
-        # Find this attempt's position in the filtered list (1-indexed)
-        for i, a in enumerate(filtered_attempts, 1):
-            if a.id == attempt.id:
-                return i
-    else:
-        # For all other cases (email, mail, LinkedIn connection), count all attempts
-        # Find this attempt's position (1-indexed)
-        for i, a in enumerate(all_attempts, 1):
-            if a.id == attempt.id:
-                return i
+    for i, a in enumerate(all_attempts, 1):
+        if a.id == attempt.id:
+            return i
+    return None
+
+def _get_connection_message_sequence_position(db: Session, lead_id: int, contact_id: int, attempt: LeadAttempt) -> int | None:
+    """
+    Get sequence position for connection→messages path ONLY.
+    Filters out: connection attempts, InMail attempts.
+    Returns: 1, 2, or 3 for Message 1, 2, 3.
+    """
+    all_attempts = db.query(LeadAttempt).filter(
+        LeadAttempt.lead_id == lead_id,
+        LeadAttempt.contact_id == contact_id,
+        LeadAttempt.channel == ContactChannel.linkedin
+    ).order_by(LeadAttempt.created_at.asc()).all()
     
+    # Filter to ONLY message attempts (exclude connection and InMail)
+    message_attempts = [
+        a for a in all_attempts
+        if "connection" not in (a.outcome or "").lower()
+        and "inmail" not in (a.outcome or "").lower()
+    ]
+    
+    for i, a in enumerate(message_attempts, 1):
+        if a.id == attempt.id:
+            return i
+    return None
+
+def _get_email_sequence_position(db: Session, lead_id: int, contact_id: int, attempt: LeadAttempt) -> int | None:
+    """
+    Get sequence position for email path.
+    Returns: 1, 2, or 3 for email_1, email_followup_1, email_followup_2.
+    """
+    all_attempts = db.query(LeadAttempt).filter(
+        LeadAttempt.lead_id == lead_id,
+        LeadAttempt.contact_id == contact_id,
+        LeadAttempt.channel == ContactChannel.email
+    ).order_by(LeadAttempt.created_at.asc()).all()
+    
+    for i, a in enumerate(all_attempts, 1):
+        if a.id == attempt.id:
+            return i
+    return None
+
+def _get_mail_sequence_position(db: Session, lead_id: int, contact_id: int, attempt: LeadAttempt) -> int | None:
+    """
+    Get sequence position for mail path.
+    Returns: 1, 2, or 3 for mail_1, mail_2, mail_3.
+    """
+    all_attempts = db.query(LeadAttempt).filter(
+        LeadAttempt.lead_id == lead_id,
+        LeadAttempt.contact_id == contact_id,
+        LeadAttempt.channel == ContactChannel.mail
+    ).order_by(LeadAttempt.created_at.asc()).all()
+    
+    for i, a in enumerate(all_attempts, 1):
+        if a.id == attempt.id:
+            return i
+    return None
+
+# Legacy function for backward compatibility (deprecated - use path-specific functions)
+def _get_attempt_sequence_position(db: Session, lead_id: int, contact_id: int, channel: ContactChannel, attempt: LeadAttempt, milestone_type: JourneyMilestoneType | None = None) -> int | None:
+    """
+    DEPRECATED: Use path-specific functions instead.
+    Kept for backward compatibility during transition.
+    """
+    if channel == ContactChannel.linkedin:
+        if milestone_type == JourneyMilestoneType.linkedin_connection:
+            return _get_all_linkedin_attempts_position(db, lead_id, contact_id, attempt)
+        elif milestone_type in [
+            JourneyMilestoneType.linkedin_message_1,
+            JourneyMilestoneType.linkedin_message_2,
+            JourneyMilestoneType.linkedin_message_3,
+        ]:
+            return _get_connection_message_sequence_position(db, lead_id, contact_id, attempt)
+        else:
+            return _get_all_linkedin_attempts_position(db, lead_id, contact_id, attempt)
+    elif channel == ContactChannel.email:
+        return _get_email_sequence_position(db, lead_id, contact_id, attempt)
+    elif channel == ContactChannel.mail:
+        return _get_mail_sequence_position(db, lead_id, contact_id, attempt)
     return None
 
 
@@ -1335,9 +1392,139 @@ def _check_prerequisite_milestones(db: Session, journey_id: int, milestone_type:
     return True  # All prerequisites completed
 
 
+# ========== PATH-SPECIFIC LINKING HANDLERS ==========
+
+def _link_attempt_to_connection_message_path(
+    db: Session, attempt: LeadAttempt, milestone: JourneyMilestone, journey: LeadJourney
+) -> bool:
+    """
+    Link attempt to connection→messages path milestones ONLY.
+    Handles: linkedin_connection, linkedin_message_1, linkedin_message_2, linkedin_message_3
+    Independent logic - doesn't affect InMail path.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if milestone.milestone_type == JourneyMilestoneType.linkedin_connection:
+        # Connection milestone: check if this is the first LinkedIn attempt
+        position = _get_all_linkedin_attempts_position(db, attempt.lead_id, journey.primary_contact_id, attempt)
+        if position == 1:
+            logger.debug(f"_link_attempt_to_connection_message_path: ✓ Matched connection attempt {attempt.id} to connection milestone")
+            return True
+        return False
+    
+    elif milestone.milestone_type in [
+        JourneyMilestoneType.linkedin_message_1,
+        JourneyMilestoneType.linkedin_message_2,
+        JourneyMilestoneType.linkedin_message_3,
+    ]:
+        # Message milestone: use connection→messages sequence (excludes connection and InMail)
+        position = _get_connection_message_sequence_position(
+            db, attempt.lead_id, journey.primary_contact_id, attempt
+        )
+        expected_positions = {
+            JourneyMilestoneType.linkedin_message_1: 1,
+            JourneyMilestoneType.linkedin_message_2: 2,
+            JourneyMilestoneType.linkedin_message_3: 3,
+        }
+        expected_position = expected_positions.get(milestone.milestone_type)
+        
+        if position == expected_position:
+            logger.debug(f"_link_attempt_to_connection_message_path: ✓ Matched message attempt {attempt.id} (position {position}) to {milestone.milestone_type}")
+            return True
+        return False
+    
+    return False
+
+def _link_attempt_to_inmail_path(
+    db: Session, attempt: LeadAttempt, milestone: JourneyMilestone, journey: LeadJourney
+) -> bool:
+    """
+    Link attempt to InMail path milestone ONLY.
+    Handles: linkedin_inmail
+    Matches by outcome pattern, NOT sequence position.
+    Independent logic - doesn't affect connection→messages path.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if milestone.milestone_type != JourneyMilestoneType.linkedin_inmail:
+        return False
+    
+    # InMail is matched by outcome pattern, not sequence
+    outcome = (attempt.outcome or "").lower()
+    if "inmail" in outcome:
+        logger.debug(f"_link_attempt_to_inmail_path: ✓ Matched InMail attempt {attempt.id} to InMail milestone")
+        return True
+    return False
+
+def _link_attempt_to_email_path(
+    db: Session, attempt: LeadAttempt, milestone: JourneyMilestone, journey: LeadJourney
+) -> bool:
+    """
+    Link attempt to email path milestones ONLY.
+    Handles: email_1, email_followup_1, email_followup_2
+    Independent logic - doesn't affect other paths.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if milestone.milestone_type not in [
+        JourneyMilestoneType.email_1,
+        JourneyMilestoneType.email_followup_1,
+        JourneyMilestoneType.email_followup_2,
+    ]:
+        return False
+    
+    position = _get_email_sequence_position(db, attempt.lead_id, journey.primary_contact_id, attempt)
+    expected_positions = {
+        JourneyMilestoneType.email_1: 1,
+        JourneyMilestoneType.email_followup_1: 2,
+        JourneyMilestoneType.email_followup_2: 3,
+    }
+    expected_position = expected_positions.get(milestone.milestone_type)
+    
+    if position == expected_position:
+        logger.debug(f"_link_attempt_to_email_path: ✓ Matched email attempt {attempt.id} (position {position}) to {milestone.milestone_type}")
+        return True
+    return False
+
+def _link_attempt_to_mail_path(
+    db: Session, attempt: LeadAttempt, milestone: JourneyMilestone, journey: LeadJourney
+) -> bool:
+    """
+    Link attempt to mail path milestones ONLY.
+    Handles: mail_1, mail_2, mail_3
+    Independent logic - doesn't affect other paths.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if milestone.milestone_type not in [
+        JourneyMilestoneType.mail_1,
+        JourneyMilestoneType.mail_2,
+        JourneyMilestoneType.mail_3,
+    ]:
+        return False
+    
+    position = _get_mail_sequence_position(db, attempt.lead_id, journey.primary_contact_id, attempt)
+    expected_positions = {
+        JourneyMilestoneType.mail_1: 1,
+        JourneyMilestoneType.mail_2: 2,
+        JourneyMilestoneType.mail_3: 3,
+    }
+    expected_position = expected_positions.get(milestone.milestone_type)
+    
+    if position == expected_position:
+        logger.debug(f"_link_attempt_to_mail_path: ✓ Matched mail attempt {attempt.id} (position {position}) to {milestone.milestone_type}")
+        return True
+    return False
+
 def _link_attempt_to_milestone(db: Session, attempt: LeadAttempt):
-    """Link a newly created attempt to a matching journey milestone and mark it as completed.
-    Only attempts for the primary contact count toward milestones."""
+    """
+    Main linking function - routes to appropriate path handler.
+    Each path handler is independent and doesn't affect others.
+    """
     import logging
     logger = logging.getLogger(__name__)
     
@@ -1357,8 +1544,6 @@ def _link_attempt_to_milestone(db: Session, attempt: LeadAttempt):
     db.flush()  # Ensure status changes are visible to subsequent query
     
     # Only count attempts for the primary contact
-    # If journey has a primary contact, the attempt must match it
-    # If attempt has no contact_id, it can't be matched to a primary contact
     if journey.primary_contact_id:
         if attempt.contact_id is None:
             logger.debug(f"_link_attempt_to_milestone: Attempt {attempt.id} has no contact_id, skipping")
@@ -1367,14 +1552,14 @@ def _link_attempt_to_milestone(db: Session, attempt: LeadAttempt):
             logger.debug(f"_link_attempt_to_milestone: Attempt {attempt.id} contact_id {attempt.contact_id} doesn't match primary_contact_id {journey.primary_contact_id}, skipping")
             return
     elif attempt.contact_id is not None:
-        # If journey has no primary contact but attempt has a contact_id, don't match
-        # (journey should have a primary contact set)
         logger.debug(f"_link_attempt_to_milestone: Journey has no primary_contact_id but attempt has contact_id, skipping")
         return
     
+    if not journey.primary_contact_id:
+        logger.debug(f"_link_attempt_to_milestone: No primary contact set for journey")
+        return
+    
     # Get the NEXT milestone in sequence (first incomplete one for this channel)
-    # This ensures we only check the next milestone, not all of them
-    # We include overdue milestones because they can still be completed retroactively
     milestone = db.query(JourneyMilestone).filter(
         JourneyMilestone.journey_id == journey.id,
         JourneyMilestone.channel == attempt.channel,
@@ -1388,99 +1573,60 @@ def _link_attempt_to_milestone(db: Session, attempt: LeadAttempt):
     
     logger.debug(f"_link_attempt_to_milestone: Checking next milestone {milestone.id} (type: {milestone.milestone_type}, scheduled_day: {milestone.scheduled_day}) for channel {attempt.channel}")
     
-    journey_start = journey.started_at
-    # Ensure attempt_date is timezone-aware
-    if attempt.created_at:
-        attempt_date = attempt.created_at
-        if attempt_date.tzinfo is None:
-            # If naive, assume UTC
-            attempt_date = attempt_date.replace(tzinfo=timezone.utc)
-    else:
-        attempt_date = datetime.now(timezone.utc)
-    
-    # Get matching rule for this milestone type
-    rule = MILESTONE_MATCHING_RULES.get(milestone.milestone_type)
-    if not rule:
-        logger.debug(f"_link_attempt_to_milestone: No matching rule found for milestone type {milestone.milestone_type}")
-        return
-    
     # Check if prerequisite milestones are completed (must complete in order)
     if not _check_prerequisite_milestones(db, journey.id, milestone.milestone_type):
         logger.debug(f"_link_attempt_to_milestone: Prerequisites not met for milestone {milestone.id} (type: {milestone.milestone_type}) - cannot complete until previous milestones are done")
         return
     
-    # Use simple sequence-based matching: count attempts chronologically for contact + channel
-    # This is reliable because all attempts are automated (or manual ones don't affect journey)
-    if not journey.primary_contact_id:
-        logger.debug(f"_link_attempt_to_milestone: No primary contact set for journey")
-        return
-    
-    # Get sequence position (1-indexed) for this attempt
-    attempt_position = _get_attempt_sequence_position(
-        db, lead_id, journey.primary_contact_id, attempt.channel, attempt, milestone.milestone_type
-    )
-    
-    if not attempt_position:
-        logger.debug(f"_link_attempt_to_milestone: Could not determine sequence position for attempt {attempt.id}")
-        return
-    
-    # Map position to milestone type based on channel
-    # For LinkedIn, the position calculation already filters out connection attempts for message milestones
-    # So position 1 (filtered) = message_1, position 2 (filtered) = message_2, etc.
-    # For connection, position 1 (all attempts) = connection
-    position_to_milestone = {}
-    if attempt.channel == ContactChannel.email:
-        position_to_milestone = {
-            1: JourneyMilestoneType.email_1,
-            2: JourneyMilestoneType.email_followup_1,
-            3: JourneyMilestoneType.email_followup_2,
-        }
-    elif attempt.channel == ContactChannel.linkedin:
-        # For LinkedIn, check if this is a connection or message milestone
-        if milestone.milestone_type == JourneyMilestoneType.linkedin_connection:
-            # Connection milestone: position 1 from all attempts
-            position_to_milestone = {
-                1: JourneyMilestoneType.linkedin_connection,
-            }
-        else:
-            # Message milestones: position from filtered attempts (connection attempts excluded)
-            position_to_milestone = {
-                1: JourneyMilestoneType.linkedin_message_1,
-                2: JourneyMilestoneType.linkedin_message_2,
-                3: JourneyMilestoneType.linkedin_message_3,
-            }
-    elif attempt.channel == ContactChannel.mail:
-        position_to_milestone = {
-            1: JourneyMilestoneType.mail_1,
-            2: JourneyMilestoneType.mail_2,
-            3: JourneyMilestoneType.mail_3,
-        }
-    
-    expected_milestone_type = position_to_milestone.get(attempt_position)
-    
-    if not expected_milestone_type:
-        logger.debug(f"_link_attempt_to_milestone: No milestone defined for position {attempt_position} for channel {attempt.channel}")
-        return
-    
-    # Check if this attempt matches the expected milestone type
-    if milestone.milestone_type != expected_milestone_type:
-        logger.debug(f"_link_attempt_to_milestone: Attempt position {attempt_position} expects {expected_milestone_type}, but next milestone is {milestone.milestone_type}")
-        return
+    journey_start = journey.started_at
+    # Ensure attempt_date is timezone-aware
+    if attempt.created_at:
+        attempt_date = attempt.created_at
+        if attempt_date.tzinfo is None:
+            attempt_date = attempt_date.replace(tzinfo=timezone.utc)
+    else:
+        attempt_date = datetime.now(timezone.utc)
     
     # Ensure attempt is after journey start
     if attempt_date < journey_start:
         logger.debug(f"_link_attempt_to_milestone: Attempt {attempt.id} is before journey start, skipping")
         return
     
-    logger.debug(f"_link_attempt_to_milestone: ✓ Matched attempt {attempt.id} (position {attempt_position}) to milestone {milestone.id} (type: {milestone.milestone_type})")
-    milestone.status = MilestoneStatus.completed
-    milestone.completed_at = attempt_date
-    milestone.attempt_id = attempt.id
-    milestone.updated_at = datetime.now(timezone.utc)
-    db.flush()
+    # Route to appropriate path handler based on channel and milestone type
+    linked = False
+    if attempt.channel == ContactChannel.linkedin:
+        if milestone.milestone_type in [
+            JourneyMilestoneType.linkedin_connection,
+            JourneyMilestoneType.linkedin_message_1,
+            JourneyMilestoneType.linkedin_message_2,
+            JourneyMilestoneType.linkedin_message_3,
+        ]:
+            # Route to connection→messages path handler
+            linked = _link_attempt_to_connection_message_path(db, attempt, milestone, journey)
+        elif milestone.milestone_type == JourneyMilestoneType.linkedin_inmail:
+            # Route to InMail path handler
+            linked = _link_attempt_to_inmail_path(db, attempt, milestone, journey)
     
-    # Update milestone statuses to handle any overdue/skipped logic
-    _update_milestone_statuses(db, lead_id)
+    elif attempt.channel == ContactChannel.email:
+        # Route to email path handler
+        linked = _link_attempt_to_email_path(db, attempt, milestone, journey)
+    
+    elif attempt.channel == ContactChannel.mail:
+        # Route to mail path handler
+        linked = _link_attempt_to_mail_path(db, attempt, milestone, journey)
+    
+    if linked:
+        logger.debug(f"_link_attempt_to_milestone: ✓ Matched attempt {attempt.id} to milestone {milestone.id} (type: {milestone.milestone_type})")
+        milestone.status = MilestoneStatus.completed
+        milestone.completed_at = attempt_date
+        milestone.attempt_id = attempt.id
+        milestone.updated_at = datetime.now(timezone.utc)
+        db.flush()
+        
+        # Update milestone statuses to handle any overdue/skipped logic
+        _update_milestone_statuses(db, lead_id)
+    else:
+        logger.debug(f"_link_attempt_to_milestone: ✗ Attempt {attempt.id} did not match milestone {milestone.id} (type: {milestone.milestone_type})")
 
 
 def _cleanup_invalid_milestones(db: Session, journey_id: int):
