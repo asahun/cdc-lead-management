@@ -106,28 +106,6 @@ The app will be available at `http://localhost:8000`
 
 ## Mgration tasks
 
--- Create ENUM types for journey tracking
-CREATE TYPE journey_status AS ENUM ('active', 'completed', 'paused');
-
-CREATE TYPE journey_milestone_type AS ENUM (
-    'email_1',
-    'email_followup_1',
-    'email_followup_2',
-    'linkedin_connection',
-    'linkedin_message_1',
-    'linkedin_message_2',
-    'linkedin_message_3',
-    'linkedin_inmail',
-    'mail_1',
-    'mail_2',
-    'mail_3'
-);
-
-CREATE TYPE milestone_status AS ENUM ('pending', 'completed', 'skipped', 'overdue');
-
-
-
-
 
 
 
