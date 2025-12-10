@@ -106,7 +106,6 @@ class JourneyMilestoneType(str, enum.Enum):
     email_1 = "email_1"
     email_followup_1 = "email_followup_1"
     email_followup_2 = "email_followup_2"
-    email_followup_3 = "email_followup_3"
     # LinkedIn milestones
     linkedin_connection = "linkedin_connection"
     linkedin_message_1 = "linkedin_message_1"

@@ -41,8 +41,7 @@ class MilestoneMatchingRule:
         
         # For email followups, require "follow" AND one of the number patterns
         if self.milestone_type in (JourneyMilestoneType.email_followup_1, 
-                                   JourneyMilestoneType.email_followup_2, 
-                                   JourneyMilestoneType.email_followup_3):
+                                   JourneyMilestoneType.email_followup_2):
             has_follow = "follow" in outcome_lower
             number_patterns = [p for p in self.outcome_patterns if p.lower() != "follow"]
             has_number = any(pattern.lower() in outcome_lower for pattern in number_patterns)
@@ -66,27 +65,59 @@ EMAIL_MILESTONE_RULES: dict[JourneyMilestoneType, MilestoneMatchingRule] = {
         milestone_type=JourneyMilestoneType.email_followup_1,
         channel=ContactChannel.email,
         outcome_patterns=["follow", "1", "one", "first"],
-        sequence_matcher=lambda attempts, attempt: (
-            len(attempts) == 2 and attempts[1].id == attempt.id
-        ),
+        sequence_matcher=None,  # Will be handled specially in _link_attempt_to_milestone_scheduler
     ),
     JourneyMilestoneType.email_followup_2: MilestoneMatchingRule(
         milestone_type=JourneyMilestoneType.email_followup_2,
         channel=ContactChannel.email,
-        outcome_patterns=["follow", "2", "two", "second"],
-        sequence_matcher=lambda attempts, attempt: (
-            len(attempts) == 3 and attempts[2].id == attempt.id
-        ),
-    ),
-    JourneyMilestoneType.email_followup_3: MilestoneMatchingRule(
-        milestone_type=JourneyMilestoneType.email_followup_3,
-        channel=ContactChannel.email,
-        outcome_patterns=["follow", "3", "three", "third", "final", "nudge"],
-        sequence_matcher=lambda attempts, attempt: (
-            len(attempts) == 4 and attempts[3].id == attempt.id
-        ),
+        outcome_patterns=["follow", "2", "two", "second", "final", "nudge"],
+        sequence_matcher=None,  # Will be handled specially in _link_attempt_to_milestone_scheduler
     ),
 }
+
+
+def _get_attempt_sequence_position_scheduler(db: Session, lead_id: int, contact_id: int, channel, attempt: LeadAttempt, milestone_type=None) -> int | None:
+    """
+    Get the sequence position (1-indexed) of an attempt for a given contact + channel.
+    Returns None if attempt not found or doesn't match contact/channel.
+    Duplicate of function in main.py to avoid circular imports.
+    
+    For LinkedIn, if milestone_type is a message milestone, filters out connection-related attempts
+    before calculating position. For connection milestone, counts all attempts.
+    """
+    from models import LeadAttempt, JourneyMilestoneType
+    
+    # Get all attempts for this contact + channel, ordered chronologically
+    all_attempts = db.query(LeadAttempt).filter(
+        LeadAttempt.lead_id == lead_id,
+        LeadAttempt.contact_id == contact_id,
+        LeadAttempt.channel == channel
+    ).order_by(LeadAttempt.created_at.asc()).all()
+    
+    # For LinkedIn message milestones, filter out connection-related attempts
+    if channel.value == "linkedin" and milestone_type in [
+        JourneyMilestoneType.linkedin_message_1,
+        JourneyMilestoneType.linkedin_message_2,
+        JourneyMilestoneType.linkedin_message_3,
+        JourneyMilestoneType.linkedin_inmail,
+    ]:
+        # Filter out connection-related attempts (connection request, connection accepted)
+        filtered_attempts = [
+            a for a in all_attempts
+            if "connection" not in (a.outcome or "").lower()
+        ]
+        # Find this attempt's position in the filtered list (1-indexed)
+        for i, a in enumerate(filtered_attempts, 1):
+            if a.id == attempt.id:
+                return i
+    else:
+        # For all other cases (email, mail, LinkedIn connection), count all attempts
+        # Find this attempt's position (1-indexed)
+        for i, a in enumerate(all_attempts, 1):
+            if a.id == attempt.id:
+                return i
+    
+    return None
 
 
 def _check_prerequisite_milestones_scheduler(db: Session, journey_id: int, milestone_type: JourneyMilestoneType) -> bool:
@@ -98,7 +129,6 @@ def _check_prerequisite_milestones_scheduler(db: Session, journey_id: int, miles
     email_prerequisites = {
         JourneyMilestoneType.email_followup_1: [JourneyMilestoneType.email_1],
         JourneyMilestoneType.email_followup_2: [JourneyMilestoneType.email_1, JourneyMilestoneType.email_followup_1],
-        JourneyMilestoneType.email_followup_3: [JourneyMilestoneType.email_1, JourneyMilestoneType.email_followup_1, JourneyMilestoneType.email_followup_2],
     }
     
     # Define prerequisite chain for mail milestones
@@ -166,43 +196,50 @@ def _link_attempt_to_milestone_scheduler(db: Session, attempt: LeadAttempt):
     else:
         attempt_date = datetime.now(timezone.utc)
     
-    # Get matching rule for this milestone type
-    rule = EMAIL_MILESTONE_RULES.get(milestone.milestone_type)
-    if not rule:
-        return  # Not an email milestone or no rule found
-    
     # Check if prerequisite milestones are completed (must complete in order)
     if not _check_prerequisite_milestones_scheduler(db, journey.id, milestone.milestone_type):
         return
     
-    # Try to match using outcome text
-    matched = rule.matches_outcome(attempt.outcome or "")
-    is_sequence_match = False
+    # Use simple sequence-based matching: count attempts chronologically for contact + channel
+    # This is reliable because all attempts are automated (or manual ones don't affect journey)
+    if not journey.primary_contact_id:
+        return
     
-    # Try sequence-based matching if rule has a sequence matcher and outcome didn't match
-    if not matched and rule.sequence_matcher and journey.primary_contact_id:
-        # Get all attempts for this channel and primary contact
-        attempts_query = db.query(LeadAttempt).filter(
-            LeadAttempt.lead_id == lead_id,
-            LeadAttempt.channel == attempt.channel,
-            LeadAttempt.contact_id == journey.primary_contact_id
-        )
-        attempts = attempts_query.order_by(LeadAttempt.created_at.asc()).all()
-        
-        if rule.sequence_matcher(attempts, attempt):
-            matched = True
-            is_sequence_match = True
+    # Get sequence position (1-indexed) for this attempt
+    attempt_position = _get_attempt_sequence_position_scheduler(
+        db, lead_id, journey.primary_contact_id, attempt.channel, attempt, milestone.milestone_type
+    )
     
-    if matched:
-        # For sequence-based matches, only require that attempt is after journey start
-        if is_sequence_match:
-            if attempt_date < journey_start:
-                return
-        milestone.status = MilestoneStatus.completed
-        milestone.completed_at = attempt_date
-        milestone.attempt_id = attempt.id
-        milestone.updated_at = datetime.now(timezone.utc)
-        db.flush()
+    if not attempt_position:
+        return
+    
+    # Map position to milestone type based on channel (only email for scheduler)
+    position_to_milestone = {}
+    if attempt.channel == ContactChannel.email:
+        position_to_milestone = {
+            1: JourneyMilestoneType.email_1,
+            2: JourneyMilestoneType.email_followup_1,
+            3: JourneyMilestoneType.email_followup_2,
+        }
+    
+    expected_milestone_type = position_to_milestone.get(attempt_position)
+    
+    if not expected_milestone_type:
+        return
+    
+    # Check if this attempt matches the expected milestone type
+    if milestone.milestone_type != expected_milestone_type:
+        return
+    
+    # Ensure attempt is after journey start
+    if attempt_date < journey_start:
+        return
+    
+    milestone.status = MilestoneStatus.completed
+    milestone.completed_at = attempt_date
+    milestone.attempt_id = attempt.id
+    milestone.updated_at = datetime.now(timezone.utc)
+    db.flush()
 
 
 def _process_scheduled_emails():

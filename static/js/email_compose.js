@@ -44,14 +44,54 @@
     return 'fisseha';
   }
 
+  // Helper to determine next email template from journey
+  async function getNextEmailTemplate(leadId) {
+    try {
+      const response = await fetch(`/api/leads/${leadId}/journey`);
+      if (!response.ok) {
+        // No journey exists or error - default to initial
+        return { variant: 'initial', label: 'Initial Contact' };
+      }
+      
+      const journeyData = await response.json();
+      if (!journeyData || !journeyData.email) {
+        return { variant: 'initial', label: 'Initial Contact' };
+      }
+      
+      // Find the first incomplete email milestone
+      const emailMilestones = journeyData.email || [];
+      const nextMilestone = emailMilestones.find(m => 
+        m.status === 'pending' || m.status === 'overdue'
+      );
+      
+      if (!nextMilestone) {
+        // All emails completed - default to final nudge
+        return { variant: 'followup_2', label: 'Final Nudge' };
+      }
+      
+      // Map milestone type to template variant
+      const typeToVariant = {
+        'email_1': { variant: 'initial', label: 'Initial Contact' },
+        'email_followup_1': { variant: 'followup_1', label: 'Follow-up #1' },
+        'email_followup_2': { variant: 'followup_2', label: 'Final Nudge' },
+      };
+      
+      return typeToVariant[nextMilestone.type] || { variant: 'initial', label: 'Initial Contact' };
+    } catch (error) {
+      console.error('Error fetching journey data:', error);
+      // Default to initial on error
+      return { variant: 'initial', label: 'Initial Contact' };
+    }
+  }
+
   // Helper to reset modal
   function resetModal() {
     modal.style.display = 'none';
     form.reset();
     bodyEditor.innerHTML = '';
-    const templateSelector = document.getElementById('email-template-variant');
-    if (templateSelector) {
-      templateSelector.value = 'initial';
+    const templateDisplay = document.getElementById('email-template-display');
+    if (templateDisplay) {
+      templateDisplay.textContent = '';
     }
     const scheduleGroup = document.getElementById('schedule-group');
     if (scheduleGroup) {
@@ -161,25 +201,18 @@
     modal.style.display = 'flex';
     toInput.value = `${contactName} <${contactEmail}>`;
 
-    // Load initial template
-    const templateSelector = document.getElementById('email-template-variant');
-    const templateVariant = templateSelector?.value || 'initial';
-    loadEmailTemplate(templateVariant);
+    // Determine next template from journey
+    const nextTemplate = await getNextEmailTemplate(leadId);
+    const templateDisplay = document.getElementById('email-template-display');
+    if (templateDisplay) {
+      templateDisplay.textContent = nextTemplate.label;
+    }
+    
+    // Load the determined template
+    loadEmailTemplate(nextTemplate.variant);
   });
   
-  // Handle template selector change using event delegation (works even if element doesn't exist yet)
-  document.addEventListener('change', async (e) => {
-    if (e.target && e.target.id === 'email-template-variant') {
-      const templateVariant = e.target.value;
-      
-      // Ensure modal is open and we have the required IDs
-      if (!currentLeadId || !currentContactId) {
-        return;
-      }
-      
-      await loadEmailTemplate(templateVariant);
-    }
-  });
+  // Template selector removed - template is determined automatically from journey
 
   // Sync body editor to hidden input
   bodyEditor.addEventListener('input', () => {

@@ -106,9 +106,6 @@ The app will be available at `http://localhost:8000`
 
 ## Mgration tasks
 
-ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'competitor_claimed';
-ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'ready';
-
 -- Create ENUM types for journey tracking
 CREATE TYPE journey_status AS ENUM ('active', 'completed', 'paused');
 
@@ -116,7 +113,6 @@ CREATE TYPE journey_milestone_type AS ENUM (
     'email_1',
     'email_followup_1',
     'email_followup_2',
-    'email_followup_3',
     'linkedin_connection',
     'linkedin_message_1',
     'linkedin_message_2',
@@ -129,26 +125,10 @@ CREATE TYPE journey_milestone_type AS ENUM (
 
 CREATE TYPE milestone_status AS ENUM ('pending', 'completed', 'skipped', 'overdue');
 
--- Note: The tables `lead_journey` and `journey_milestone` will be created automatically
--- by SQLAlchemy's Base.metadata.create_all() when the application starts.
 
--- Add primary contact tracking columns
-ALTER TABLE lead_contact ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE lead_journey ADD COLUMN IF NOT EXISTS primary_contact_id BIGINT REFERENCES lead_contact(id) ON DELETE SET NULL;
 
-WITH cutoff AS (
-    SELECT date_trunc('week', now())  -- Monday 00:00 (DB timezone)
-           - interval '7 days'        -- previous Monday
-           + interval '18 hours'      -- 6:00 PM
-           AS ts
-)
-UPDATE business_lead bl
-SET status = 'competitor_claimed',
-    updated_at = now()
-FROM ucp_main_year_e_2025 p, cutoff c
-WHERE bl.property_raw_hash  = p.row_hash 
-  AND p.last_seen < c.ts
-  AND bl.status <> 'competitor_claimed';
+
+
 
 
 

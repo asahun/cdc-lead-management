@@ -27,3 +27,6 @@ print/_tmp_letter.html
 
 # Mac OS artifacts
 .DS_Store
+
+# Cursor artifacts
+.cursor/
