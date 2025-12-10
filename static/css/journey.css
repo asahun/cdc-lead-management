@@ -225,6 +225,78 @@
   text-decoration: underline;
 }
 
+/* Journey Toggle Styles */
+.journey-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.journey-header-section h2 {
+  margin: 0;
+}
+
+.journey-toggle {
+  font-weight: 600;
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.journey-toggle:hover {
+  background: rgba(67, 56, 202, 0.1);
+}
+
+.journey-toggle::after {
+  content: '▾';
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.journey-card:not(.collapsed) .journey-toggle::after {
+  transform: rotate(180deg);
+}
+
+/* Collapsed state */
+.journey-card.collapsed .section-content > #journey-display {
+  display: none;
+}
+
+/* Goal Achieved Message */
+.journey-goal-achieved-message {
+  display: none;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+  border: 2px solid #10b981;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.journey-goal-achieved-message.show {
+  display: block;
+}
+
+.journey-goal-achieved-message p {
+  margin: 0.5rem 0;
+  color: #065f46;
+}
+
+.journey-goal-achieved-message p:first-child {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.journey-goal-achieved-message p:last-child {
+  font-size: 0.95rem;
+  color: #047857;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .journey-channels {
@@ -234,6 +306,12 @@
   .journey-meta {
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  .journey-header-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
   }
 }
 

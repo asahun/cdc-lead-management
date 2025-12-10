@@ -9,6 +9,50 @@
   const journeyDisplay = document.getElementById('journey-display');
   if (!journeyDisplay) return;
 
+  // Get lead status from parent section
+  const journeySection = journeyDisplay.closest('#journey-tracking');
+  const leadStatus = journeySection?.dataset.leadStatus || '';
+  const isResponseReceived = leadStatus === 'response_received';
+  
+  // Set initial collapsed state based on status
+  let isCollapsed = isResponseReceived; // collapsed for response_received, expanded for others
+  
+  const toggleButton = document.getElementById('journey-toggle');
+  const goalMessage = document.getElementById('journey-goal-message');
+
+  function applyCollapsedState() {
+    if (!journeySection) return;
+    
+    if (isCollapsed) {
+      journeySection.classList.add('collapsed');
+    } else {
+      journeySection.classList.remove('collapsed');
+    }
+    
+    // Show goal message only when collapsed AND status is response_received
+    if (goalMessage) {
+      if (isCollapsed && isResponseReceived) {
+        goalMessage.classList.add('show');
+      } else {
+        goalMessage.classList.remove('show');
+      }
+    }
+    
+    if (toggleButton) {
+      toggleButton.textContent = isCollapsed ? 'Show Journey' : 'Hide Journey';
+      toggleButton.setAttribute('aria-expanded', String(!isCollapsed));
+    }
+  }
+
+  // Initialize collapsed state
+  applyCollapsedState();
+
+  // Handle toggle click
+  toggleButton?.addEventListener('click', () => {
+    isCollapsed = !isCollapsed;
+    applyCollapsedState();
+  });
+
   const leadId = journeyDisplay.dataset.leadId;
   const journeyDataStr = journeyDisplay.dataset.journeyData;
   
@@ -29,13 +73,19 @@
           return;
         }
         renderJourney(data);
+        // Re-apply collapsed state after rendering
+        applyCollapsedState();
       })
       .catch(err => {
         console.error('Failed to fetch journey data:', err);
         journeyDisplay.innerHTML = '<div class="journey-error">Failed to load journey data</div>';
+        // Re-apply collapsed state after error
+        applyCollapsedState();
       });
   } else {
     renderJourney(journeyData);
+    // Re-apply collapsed state after rendering
+    applyCollapsedState();
   }
 
   function renderJourney(data) {

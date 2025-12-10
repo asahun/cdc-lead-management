@@ -167,11 +167,22 @@
 
 {% if mode != 'create' and lead.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
     {% if journey_data and journey_data != 'null' %}
-    <section id="journey-tracking" class="card journey-card">
-      <header>
+    <section id="journey-tracking" class="card journey-card" data-lead-status="{{ lead.status.value }}">
+      <header class="journey-header-section">
         <h2>Outreach Journey</h2>
+        <button
+          type="button"
+          class="btn btn-ghost journey-toggle"
+          id="journey-toggle"
+          aria-expanded="true">
+          Hide Journey
+        </button>
       </header>
       <div class="section-content">
+        <div class="journey-goal-achieved-message" id="journey-goal-message">
+          <p>✓ <strong>Goal Achieved - Response Received</strong></p>
+          <p>The lead has responded. Journey milestones are no longer needed.</p>
+        </div>
         <div id="journey-display" data-lead-id="{{ lead.id }}" data-journey-data="{{ journey_data }}">
           <div class="journey-loading">Loading journey data...</div>
         </div>
