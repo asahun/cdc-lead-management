@@ -437,7 +437,18 @@
                     <div class="contact-actions">
                       {% if not c.is_primary %}
                         <form method="post" action="/leads/{{ lead.id }}/contacts/{{ c.id }}/mark-primary" style="display: inline;">
-                          <button type="submit" class="btn btn-secondary btn-sm" title="Mark as Primary Contact">Mark Primary</button>
+                          <button 
+                            type="submit" 
+                            class="btn btn-secondary btn-sm mark-primary-btn" 
+                            data-lead-status="{{ lead.status.value }}"
+                            {% if lead.status.value in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+                            disabled
+                            title="Lead must be in 'ready' status or later to mark a contact as primary. Current status: {{ lead.status.value }}"
+                            {% else %}
+                            title="Mark as Primary Contact"
+                            {% endif %}>
+                            Mark Primary
+                          </button>
                         </form>
                       {% endif %}
                       <a class="btn btn-ghost" href="/leads/{{ lead.id }}/edit?edit_contact_id={{ c.id }}#contacts">Edit</a>

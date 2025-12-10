@@ -656,6 +656,22 @@ body {
     background: rgba(15, 23, 42, 0.16);
   }
 
+  .btn:disabled,
+  .btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #f3f4f6 !important;
+    color: #9ca3af !important;
+    pointer-events: none;
+  }
+
+  .btn:disabled:hover,
+  .btn[disabled]:hover {
+    transform: none;
+    box-shadow: none;
+    background: #f3f4f6 !important;
+  }
+
   .btn-danger {
     background: #dc2626;
     color: #fff;

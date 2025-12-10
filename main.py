@@ -831,27 +831,31 @@ def _initialize_lead_journey(db: Session, lead_id: int, primary_contact_id: int 
     # Check if journey already exists
     existing_journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
     
-    # Get the first attempt date for the primary contact to set journey start date
-    first_attempt_query = db.query(LeadAttempt).filter(
-        LeadAttempt.lead_id == lead_id
-    )
-    if primary_contact_id:
-        first_attempt_query = first_attempt_query.filter(LeadAttempt.contact_id == primary_contact_id)
-    first_attempt = first_attempt_query.order_by(LeadAttempt.created_at.asc()).first()
-    
-    # Set started_at to first attempt date if it exists and is in the past, otherwise use now
-    if first_attempt and first_attempt.created_at:
-        started_at = first_attempt.created_at
-        if started_at.tzinfo is None:
-            started_at = started_at.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
-        # Only use first attempt date if it's in the past (within reason, not too far back)
-        if started_at < now and (now - started_at).days <= 90:  # Allow up to 90 days back
-            journey_start_date = started_at
-        else:
-            journey_start_date = now
-    else:
+    # Determine journey start date (day 0)
+    if existing_journey:
+        # Switching primary contact - always reset day 0 to now (fresh start for new contact)
         journey_start_date = datetime.now(timezone.utc)
+    else:
+        # First time creating journey - use first attempt date if exists, otherwise now
+        first_attempt_query = db.query(LeadAttempt).filter(
+            LeadAttempt.lead_id == lead_id
+        )
+        if primary_contact_id:
+            first_attempt_query = first_attempt_query.filter(LeadAttempt.contact_id == primary_contact_id)
+        first_attempt = first_attempt_query.order_by(LeadAttempt.created_at.asc()).first()
+        
+        if first_attempt and first_attempt.created_at:
+            started_at = first_attempt.created_at
+            if started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            # Only use first attempt date if it's in the past (within reason, not too far back)
+            if started_at < now and (now - started_at).days <= 90:  # Allow up to 90 days back
+                journey_start_date = started_at
+            else:
+                journey_start_date = now
+        else:
+            journey_start_date = datetime.now(timezone.utc)
     
     if existing_journey:
         # Update existing journey with new primary contact
@@ -3139,8 +3143,19 @@ def update_lead(
 
     _mark_property_assigned(db, property_raw_hash, property_id)
     
-    # Journey will be initialized when a primary contact is marked
-    # No longer auto-initialize when status becomes ready
+    # If status is changing to ready and primary contact exists, initialize journey
+    if old_status in {LeadStatus.new, LeadStatus.researching} and lead.status not in {LeadStatus.new, LeadStatus.researching, LeadStatus.invalid, LeadStatus.competitor_claimed}:
+        # Check if primary contact exists
+        primary_contact = db.query(LeadContact).filter(
+            LeadContact.lead_id == lead_id,
+            LeadContact.is_primary == True
+        ).first()
+        if primary_contact:
+            # Check if journey exists
+            existing_journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
+            if not existing_journey:
+                # Initialize journey now
+                _initialize_lead_journey(db, lead_id, primary_contact_id=primary_contact.id)
 
     db.commit()
     return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
@@ -3276,6 +3291,13 @@ def mark_contact_as_primary(
     lead = _get_lead_or_404(db, lead_id)
     contact = _get_contact_or_404(db, contact_id, lead_id)
     
+    # Validate lead is ready before allowing primary contact
+    if lead.status in {LeadStatus.new, LeadStatus.researching, LeadStatus.invalid, LeadStatus.competitor_claimed}:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot mark contact as primary. Lead must be in 'ready' status or later. Current status: {lead.status.value}"
+        )
+    
     # Unset primary flag on all other contacts for this lead
     db.query(LeadContact).filter(
         LeadContact.lead_id == lead_id,
@@ -3289,11 +3311,11 @@ def mark_contact_as_primary(
     db.flush()
     
     # Initialize or update journey for this primary contact
-    if lead.status not in {LeadStatus.new, LeadStatus.researching, LeadStatus.invalid, LeadStatus.competitor_claimed}:
-        journey = _initialize_lead_journey(db, lead_id, primary_contact_id=contact_id)
-        if not journey:
-            db.rollback()
-            raise HTTPException(status_code=400, detail="Failed to initialize journey")
+    # Lead is guaranteed to be ready at this point
+    journey = _initialize_lead_journey(db, lead_id, primary_contact_id=contact_id)
+    if not journey:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Failed to initialize journey")
     
     # Commit all changes (contact update + journey initialization)
     db.commit()
