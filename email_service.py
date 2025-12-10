@@ -335,7 +335,7 @@ def build_email_subject(lead: BusinessLead, template_variant: str = "initial") -
             },
             BusinessOwnerStatus.dissolved: {
                 "initial": "Unclaimed Property Reported Under Dissolved Business: {company} (GA – Ref: {id})",
-                "followup_1": "",  # Empty for dissolved followup_1
+                "followup_1": "Follow-up: Unclaimed Property – Dissolved Business {company} (GA – Ref: {id})",
                 "followup_2": "Follow-up: Unclaimed Property – {company} (GA – Ref: {id})",
             },
         },
