@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     DateTime,
     Boolean,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -125,14 +126,30 @@ class MilestoneStatus(str, enum.Enum):
     overdue = "overdue"
 
 
+class LeadProperty(Base):
+    __tablename__ = "lead_property"
+
+    id = Column(BigInteger, primary_key=True)
+    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    property_id = Column(Text, nullable=False)
+    property_raw_hash = Column(Text, nullable=False)
+    property_amount = Column(Numeric(18, 2))
+    is_primary = Column(Boolean, nullable=False, default=False)
+    added_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    lead = relationship("BusinessLead", back_populates="properties")
+    
+    __table_args__ = (
+        # Unique constraint: a property can only be assigned to one lead
+        UniqueConstraint('property_raw_hash', name='uq_lead_property_raw_hash'),
+    )
+
+
 class BusinessLead(Base):
     __tablename__ = "business_lead"
 
     id = Column(BigInteger, primary_key=True)
-    property_id = Column(Text, nullable=False)
     owner_name = Column(Text, nullable=False)
-    property_amount = Column(Numeric(18, 2))
-    property_raw_hash = Column(Text)
 
     status = Column(Enum(LeadStatus, name="lead_status"), nullable=False, default=LeadStatus.new)
     notes = Column(Text)
@@ -145,6 +162,7 @@ class BusinessLead(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
+    properties = relationship("LeadProperty", back_populates="lead", cascade="all, delete-orphan", order_by="LeadProperty.is_primary.desc(), LeadProperty.added_at")
     contacts = relationship("LeadContact", back_populates="lead", cascade="all, delete-orphan")
     attempts = relationship("LeadAttempt", back_populates="lead", cascade="all, delete-orphan")
     comments = relationship("LeadComment", back_populates="lead", cascade="all, delete-orphan")

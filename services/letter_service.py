@@ -103,9 +103,13 @@ def render_letter_pdf(
     else:
         company_for_body = ""
 
-    primary_reference = getattr(property_details, "propertyid", "") or lead.property_id
+    # Get primary property
+    from helpers.property_helpers import get_primary_property
+    primary_prop = get_primary_property(lead)
+    
+    primary_reference = getattr(property_details, "propertyid", "") or (primary_prop.property_id if primary_prop else "")
     primary_holder = getattr(property_details, "holdername", "")
-    primary_amount = getattr(property_details, "propertyamount", "") or lead.property_amount
+    primary_amount = getattr(property_details, "propertyamount", "") or (primary_prop.property_amount if primary_prop else None)
     primary_year = getattr(property_details, "reportyear", "")
     primary_type = (
         getattr(property_details, "propertytypedescription", None)
@@ -199,9 +203,11 @@ def _render_pdf_from_html(html: str) -> bytes:
 
 
 def get_property_for_lead(db: Session, lead: BusinessLead) -> Optional[PropertyView]:
-    if not lead.property_raw_hash:
+    from helpers.property_helpers import get_primary_property
+    primary_prop = get_primary_property(lead)
+    if not primary_prop or not primary_prop.property_raw_hash:
         return None
     return db.scalar(
-        select(PropertyView).where(PropertyView.raw_hash == lead.property_raw_hash)
+        select(PropertyView).where(PropertyView.raw_hash == primary_prop.property_raw_hash)
     )
 

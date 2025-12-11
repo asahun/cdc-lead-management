@@ -6,10 +6,11 @@ from urllib.parse import urlencode
 from typing import Optional
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, and_
+from sqlalchemy import select, func, or_, and_, exists
 
 from models import (
     BusinessLead,
+    LeadProperty,
     LeadAttempt,
     LeadStatus,
     ContactChannel,
@@ -53,10 +54,16 @@ def build_lead_filters(
     # Text search filter
     if q:
         pattern = f"%{q}%"
+        # Search in owner_name and in LeadProperty.property_id
         filters.append(
             or_(
-                BusinessLead.property_id.ilike(pattern),
-                BusinessLead.owner_name.ilike(pattern)
+                BusinessLead.owner_name.ilike(pattern),
+                exists(
+                    select(1)
+                    .select_from(LeadProperty)
+                    .where(LeadProperty.lead_id == BusinessLead.id)
+                    .where(LeadProperty.property_id.ilike(pattern))
+                )
             )
         )
     

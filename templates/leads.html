@@ -188,10 +188,10 @@
     </tr>
   </thead>
   <tbody>
-        {% if not leads_with_flags %}
+        {% if not leads_with_data %}
           <tr><td colspan="9" style="text-align: center; padding: 20px;">No leads found matching the filters.</td></tr>
         {% endif %}
-        {% for l, is_editable in leads_with_flags %}
+        {% for l, is_editable, primary_prop in leads_with_data %}
           <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
       <td class="checkbox-column">
         <input type="checkbox" class="lead-checkbox" data-lead-id="{{ l.id }}" {% if not is_editable %}disabled title="This lead cannot be edited"{% endif %}>
@@ -204,9 +204,9 @@
         {% endif %}
       </td>
       <td>{{ l.id }}</td>
-      <td>{{ l.property_id }}</td>
-      <td>{{ l.owner_name }}</td>
-            <td>{{ l.property_amount|currency }}</td>
+      <td>{{ primary_prop.property_id if primary_prop else '—' }}</td>
+      <td><span class="owner-name">{{ l.owner_name }}</span></td>
+            <td>{{ primary_prop.property_amount|currency if primary_prop and primary_prop.property_amount else '—' }}</td>
             <td><span class="status-pill">{{ l.status.value }}</span></td>
       <td>
               <time class="js-local-time" datetime="{{ l.created_at.isoformat() }}">{{ l.created_at }}</time>

@@ -5,7 +5,7 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Outreach Attempts</h1>
-      <p class="page-subtitle">Lead #{{ lead.id }} · {{ lead.property_id }} — {{ lead.owner_name }}</p>
+      <p class="page-subtitle">Lead #{{ lead.id }} · {{ primary_property.property_id if primary_property else '—' }} — {{ lead.owner_name }}</p>
     </div>
     <div class="page-actions">
       <a class="ghost-link" href="/leads/{{ lead.id }}/edit">Back to Lead</a>

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from db import Base, engine
 from models import (
     BusinessLead,
+    LeadProperty,
     LeadContact,
     LeadAttempt,
     LeadComment,
@@ -44,6 +45,7 @@ Base.metadata.create_all(
     bind=engine,
     tables=[
         BusinessLead.__table__,
+        LeadProperty.__table__,
         LeadContact.__table__,
         LeadAttempt.__table__,
         LeadComment.__table__,

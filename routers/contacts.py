@@ -193,9 +193,12 @@ def generate_contact_letter(
             detail="Contact must have street, city, state, and ZIP before generating a letter.",
         )
 
+    from helpers.property_helpers import get_primary_property
     property_details = get_property_for_lead(db, lead)
     if not property_details:
-        property_details = get_property_by_id(db, lead.property_id)
+        primary_prop = get_primary_property(lead)
+        if primary_prop:
+            property_details = get_property_by_id(db, primary_prop.property_id)
 
     if not property_details:
         raise HTTPException(

@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, update, cast, String, Table, MetaData, inspect
 
 from db import engine
-from models import PropertyView, BusinessLead
+from models import PropertyView, BusinessLead, LeadProperty
+from helpers.property_helpers import get_primary_property
 
 # Constants
 PROPERTY_MIN_AMOUNT = Decimal("10000")
@@ -167,17 +168,22 @@ def get_property_details_for_lead(db: Session, lead: BusinessLead, year: str | N
     if not year:
         year = DEFAULT_YEAR
     
+    # Get primary property
+    primary_prop = get_primary_property(lead)
+    if not primary_prop:
+        return None
+    
     # Try all available years if property not found in specified year
     available_years = get_available_years(db)
     years_to_try = [year] + [y for y in available_years if y != year]
     
     for try_year in years_to_try:
-        if lead.property_raw_hash:
-            prop = get_property_by_raw_hash(db, lead.property_raw_hash, try_year)
+        if primary_prop.property_raw_hash:
+            prop = get_property_by_raw_hash(db, primary_prop.property_raw_hash, try_year)
             if prop:
                 return prop
-        if lead.property_id:
-            prop = get_property_by_id(db, lead.property_id, try_year)
+        if primary_prop.property_id:
+            prop = get_property_by_id(db, primary_prop.property_id, try_year)
             if prop:
                 return prop
     
@@ -215,8 +221,8 @@ def unmark_property_if_unused(db: Session, property_raw_hash: str | None, proper
     """Unmark a property if it's no longer used by any lead."""
     if property_raw_hash:
         still_used = db.scalar(
-            select(BusinessLead.id)
-            .where(BusinessLead.property_raw_hash == property_raw_hash)
+            select(LeadProperty.id)
+            .where(LeadProperty.property_raw_hash == property_raw_hash)
             .limit(1)
         )
         if not still_used:
@@ -225,8 +231,8 @@ def unmark_property_if_unused(db: Session, property_raw_hash: str | None, proper
 
     if property_id:
         still_used = db.scalar(
-            select(BusinessLead.id)
-            .where(BusinessLead.property_id == property_id)
+            select(LeadProperty.id)
+            .where(LeadProperty.property_id == property_id)
             .limit(1)
         )
         if not still_used:
@@ -239,11 +245,12 @@ def sync_existing_property_assignments():
     
     db = SessionLocal()
     try:
+        # Get all property_raw_hashes from LeadProperty table
         raw_hashes = {
             value
             for value in db.scalars(
-                select(BusinessLead.property_raw_hash).where(
-                    BusinessLead.property_raw_hash.is_not(None)
+                select(LeadProperty.property_raw_hash).where(
+                    LeadProperty.property_raw_hash.is_not(None)
                 )
             ).all()
             if value
@@ -255,11 +262,12 @@ def sync_existing_property_assignments():
                 .values(assigned_to_lead=True)
             )
 
+        # Get all property_ids from LeadProperty table
         property_ids = {
             value
             for value in db.scalars(
-                select(BusinessLead.property_id).where(
-                    BusinessLead.property_id.is_not(None)
+                select(LeadProperty.property_id).where(
+                    LeadProperty.property_id.is_not(None)
                 )
             ).all()
             if value
@@ -322,6 +330,100 @@ def property_navigation_info(db: Session, raw_hash: str, year: str | None = None
         "prev_hash": prev_hash,
         "next_hash": next_hash,
     }
+
+
+def find_related_properties_by_owner_name(
+    db: Session, 
+    owner_name: str, 
+    exclude_lead_id: int | None = None,
+    year: str | None = None
+) -> list[dict]:
+    """
+    Find properties with the same owner name (normalized) that are not already assigned to a lead.
+    
+    Args:
+        db: Database session
+        owner_name: Owner name to search for
+        exclude_lead_id: Optional lead ID to exclude from "already assigned" check (for existing leads)
+        year: Year for property table (defaults to DEFAULT_YEAR)
+    
+    Returns:
+        List of property dictionaries that match the owner name and are not assigned
+    """
+    if not year:
+        year = DEFAULT_YEAR
+    
+    from utils.name_utils import normalize_name
+    
+    # Normalize the owner name for comparison
+    normalized_owner_name = normalize_name(owner_name).lower().strip()
+    if not normalized_owner_name:
+        return []
+    
+    prop_table = get_property_table_for_year(year)
+    
+    # Get all properties with matching owner name (case-insensitive, normalized)
+    # NOTE: We do NOT apply the 10k amount filter here - we want to show ALL properties
+    # with the same owner name so users can choose which ones to add
+    all_props = db.execute(
+        select(
+            prop_table.c.row_hash.label("raw_hash"),
+            prop_table.c.propertyid.label("propertyid"),
+            prop_table.c.ownername.label("ownername"),
+            prop_table.c.propertyamount.label("propertyamount"),
+            prop_table.c.holdername.label("holdername"),
+            prop_table.c.owneraddress1.label("owneraddress1"),
+            prop_table.c.owneraddress2.label("owneraddress2"),
+            prop_table.c.owneraddress3.label("owneraddress3"),
+            prop_table.c.ownercity.label("ownercity"),
+            prop_table.c.ownerstate.label("ownerstate"),
+            prop_table.c.ownerzipcode.label("ownerzipcode"),
+            prop_table.c.ownerrelation.label("ownerrelation"),
+            prop_table.c.lastactivitydate.label("lastactivitydate"),
+            prop_table.c.reportyear.label("reportyear"),
+            prop_table.c.propertytypedescription.label("propertytypedescription"),
+        )
+        .where(prop_table.c.ownername.is_not(None))
+    ).all()
+    
+    # Get all property hashes that are assigned to any lead
+    all_assigned = db.scalars(
+        select(LeadProperty.property_raw_hash).where(LeadProperty.property_raw_hash.is_not(None))
+    ).all()
+    assigned_hashes = set(all_assigned)
+    
+    # If exclude_lead_id is provided, get properties already in that lead to exclude them
+    if exclude_lead_id:
+        assigned_to_this_lead = db.scalars(
+            select(LeadProperty.property_raw_hash).where(LeadProperty.lead_id == exclude_lead_id)
+        ).all()
+        assigned_to_this_lead_set = set(assigned_to_this_lead)
+    else:
+        assigned_to_this_lead_set = set()
+    
+    # Filter properties by normalized owner name and exclude already assigned
+    related_props = []
+    for prop_row in all_props:
+        prop_dict = dict(prop_row._mapping)
+        prop_owner_name = (prop_dict.get("ownername") or "").strip()
+        normalized_prop_owner = normalize_name(prop_owner_name).lower().strip()
+        
+        # Match if normalized names are the same
+        if normalized_prop_owner == normalized_owner_name:
+            raw_hash = prop_dict.get("raw_hash")
+            # Exclude if already assigned to another lead
+            if raw_hash and raw_hash in assigned_hashes:
+                # Only include if it's assigned to the current lead (we want to show it)
+                if not (exclude_lead_id and raw_hash in assigned_to_this_lead_set):
+                    continue  # Skip - assigned to another lead
+            
+            # Exclude if already in current lead (for existing leads)
+            if exclude_lead_id and raw_hash and raw_hash in assigned_to_this_lead_set:
+                continue  # Skip - already in this lead
+            
+            related_props.append(prop_dict)
+    
+    return related_props
 
 
 def build_gpt_payload(lead: BusinessLead, prop: dict) -> dict:

@@ -9,12 +9,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, cast, String, and_, exists
+from sqlalchemy import select, func, or_, cast, String, and_, exists, update
 
 from db import get_db
 from models import (
     BusinessLead,
+    LeadProperty,
     LeadStatus,
     LeadContact,
     ContactChannel,
@@ -50,6 +52,7 @@ from utils import (
 from helpers.filter_helpers import build_lead_filters, build_filter_query_string, lead_navigation_info
 from helpers.phone_scripts import load_phone_scripts, get_phone_scripts_json
 from helpers.print_log_helpers import get_print_logs_for_lead, serialize_print_log
+from helpers.property_helpers import get_primary_property
 from services.gpt_service import fetch_entity_intelligence, GPTConfigError, GPTServiceError
 from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
@@ -107,17 +110,15 @@ def new_lead_from_property(
         raise HTTPException(status_code=404, detail=f"Property '{property_id}' not found in view")
 
     if prop.get("assigned_to_lead"):
-        existing_lead = db.scalar(
-            select(BusinessLead).where(
-                or_(
-                    BusinessLead.property_raw_hash == prop["raw_hash"],
-                    BusinessLead.property_id == prop["propertyid"],
-                )
+        # Check if property is already assigned to a lead via LeadProperty
+        existing_property = db.scalar(
+            select(LeadProperty).where(
+                LeadProperty.property_raw_hash == prop["raw_hash"]
             )
         )
-        if existing_lead:
+        if existing_property:
             return RedirectResponse(
-                url=f"/leads/{existing_lead.id}/edit",
+                url=f"/leads/{existing_property.lead_id}/edit",
                 status_code=303,
             )
         raise HTTPException(
@@ -131,6 +132,44 @@ def new_lead_from_property(
         prop.get("propertyamount") if prop else None,
         prop,
     )
+    
+    # Fetch related properties for auto-suggestion
+    from services.property_service import find_related_properties_by_owner_name
+    related_props = find_related_properties_by_owner_name(
+        db,
+        prop.get("ownername") or "",
+        exclude_lead_id=None
+    )
+    
+    # Format related properties for template
+    related_properties_list = []
+    for rp in related_props:
+        # Exclude the current property and already assigned ones
+        if rp.get("raw_hash") != prop.get("raw_hash"):
+            already_assigned = db.scalar(
+                select(LeadProperty).where(LeadProperty.property_raw_hash == rp.get("raw_hash"))
+            ) is not None
+            if not already_assigned:
+                # Convert Decimal to float for JSON serialization
+                property_amount = rp.get("propertyamount")
+                if property_amount is not None:
+                    if isinstance(property_amount, Decimal):
+                        property_amount = float(property_amount)
+                    elif property_amount is not None:
+                        try:
+                            property_amount = float(property_amount)
+                        except (TypeError, ValueError):
+                            property_amount = None
+                else:
+                    property_amount = None
+                
+                related_properties_list.append({
+                    "property_id": rp.get("propertyid") or "",
+                    "property_raw_hash": rp.get("raw_hash") or "",
+                    "property_amount": property_amount,
+                    "holder_name": rp.get("holdername") or "",
+                    "owner_name": rp.get("ownername") or "",
+                })
 
     return templates.TemplateResponse(
         "lead_form.html",
@@ -141,6 +180,7 @@ def new_lead_from_property(
             "property_id": prop["propertyid"],
             "owner_name": prop["ownername"],
             "property_amount": prop["propertyamount"],
+            "related_properties": related_properties_list,
             "statuses": list(LeadStatus),
             "contacts": [],
             "attempts": [],
@@ -173,6 +213,7 @@ def create_lead(
     owner_name: str = Form(...),
     property_amount: float | None = Form(None),
     property_raw_hash: str | None = Form(None),
+    additional_properties: str | None = Form(None),  # JSON array of additional property data
     status: LeadStatus = Form(LeadStatus.new),
     notes: str | None = Form(None),
     owner_type: OwnerType = Form(OwnerType.business),
@@ -187,10 +228,9 @@ def create_lead(
         individual_owner_status, validate=True
     )
 
+    # Create lead without property fields
     lead = BusinessLead(
-        property_id=property_id,
         owner_name=owner_name,
-        property_amount=property_amount,
         status=status,
         notes=notes,
         owner_type=owner_type,
@@ -198,10 +238,51 @@ def create_lead(
         owner_size=normalized["owner_size"],
         new_business_name=normalized["new_business_name"],
         individual_owner_status=normalized["individual_owner_status"],
-        property_raw_hash=property_raw_hash,
     )
     db.add(lead)
-    mark_property_assigned(db, property_raw_hash, property_id)
+    db.flush()  # Get lead.id
+    
+    # Create primary property
+    if property_raw_hash:
+        primary_property = LeadProperty(
+            lead_id=lead.id,
+            property_id=property_id,
+            property_raw_hash=property_raw_hash,
+            property_amount=property_amount,
+            is_primary=True,
+        )
+        db.add(primary_property)
+        mark_property_assigned(db, property_raw_hash, property_id)
+    
+    # Add additional properties if provided
+    if additional_properties:
+        try:
+            additional_props_data = json.loads(additional_properties)
+            if isinstance(additional_props_data, list):
+                for prop_data in additional_props_data:
+                    add_prop_id = prop_data.get("property_id")
+                    add_prop_hash = prop_data.get("property_raw_hash")
+                    add_prop_amount = prop_data.get("property_amount")
+                    
+                    if add_prop_id and add_prop_hash:
+                        # Check if already assigned
+                        existing = db.scalar(
+                            select(LeadProperty).where(LeadProperty.property_raw_hash == add_prop_hash)
+                        )
+                        if not existing:
+                            additional_property = LeadProperty(
+                                lead_id=lead.id,
+                                property_id=add_prop_id,
+                                property_raw_hash=add_prop_hash,
+                                property_amount=add_prop_amount,
+                                is_primary=False,
+                            )
+                            db.add(additional_property)
+                            mark_property_assigned(db, add_prop_hash, add_prop_id)
+        except (json.JSONDecodeError, TypeError):
+            # Ignore invalid JSON, just create with primary property
+            pass
+    
     db.commit()
     db.refresh(lead)
     
@@ -255,23 +336,25 @@ def list_leads(
     count_stmt = select(func.count()).select_from(BusinessLead)
 
     prop_table = get_property_table_for_year(year)
-    year_filter = or_(
-        and_(
-            BusinessLead.property_raw_hash.is_not(None),
-            exists(
-                select(1)
-                .select_from(prop_table)
-                .where(prop_table.c.row_hash == BusinessLead.property_raw_hash)
-                .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
-            )
-        ),
-        and_(
-            BusinessLead.property_id.is_not(None),
-            exists(
-                select(1)
-                .select_from(prop_table)
-                .where(cast(prop_table.c.propertyid, String) == BusinessLead.property_id)
-                .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+    # Filter leads that have properties matching the year's property table
+    year_filter = exists(
+        select(1)
+        .select_from(LeadProperty)
+        .where(LeadProperty.lead_id == BusinessLead.id)
+        .where(
+            or_(
+                exists(
+                    select(1)
+                    .select_from(prop_table)
+                    .where(prop_table.c.row_hash == LeadProperty.property_raw_hash)
+                    .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+                ),
+                exists(
+                    select(1)
+                    .select_from(prop_table)
+                    .where(cast(prop_table.c.propertyid, String) == LeadProperty.property_id)
+                    .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+                )
             )
         )
     )
@@ -296,13 +379,17 @@ def list_leads(
 
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE if total else 1
 
-    leads_with_flags = [(lead, is_lead_editable(lead)) for lead in leads]
+    # Get primary property for each lead
+    leads_with_data = []
+    for lead in leads:
+        primary_prop = get_primary_property(lead)
+        leads_with_data.append((lead, is_lead_editable(lead), primary_prop))
 
     return templates.TemplateResponse(
         "leads.html",
         {
             "request": request,
-            "leads_with_flags": leads_with_flags,
+            "leads_with_data": leads_with_data,
             "page": page,
             "total_pages": total_pages,
             "q": q or "",
@@ -408,11 +495,28 @@ def view_lead(
         reverse=True,
     )
 
+    # Get primary property and all properties
+    primary_property = get_primary_property(lead)
+    all_properties = sorted(
+        lead.properties,
+        key=lambda p: (not p.is_primary, p.added_at),
+        reverse=True
+    ) if lead.properties else []
+    
+    # Fetch property details for each property to get holder names
+    from services.property_service import get_property_by_raw_hash
+    properties_with_details = []
+    for prop in all_properties:
+        prop_details = None
+        if prop.property_raw_hash:
+            prop_details = get_property_by_raw_hash(db, prop.property_raw_hash)
+        properties_with_details.append((prop, prop_details))
+    
     property_details = get_property_details_for_lead(db, lead)
     phone_script_context = _build_phone_script_context(
         lead.owner_name,
-        lead.property_id,
-        lead.property_amount,
+        primary_property.property_id if primary_property else None,
+        primary_property.property_amount if primary_property else None,
         property_details,
     )
 
@@ -428,9 +532,12 @@ def view_lead(
             "request": request,
             "lead": lead,
             "mode": "view",
-            "property_id": lead.property_id,
+            "primary_property": primary_property,
+            "all_properties": all_properties,
+            "properties_with_details": properties_with_details,
+            "property_id": primary_property.property_id if primary_property else "",
             "owner_name": lead.owner_name,
-            "property_amount": lead.property_amount,
+            "property_amount": primary_property.property_amount if primary_property else None,
             "statuses": list(LeadStatus),
             "contacts": contacts,
             "attempts": attempts,
@@ -447,8 +554,8 @@ def view_lead(
             "owner_size": lead.owner_size,
             "new_business_name": lead.new_business_name or "",
             "individual_owner_status": lead.individual_owner_status,
-            "property_raw_hash": lead.property_raw_hash,
-            "can_generate_letters": False,
+            "property_raw_hash": primary_property.property_raw_hash if primary_property else "",
+            "can_generate_letters": bool(primary_property and primary_property.property_raw_hash),
             "phone_scripts": PHONE_SCRIPTS,
             "phone_scripts_json": PHONE_SCRIPTS_JSON,
             "phone_script_context_json": json.dumps(phone_script_context, default=str),
@@ -537,11 +644,28 @@ def edit_lead(
         reverse=True,
     )
 
+    # Get primary property and all properties
+    primary_property = get_primary_property(lead)
+    all_properties = sorted(
+        lead.properties,
+        key=lambda p: (not p.is_primary, p.added_at),
+        reverse=True
+    ) if lead.properties else []
+    
+    # Fetch property details for each property to get holder names
+    from services.property_service import get_property_by_raw_hash
+    properties_with_details = []
+    for prop in all_properties:
+        prop_details = None
+        if prop.property_raw_hash:
+            prop_details = get_property_by_raw_hash(db, prop.property_raw_hash)
+        properties_with_details.append((prop, prop_details))
+    
     property_details = get_property_details_for_lead(db, lead)
     phone_script_context = _build_phone_script_context(
         lead.owner_name,
-        lead.property_id,
-        lead.property_amount,
+        primary_property.property_id if primary_property else None,
+        primary_property.property_amount if primary_property else None,
         property_details,
     )
 
@@ -578,9 +702,12 @@ def edit_lead(
             "request": request,
             "lead": lead,
             "mode": "edit",
-            "property_id": lead.property_id,
+            "primary_property": primary_property,
+            "all_properties": all_properties,
+            "properties_with_details": properties_with_details,
+            "property_id": primary_property.property_id if primary_property else "",
             "owner_name": lead.owner_name,
-            "property_amount": lead.property_amount,
+            "property_amount": primary_property.property_amount if primary_property else None,
             "statuses": list(LeadStatus),
             "contacts": contacts,
             "attempts": attempts,
@@ -598,8 +725,8 @@ def edit_lead(
             "owner_size": lead.owner_size,
             "new_business_name": lead.new_business_name or "",
             "individual_owner_status": lead.individual_owner_status,
-            "property_raw_hash": lead.property_raw_hash,
-            "can_generate_letters": bool(lead.property_raw_hash or lead.property_id),
+            "property_raw_hash": primary_property.property_raw_hash if primary_property else "",
+            "can_generate_letters": bool(primary_property and primary_property.property_raw_hash),
             "phone_scripts": PHONE_SCRIPTS,
             "phone_scripts_json": PHONE_SCRIPTS_JSON,
             "phone_script_context_json": json.dumps(phone_script_context, default=str),
@@ -648,9 +775,7 @@ def update_lead(
     )
 
     old_status = lead.status
-    lead.property_id = property_id
     lead.owner_name = owner_name
-    lead.property_amount = property_amount
     lead.status = status
     lead.notes = notes
     lead.owner_type = owner_type
@@ -658,11 +783,27 @@ def update_lead(
     lead.owner_size = normalized["owner_size"]
     lead.new_business_name = normalized["new_business_name"]
     lead.individual_owner_status = normalized["individual_owner_status"]
-    lead.property_raw_hash = property_raw_hash
-
     lead.updated_at = datetime.now(timezone.utc)
 
-    mark_property_assigned(db, property_raw_hash, property_id)
+    # Update primary property if it exists, otherwise create it
+    primary_prop = get_primary_property(lead)
+    if primary_prop and property_raw_hash:
+        # Update existing primary property
+        primary_prop.property_id = property_id
+        primary_prop.property_amount = property_amount
+        primary_prop.property_raw_hash = property_raw_hash
+        mark_property_assigned(db, property_raw_hash, property_id)
+    elif property_raw_hash:
+        # Create new primary property if none exists
+        primary_property = LeadProperty(
+            lead_id=lead.id,
+            property_id=property_id,
+            property_raw_hash=property_raw_hash,
+            property_amount=property_amount,
+            is_primary=True,
+        )
+        db.add(primary_property)
+        mark_property_assigned(db, property_raw_hash, property_id)
     
     if old_status in {LeadStatus.new, LeadStatus.researching} and lead.status not in {LeadStatus.new, LeadStatus.researching, LeadStatus.invalid, LeadStatus.competitor_claimed}:
         primary_contact = db.query(LeadContact).filter(
@@ -685,15 +826,307 @@ def delete_lead(
 ):
     lead = get_lead_or_404(db, lead_id)
     
-    property_raw_hash = lead.property_raw_hash
-    property_id = lead.property_id
+    # Get all property hashes and IDs before deleting
+    property_data = [
+        (prop.property_raw_hash, prop.property_id)
+        for prop in lead.properties
+    ]
     
     db.delete(lead)
     db.flush()
-    unmark_property_if_unused(db, property_raw_hash, property_id)
+    
+    # Unmark each property if unused
+    for property_raw_hash, property_id in property_data:
+        unmark_property_if_unused(db, property_raw_hash, property_id)
+    
     db.commit()
     
     return RedirectResponse(url="/leads", status_code=303)
+
+
+@router.post("/leads/{lead_id}/properties/add")
+def add_property_to_lead(
+    lead_id: int,
+    property_id: str = Form(...),
+    property_raw_hash: str = Form(...),
+    property_amount: float | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Add a property to a lead."""
+    lead = get_lead_or_404(db, lead_id)
+    
+    # Check if property already assigned to any lead
+    existing = db.scalar(
+        select(LeadProperty).where(LeadProperty.property_raw_hash == property_raw_hash)
+    )
+    if existing:
+        existing_lead = db.get(BusinessLead, existing.lead_id)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Property already assigned to Lead #{existing_lead.id}"
+        )
+    
+    # Create new LeadProperty
+    new_property = LeadProperty(
+        lead_id=lead.id,
+        property_id=property_id,
+        property_raw_hash=property_raw_hash,
+        property_amount=property_amount,
+        is_primary=False,  # New properties are not primary by default
+    )
+    db.add(new_property)
+    mark_property_assigned(db, property_raw_hash, property_id)
+    db.commit()
+    
+    return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
+
+
+@router.post("/leads/{lead_id}/properties/{property_id}/remove")
+def remove_property_from_lead(
+    lead_id: int,
+    property_id: str,
+    db: Session = Depends(get_db),
+):
+    """Remove a property from a lead."""
+    lead = get_lead_or_404(db, lead_id)
+    
+    prop = db.scalar(
+        select(LeadProperty).where(
+            LeadProperty.lead_id == lead_id,
+            LeadProperty.property_id == property_id
+        )
+    )
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Prevent deleting the only property
+    property_count = db.scalar(
+        select(func.count(LeadProperty.id)).where(LeadProperty.lead_id == lead_id)
+    )
+    if property_count <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot remove the only property from a lead."
+        )
+    
+    # Prevent deleting the primary property
+    if prop.is_primary:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot remove the primary property. Set another property as primary first."
+        )
+    
+    property_raw_hash = prop.property_raw_hash
+    db.delete(prop)
+    unmark_property_if_unused(db, property_raw_hash, property_id)
+    db.commit()
+    
+    return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
+
+
+@router.post("/leads/{lead_id}/properties/{property_id}/set-primary")
+def set_primary_property(
+    lead_id: int,
+    property_id: str,
+    db: Session = Depends(get_db),
+):
+    """Set a property as primary for a lead."""
+    lead = get_lead_or_404(db, lead_id)
+    
+    prop = db.scalar(
+        select(LeadProperty).where(
+            LeadProperty.lead_id == lead_id,
+            LeadProperty.property_id == property_id
+        )
+    )
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Set all properties for this lead to is_primary=False
+    db.execute(
+        update(LeadProperty)
+        .where(LeadProperty.lead_id == lead_id)
+        .values(is_primary=False)
+    )
+    
+    # Set selected property to is_primary=True
+    prop.is_primary = True
+    db.commit()
+    
+    return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
+
+
+@router.get("/leads/{lead_id}/properties/related")
+def get_related_properties_for_lead(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get related properties for an existing lead (same owner_name, not already assigned)."""
+    lead = get_lead_or_404(db, lead_id)
+    
+    from services.property_service import find_related_properties_by_owner_name
+    
+    related_props = find_related_properties_by_owner_name(
+        db, 
+        lead.owner_name, 
+        exclude_lead_id=lead_id
+    )
+    
+    # Format for JSON response
+    result = []
+    for prop in related_props:
+        # Check if this property is already in the lead's properties
+        already_in_lead = db.scalar(
+            select(LeadProperty).where(
+                LeadProperty.lead_id == lead_id,
+                LeadProperty.property_raw_hash == prop.get("raw_hash")
+            )
+        ) is not None
+        
+        if not already_in_lead:
+            # Convert Decimal to float for JSON serialization
+            property_amount = prop.get("propertyamount")
+            if property_amount is not None:
+                if isinstance(property_amount, Decimal):
+                    property_amount = float(property_amount)
+                elif property_amount is not None:
+                    try:
+                        property_amount = float(property_amount)
+                    except (TypeError, ValueError):
+                        property_amount = None
+            else:
+                property_amount = None
+            
+            result.append({
+                "property_id": str(prop.get("propertyid") or ""),
+                "property_raw_hash": str(prop.get("raw_hash") or ""),
+                "property_amount": property_amount,
+                "holder_name": str(prop.get("holdername") or ""),
+                "owner_name": str(prop.get("ownername") or ""),
+            })
+    
+    return JSONResponse(content={"properties": result})
+
+
+@router.get("/properties/related")
+def get_related_properties_by_owner_name(
+    owner_name: str = Query(..., description="Owner name to search for"),
+    exclude_lead_id: int | None = Query(None, description="Lead ID to exclude from assignment check"),
+    db: Session = Depends(get_db),
+):
+    """Get related properties by owner name (for new lead creation)."""
+    from services.property_service import find_related_properties_by_owner_name
+    
+    related_props = find_related_properties_by_owner_name(
+        db, 
+        owner_name, 
+        exclude_lead_id=exclude_lead_id
+    )
+    
+    # Format for JSON response
+    result = []
+    for prop in related_props:
+        # Check if property is already assigned to any lead
+        already_assigned = db.scalar(
+            select(LeadProperty).where(
+                LeadProperty.property_raw_hash == prop.get("raw_hash")
+            )
+        ) is not None
+        
+        if not already_assigned:
+            # Convert Decimal to float for JSON serialization
+            property_amount = prop.get("propertyamount")
+            if property_amount is not None:
+                if isinstance(property_amount, Decimal):
+                    property_amount = float(property_amount)
+                elif property_amount is not None:
+                    try:
+                        property_amount = float(property_amount)
+                    except (TypeError, ValueError):
+                        property_amount = None
+            else:
+                property_amount = None
+            
+            result.append({
+                "property_id": str(prop.get("propertyid") or ""),
+                "property_raw_hash": str(prop.get("raw_hash") or ""),
+                "property_amount": property_amount,
+                "holder_name": str(prop.get("holdername") or ""),
+                "owner_name": str(prop.get("ownername") or ""),
+            })
+    
+    return JSONResponse(content={"properties": result})
+
+
+@router.post("/leads/{lead_id}/properties/add-bulk")
+def add_properties_bulk(
+    lead_id: int,
+    property_ids: str = Form(...),  # JSON array of property data
+    db: Session = Depends(get_db),
+):
+    """Add multiple properties to a lead at once."""
+    lead = get_lead_or_404(db, lead_id)
+    
+    try:
+        properties_data = json.loads(property_ids)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid property_ids JSON")
+    
+    if not isinstance(properties_data, list):
+        raise HTTPException(status_code=400, detail="property_ids must be an array")
+    
+    added_count = 0
+    errors = []
+    
+    for prop_data in properties_data:
+        property_id = prop_data.get("property_id")
+        property_raw_hash = prop_data.get("property_raw_hash")
+        property_amount = prop_data.get("property_amount")
+        
+        if not property_id or not property_raw_hash:
+            errors.append(f"Missing property_id or property_raw_hash for one property")
+            continue
+        
+        # Check if property already assigned to any lead
+        existing = db.scalar(
+            select(LeadProperty).where(LeadProperty.property_raw_hash == property_raw_hash)
+        )
+        if existing:
+            if existing.lead_id == lead_id:
+                # Already in this lead, skip
+                continue
+            else:
+                existing_lead = db.get(BusinessLead, existing.lead_id)
+                errors.append(f"Property {property_id} already assigned to Lead #{existing_lead.id}")
+                continue
+        
+        # Create new LeadProperty
+        new_property = LeadProperty(
+            lead_id=lead.id,
+            property_id=property_id,
+            property_raw_hash=property_raw_hash,
+            property_amount=property_amount,
+            is_primary=False,
+        )
+        db.add(new_property)
+        mark_property_assigned(db, property_raw_hash, property_id)
+        added_count += 1
+    
+    db.commit()
+    
+    if errors:
+        # Still return success but include errors
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "added_count": added_count,
+                "errors": errors,
+                "message": f"Added {added_count} properties. {len(errors)} errors occurred."
+            }
+        )
+    
+    return RedirectResponse(url=f"/leads/{lead.id}/edit", status_code=303)
 
 
 @router.post("/leads/bulk/change-status")

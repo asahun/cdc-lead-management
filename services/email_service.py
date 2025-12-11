@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from models import BusinessLead, LeadContact, PropertyView, BusinessOwnerStatus, OwnerType
 from utils.name_utils import format_first_name
+from helpers.property_helpers import get_primary_property
 
 
 # SMTP Configuration (IONIO)
@@ -140,9 +141,13 @@ def _build_template_context(
     company_name = lead.owner_name
     new_entity_name = lead.new_business_name or company_name  # Use new entity name if available, otherwise fall back to company name
     
+    # Get primary property for ID
+    primary_prop = get_primary_property(lead)
+    property_id = primary_prop.property_id if primary_prop else ""
+    
     context = {
         "FirstName": first_name,  # Standardized placeholder for contact's first name (used in all LinkedIn templates)
-        "ID": lead.property_id,
+        "ID": property_id,
         "Company Legal Name": company_name,  # Standardized placeholder for company name (property record name)
         "Company": company_name,  # Alias for Company Legal Name (for shorter usage)
         "Old Entity Legal Name": company_name,  # Same as Company Legal Name (for dissolved/acquired contexts)
@@ -308,7 +313,8 @@ def build_email_subject(lead: BusinessLead, template_variant: str = "initial") -
         lead: The business lead
         template_variant: One of "initial", "followup_1", "followup_2"
     """
-    property_id = lead.property_id or ""
+    primary_prop = get_primary_property(lead)
+    property_id = primary_prop.property_id if primary_prop else ""
     
     # Subject templates organized by owner_type, business_owner_status, and template_variant
     SUBJECT_TEMPLATES = {
@@ -483,20 +489,22 @@ def prep_contact_email(
     if not contact.email:
         raise ValueError("Contact has no email address")
     
-    # Get property details - try raw_hash first, then property_id
+    # Get property details from primary property
     property_details = None
-    if lead.property_raw_hash:
+    primary_prop = get_primary_property(lead)
+    if primary_prop:
         from sqlalchemy import select
-        property_details = db.scalar(
-            select(PropertyView).where(PropertyView.raw_hash == lead.property_raw_hash)
-        )
-    
-    # Fallback to property_id if raw_hash didn't work
-    if not property_details and lead.property_id:
-        from sqlalchemy import select
-        property_details = db.scalar(
-            select(PropertyView).where(PropertyView.propertyid == lead.property_id)
-        )
+        # Try raw_hash first, then property_id
+        if primary_prop.property_raw_hash:
+            property_details = db.scalar(
+                select(PropertyView).where(PropertyView.raw_hash == primary_prop.property_raw_hash)
+            )
+        
+        # Fallback to property_id if raw_hash didn't work
+        if not property_details and primary_prop.property_id:
+            property_details = db.scalar(
+                select(PropertyView).where(PropertyView.propertyid == primary_prop.property_id)
+            )
     
     subject = build_email_subject(lead, template_variant=template_variant)
     body = build_email_body(lead, contact, property_details, profile_key=profile_key, template_variant=template_variant)

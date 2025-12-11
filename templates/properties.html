@@ -72,7 +72,7 @@
         data-row-index="{{ loop.index0 }}"
         data-assigned="{{ 'true' if row.assigned_to_lead else 'false' }}">
       <td class="property-id">{{ row.propertyid }}</td>
-      <td>{{ row.ownername }}</td>
+      <td><span class="owner-name">{{ row.ownername }}</span></td>
       <td>{{ row.propertyamount|currency }}</td>
       <td class="property-status">
         {% if row.assigned_to_lead %}

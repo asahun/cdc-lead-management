@@ -2,8 +2,8 @@
 {% extends "base.html" %}
 {% block content %}
 
-{% set current_property_hash = property_raw_hash or (lead.property_raw_hash if lead else '') %}
-{% set current_property_id = property_id if mode == 'create' else (lead.property_id if lead else '') %}
+{% set current_property_hash = property_raw_hash if mode == 'create' else (primary_property.property_raw_hash if primary_property else '') %}
+{% set current_property_id = property_id if mode == 'create' else (primary_property.property_id if primary_property else '') %}
 
 <div class="page">
   <div class="page-header">
@@ -50,17 +50,6 @@
           {% endif %}
         </div>
       {% endif %}
-{% if current_property_hash or current_property_id %}
-        <button
-          type="button"
-          class="btn btn-secondary btn-inline"
-          data-action="open-property-detail"
-          data-property-hash="{{ current_property_hash }}"
-          data-property-id="{{ current_property_id }}"
-          title="View full property details">
-          View Property Detail
-        </button>
-{% endif %}
 {% if mode != "create" and mode != "view" %}
         <button
           type="button"
@@ -77,17 +66,8 @@
   <form class="card lead-overview" method="post" action="{% if mode == 'create' %}/leads/create{% else %}/leads/{{ lead.id }}/update{% endif %}" {% if mode == 'view' %}onsubmit="return false;"{% endif %}>
     <div class="grid two-column">
   <div>
-    <label>Property ID</label>
-    <input name="property_id" value="{{ current_property_id }}" readonly>
-  </div>
-  <div>
     <label>Owner Name</label>
         <input name="owner_name" value="{{ owner_name if mode == 'create' else lead.owner_name }}" {% if mode != 'create' or mode == 'view' %}readonly{% endif %}>
-  </div>
-  <div>
-    <label>Property Amount</label>
-    <input name="property_amount" type="number" step="0.01"
-               value="{{ property_amount if mode == 'create' else lead.property_amount }}" {% if mode != 'create' or mode == 'view' %}readonly{% endif %}>
   </div>
   <div>
     <label>Status</label>
@@ -156,7 +136,10 @@
       </div>
     </div>
 
-    <input type="hidden" name="property_raw_hash" value="{{ property_raw_hash or '' }}">
+    <input type="hidden" name="property_id" value="{{ property_id if mode == 'create' else (primary_property.property_id if primary_property else '') }}">
+    <input type="hidden" name="property_amount" value="{{ property_amount if mode == 'create' else (primary_property.property_amount if primary_property else '') }}">
+    <input type="hidden" name="property_raw_hash" value="{{ property_raw_hash if mode == 'create' else (primary_property.property_raw_hash if primary_property else '') }}">
+    <input type="hidden" name="additional_properties" id="additional-properties-input" value="">
     <input type="hidden" name="notes" value="{{ '' if mode == 'create' else lead.notes or '' }}">
     {% if mode != 'view' %}
     <div class="form-actions">
@@ -164,6 +147,206 @@
   </div>
     {% endif %}
 </form>
+
+{% if mode != 'create' %}
+  <section class="card properties-section">
+    <header>
+      <h2>Properties for <span class="owner-name">{{ lead.owner_name }}</span></h2>
+      {% if mode != 'view' %}
+      <button type="button" class="btn btn-secondary btn-sm" id="add-property-btn" title="Link related properties to this lead" style="margin-bottom: 8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+        Link Related Properties
+      </button>
+      {% endif %}
+    </header>
+    <div class="section-content">
+      {% if properties_with_details %}
+        <table class="properties-table">
+          <thead>
+            <tr>
+              <th>Property ID</th>
+              <th>Amount</th>
+              <th>Holder Name</th>
+              <th></th>
+              {% if mode != 'view' %}
+              <th>Actions</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for prop, prop_details in properties_with_details %}
+            <tr {% if prop.is_primary %}class="primary-property" style="font-weight: bold; background-color: #f0f8ff;"{% endif %}>
+              <td>
+                <code>{{ prop.property_id }}</code>
+              </td>
+              <td>
+                {% if prop.property_amount %}
+                  {{ prop.property_amount|currency }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if prop_details and prop_details.get('holdername') %}
+                  {{ prop_details.holdername }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td style="width: 40px; text-align: center;">
+                <button type="button" 
+                        class="property-detail-btn" 
+                        data-property-hash="{{ prop.property_raw_hash }}"
+                        data-property-id="{{ prop.property_id }}"
+                        title="View property details"
+                        aria-label="View property details">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </td>
+              {% if mode != 'view' %}
+              <td class="property-actions">
+                {% if all_properties|length > 1 %}
+                  {% if prop.is_primary %}
+                  <span class="text-muted" title="Cannot remove the primary property. Set another property as primary first." style="opacity: 0.4; cursor: not-allowed; font-size: 16px;">🗑️</span>
+                  {% else %}
+                  <button type="button" class="btn btn-sm btn-ghost danger remove-property-btn" 
+                          data-property-id="{{ prop.property_id }}"
+                          data-property-form-action="/leads/{{ lead.id }}/properties/{{ prop.property_id }}/remove"
+                          title="Remove property" 
+                          style="border: none; background: none; padding: 4px 8px; cursor: pointer; font-size: 16px;">
+                    🗑️
+                  </button>
+                  {% endif %}
+                {% else %}
+                <span class="text-muted" title="Cannot remove the only property" style="opacity: 0.4; cursor: not-allowed; font-size: 16px;">🗑️</span>
+                {% endif %}
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted">No properties assigned to this lead.</p>
+      {% endif %}
+    </div>
+  </section>
+  
+  <!-- Modal for adding properties -->
+  <div id="add-property-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h2>Add Properties for <span id="modal-owner-name" class="owner-name"></span></h2>
+      <div id="modal-loading" style="text-align: center; padding: 20px;">
+        <p>Loading related properties...</p>
+      </div>
+      <div id="modal-content" style="display: none;">
+        <div style="margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="select-all-properties" class="property-checkbox-small" style="cursor: pointer;">
+            <strong>Select All</strong>
+          </label>
+        </div>
+        <div id="properties-list" class="related-properties-container">
+          <!-- Properties will be loaded here -->
+        </div>
+        <div id="modal-errors" style="color: #dc2626; margin-top: 12px; display: none;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+          <button type="button" class="btn btn-primary" id="modal-add-btn" disabled>
+            Add Selected (<span id="selected-count">0</span>)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Remove Property Confirmation Modal -->
+  <div id="remove-property-modal" class="modal confirm-modal" style="display: none;">
+    <div class="modal-content confirm-modal-content">
+      <div class="modal-header">
+        <h2>Remove Property</h2>
+        <button type="button" class="modal-close" data-close-remove-property aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to remove this property from the lead?</p>
+        <p id="remove-property-details" style="margin-top: 8px; color: #6b7280; font-size: 13px;"></p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close-remove-property>Cancel</button>
+        <form id="remove-property-form" method="post" style="display: inline;">
+          <button type="submit" class="btn btn-danger">Remove Property</button>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% if mode == 'create' and related_properties %}
+  <section class="card" style="margin-top: 24px;">
+    <header>
+      <h2>Related Properties ({{ related_properties|length }} found)</h2>
+    </header>
+    <div class="section-content">
+      <div style="margin-bottom: 12px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="select-all-related" class="property-checkbox-small" style="cursor: pointer;">
+          <strong>Select All</strong>
+        </label>
+      </div>
+      <div class="related-properties-container">
+        <table class="related-properties-table">
+          <thead>
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+              <th style="text-align: left; padding: 8px; width: 40px;"></th>
+              <th style="text-align: left; padding: 8px;">Property ID</th>
+              <th style="text-align: left; padding: 8px;">Owner Name</th>
+              <th style="text-align: left; padding: 8px;">Amount</th>
+              <th style="text-align: left; padding: 8px;">Holder Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for prop in related_properties %}
+            <tr class="property-row" style="border-bottom: 1px solid #f3f4f6;">
+              <td style="padding: 8px;">
+                <input type="checkbox" class="related-property-checkbox property-checkbox-small" 
+                       data-property-id="{{ prop.property_id }}"
+                       data-property-raw-hash="{{ prop.property_raw_hash }}"
+                       data-property-amount="{{ prop.property_amount or '' }}"
+                       style="cursor: pointer;">
+              </td>
+              <td style="padding: 8px;">
+                <code>{{ prop.property_id }}</code>
+              </td>
+              <td style="padding: 8px;">
+                {% if prop.owner_name %}<span class="owner-name">{{ prop.owner_name }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td style="padding: 8px;">
+                {% if prop.property_amount %}
+                  ${{ "{:,.2f}".format(prop.property_amount) }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td style="padding: 8px;">
+                {{ prop.holder_name or '<span class="text-muted">—</span>'|safe }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top: 12px; color: #6b7280; font-size: 13px;">
+        Select additional properties to associate with this lead. They will be added as secondary properties.
+      </p>
+    </div>
+  </section>
+{% endif %}
 
 {% if mode != 'create' and lead.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
     {% if journey_data and journey_data != 'null' %}
@@ -787,27 +970,27 @@
 
 <script>
   (function () {
-    const trigger = document.querySelector('[data-action="open-property-detail"]');
-    if (!trigger) {
-      return;
-    }
+    // Handle property detail buttons in the properties table
+    const detailButtons = document.querySelectorAll('.property-detail-btn');
+    
+    detailButtons.forEach(button => {
+      button.addEventListener("click", () => {
+        if (typeof window.openPropertyDetail !== "function") {
+          return;
+        }
 
-    trigger.addEventListener("click", () => {
-      if (typeof window.openPropertyDetail !== "function") {
-        return;
-      }
+        const rawHash = button.dataset.propertyHash || "";
+        const propertyId = button.dataset.propertyId || "";
 
-      const rawHash = trigger.dataset.propertyHash || "";
-      const propertyId = trigger.dataset.propertyId || "";
+        if (!rawHash && !propertyId) {
+          return;
+        }
 
-      if (!rawHash && !propertyId) {
-        return;
-      }
-
-      window.openPropertyDetail({
-        rawHash: rawHash || undefined,
-        propertyId: rawHash ? undefined : propertyId,
-        context: "lead",
+        window.openPropertyDetail({
+          rawHash: rawHash || undefined,
+          propertyId: rawHash ? undefined : propertyId,
+          context: "lead",
+        });
       });
     });
   })();
@@ -930,4 +1113,5 @@
 <link rel="stylesheet" href="/static/css/journey.css">
 <script src="/static/js/journey_display.js?v=20241203" defer></script>
 {% endif %}
+<script src="/static/js/property_management.js?v=20241211" defer></script>
 {% endblock %}
