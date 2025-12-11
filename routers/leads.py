@@ -483,7 +483,12 @@ def view_lead(
         failed_email_operator, failed_email_count_int, status
     )
 
-    contacts = list(lead.contacts)
+    # Sort contacts to put primary first
+    contacts = sorted(
+        lead.contacts,
+        key=lambda c: (not c.is_primary, c.id),
+        reverse=False
+    ) if lead.contacts else []
     attempts = sorted(
         lead.attempts,
         key=lambda attempt: attempt.created_at or datetime.min,
@@ -500,7 +505,7 @@ def view_lead(
     all_properties = sorted(
         lead.properties,
         key=lambda p: (not p.is_primary, p.added_at),
-        reverse=True
+        reverse=False
     ) if lead.properties else []
     
     # Fetch property details for each property to get holder names
@@ -632,7 +637,12 @@ def edit_lead(
         failed_email_operator, failed_email_count_int, status
     )
 
-    contacts = list(lead.contacts)
+    # Sort contacts to put primary first
+    contacts = sorted(
+        lead.contacts,
+        key=lambda c: (not c.is_primary, c.id),
+        reverse=False
+    ) if lead.contacts else []
     attempts = sorted(
         lead.attempts,
         key=lambda attempt: attempt.created_at or datetime.min,
@@ -649,7 +659,7 @@ def edit_lead(
     all_properties = sorted(
         lead.properties,
         key=lambda p: (not p.is_primary, p.added_at),
-        reverse=True
+        reverse=False
     ) if lead.properties else []
     
     # Fetch property details for each property to get holder names
