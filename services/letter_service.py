@@ -37,7 +37,8 @@ FILENAME_PREFIX = {
 }
 
 # Paths for shared assets (logos, QR, signature)
-BASE_DIR = Path(__file__).resolve().parent
+# Go up one level from services/ to root
+BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_ASSETS_DIR = BASE_DIR / "static"
 IMG_ASSETS_DIR = STATIC_ASSETS_DIR / "img"
 

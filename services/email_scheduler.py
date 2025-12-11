@@ -16,7 +16,7 @@ from models import (
     ScheduledEmail, ScheduledEmailStatus, LeadAttempt, ContactChannel,
     LeadJourney, JourneyMilestone, MilestoneStatus, JourneyMilestoneType
 )
-from email_service import send_email, resolve_profile, extract_profile_marker
+from services.email_service import send_email, resolve_profile, extract_profile_marker
 from utils import get_next_attempt_number
 from datetime import timedelta
 

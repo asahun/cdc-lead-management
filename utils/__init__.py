@@ -1,25 +1,39 @@
 """
-Utility helpers shared across the application.
+Utility modules for the lead management application.
 """
 
-from sqlalchemy.orm import Session
-from sqlalchemy import select
+# Re-export commonly used utilities
+from utils.formatters import format_currency
+from utils.validators import (
+    get_lead_or_404,
+    get_contact_or_404,
+    normalize_contact_id,
+    is_lead_editable,
+)
+from utils.normalizers import normalize_owner_fields
+from utils.html_processing import (
+    plain_text_to_html,
+    looks_like_html,
+    extract_body_fragment,
+    strip_tags_to_text,
+    prepare_script_content,
+)
+from utils.datetime_helpers import previous_monday_cutoff, APP_TIMEZONE
+from utils.attempt_helpers import get_next_attempt_number
 
-from models import LeadAttempt
-
-
-def get_next_attempt_number(db: Session, lead_id: int) -> int:
-    """
-    Calculate the next attempt number for a lead.
-    
-    This is a shared utility function that can be imported by both main.py
-    and email_scheduler.py to avoid code duplication.
-    """
-    last_attempt = db.scalar(
-        select(LeadAttempt)
-        .where(LeadAttempt.lead_id == lead_id)
-        .order_by(LeadAttempt.attempt_number.desc())
-        .limit(1)
-    )
-    return (last_attempt.attempt_number + 1) if last_attempt else 1
-
+__all__ = [
+    "format_currency",
+    "get_lead_or_404",
+    "get_contact_or_404",
+    "normalize_contact_id",
+    "is_lead_editable",
+    "normalize_owner_fields",
+    "plain_text_to_html",
+    "looks_like_html",
+    "extract_body_fragment",
+    "strip_tags_to_text",
+    "prepare_script_content",
+    "previous_monday_cutoff",
+    "APP_TIMEZONE",
+    "get_next_attempt_number",
+]

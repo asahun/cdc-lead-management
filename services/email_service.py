@@ -21,8 +21,8 @@ from utils.name_utils import format_first_name
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.ionos.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 
-# Template directory
-TEMPLATE_DIR = Path(__file__).parent / "templates" / "email"
+# Template directory (go up one level from services/ to root)
+TEMPLATE_DIR = Path(__file__).parent.parent / "templates" / "email"
 
 # Profile configuration
 PROFILES_ENV_DEFAULTS = {
