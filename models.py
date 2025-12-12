@@ -93,6 +93,7 @@ class ContactType(str, enum.Enum):
     employee = "employee"
     owner = "owner"
     agent = "agent"
+    agent_company = "agent_company"
     heir = "heir"
 
 

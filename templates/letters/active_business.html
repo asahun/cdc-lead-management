@@ -202,9 +202,14 @@
 
   <div class="meta-block">
     <div class="recipient-address">
-      <div class="recipient-name">{{ recipient_name }}</div>
-      {% if title %}<div>{{ title }}</div>{% endif %}
-      {% if company_name %}<div>{{ company_name }}</div>{% endif %}
+        {% if c_o_name %}
+          <div class="recipient-name">{{ company_name or recipient_name }}</div>
+          <div>C/O {{ c_o_name }}</div>
+        {% else %}
+          <div class="recipient-name">{{ recipient_name }}</div>
+          {% if title %}<div>{{ title }}</div>{% endif %}
+          {% if company_name %}<div>{{ company_name }}</div>{% endif %}
+        {% endif %}
       <div>{{ street_address }}</div>
       <div>{{ city_state_zip }}</div>
     </div>
@@ -218,11 +223,15 @@
     Re: Unclaimed Property Associated with {{ subject_name }}
   </div>
 
-  <p>Dear {{ salutation }},</p>
+  {% if salutation == 'To Whom It May Concern,' %}
+    <p>{{ salutation }}</p>
+  {% else %}
+    <p>Dear {{ salutation }},</p>
+  {% endif %}
 
   <p>
     There is an unclaimed property currently held under the name
-    <strong>{{ company_name }}</strong> by the State of Georgia. We are notifying the appropriate officer so this item may be reviewed, verified, and recovered by your organization.
+    <strong>{{ company_name or recipient_name }}</strong> by the State of Georgia. We are notifying the appropriate officer so this item may be reviewed, verified, and recovered by your organization.
   </p>
 
   <div class="record-block">

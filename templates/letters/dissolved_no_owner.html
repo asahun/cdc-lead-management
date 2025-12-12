@@ -72,7 +72,13 @@
 
   <div class="meta-block">
     <div class="recipient-address">
-      <div class="recipient-name">{{ recipient_name }}</div>
+      {% if c_o_name %}
+        <div class="recipient-name">{{ company_name or recipient_name }}</div>
+        <div>C/O {{ c_o_name }}</div>
+      {% else %}
+        <div class="recipient-name">{{ recipient_name }}</div>
+        {% if company_name %}<div>{{ company_name }}</div>{% endif %}
+      {% endif %}
       <div>{{ street_address }}</div>
       <div>{{ city_state_zip }}</div>
     </div>
@@ -85,7 +91,11 @@
     Re: Unclaimed Property Reported Under Dissolved Entity: {{ company_name }}
   </div>
 
-  <p>Dear {{ salutation }},</p>
+  {% if salutation == 'To Whom It May Concern,' %}
+    <p>{{ salutation }}</p>
+  {% else %}
+    <p>Dear {{ salutation }},</p>
+  {% endif %}
 
   <p>
     There is an unclaimed property item reported under the dissolved or inactive business name

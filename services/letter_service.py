@@ -14,6 +14,7 @@ from models import (
     LeadContact,
     OwnerType,
     PropertyView,
+    ContactType,
 )
 from utils.name_utils import normalize_name, split_name, format_first_name
 
@@ -95,13 +96,12 @@ def render_letter_pdf(
 
     new_owner_name = (lead.new_business_name or "").strip()
     original_owner_name = (lead.owner_name or "").strip()
+    business_name_for_address = new_owner_name or original_owner_name
     formatted_owner_name = normalize_name(original_owner_name)
     owner_first_name = format_first_name(original_owner_name)
 
-    if lead.owner_type == OwnerType.business:
-        company_for_body = original_owner_name
-    else:
-        company_for_body = ""
+    # Always use the current business name for company references (new name if present, else owner_name)
+    company_for_body = business_name_for_address
 
     # Get primary property
     from helpers.property_helpers import get_primary_property
@@ -120,14 +120,47 @@ def render_letter_pdf(
     total_properties = 1
     fee_percent = "10"
 
-    recipient_display_name = formatted_contact_name or formatted_owner_name or (lead.owner_name or "").strip()
-    salutation_name = raw_first_name or owner_first_name or "Sir or Madam"
+    # Determine recipient/salutation rules
+    ct = contact.contact_type
+    is_agent_company = (
+        ct == ContactType.agent_company
+        or getattr(ct, "value", None) == "agent_company"
+        or str(ct).split(".")[-1] == "agent_company"
+    )
+    business_recipient = business_name_for_address or (formatted_owner_name or (lead.owner_name or "").strip())
+    company_name_for_body = company_for_body.upper() if company_for_body else None
+    company_name_for_address = company_name_for_body
+    c_o_name = contact_name if is_agent_company else None
+    acquiring_company_for_template = new_owner_name
+
+    if is_agent_company:
+        # No person; recipient is the business; add C/O agent company; no title
+        recipient_display_name = business_recipient
+        salutation_name = "To Whom It May Concern,"
+        title_for_address = None
+        # Show business line in address; agent shown as C/O in template
+        company_name_for_address = company_name_for_body
+        acquiring_company_for_template = None
+    elif contact_name:
+        # Person contact: use person as recipient, include title, include company line
+        recipient_display_name = formatted_contact_name
+        salutation_name = raw_first_name or owner_first_name or "Sir or Madam"
+        title_for_address = (contact.title or "").upper() or None
+        company_name_for_address = company_name_for_body
+    else:
+        # Fallback: use business as recipient, no title, include company line
+        recipient_display_name = business_recipient
+        salutation_name = owner_first_name or "Sir or Madam"
+        title_for_address = None
+        company_name_for_address = company_name_for_body
 
     context = {
         "today": date.today().strftime("%B %d, %Y"),
         "recipient_name": recipient_display_name,
-        "title": (contact.title or "").upper() or None,
-        "company_name": company_for_body.upper() if company_for_body else None,
+        "title": title_for_address,
+        "company_name": company_name_for_address,
+        "company_name_body": company_name_for_body,
+        "c_o_name": c_o_name,
         "street_address": street,
         "city_state_zip": city_state_zip,
         "subject_name": formatted_owner_name or formatted_contact_name or "you",
@@ -142,7 +175,7 @@ def render_letter_pdf(
         "primary_year": primary_year,
         "primary_type": primary_type,
         "total_properties": total_properties,
-        "acquiring_company": new_owner_name,
+        "acquiring_company": acquiring_company_for_template,
         "fee_percent": fee_percent,
         "sender_first_name": "Fisseha",
         "sender_last_name": "Gebresilasie",

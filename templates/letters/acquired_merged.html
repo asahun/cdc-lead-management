@@ -132,9 +132,15 @@
 
   <div class="meta-block">
     <div class="recipient-address">
-      <div class="recipient-name">{{ recipient_name }}</div>
-      {% if title %}<div>{{ title }}</div>{% endif %}
-      {% if acquiring_company %}<div>{{ acquiring_company.upper() }}</div>{% endif %}
+      {% if c_o_name %}
+        <div class="recipient-name">{{ company_name or recipient_name }}</div>
+        <div>C/O {{ c_o_name }}</div>
+      {% else %}
+        <div class="recipient-name">{{ recipient_name }}</div>
+        {% if title %}<div>{{ title }}</div>{% endif %}
+        {% if company_name %}<div>{{ company_name }}</div>{% endif %}
+        {% if acquiring_company %}<div>{{ acquiring_company.upper() }}</div>{% endif %}
+      {% endif %}
       <div>{{ street_address }}</div>
       <div>{{ city_state_zip }}</div>
     </div>
@@ -147,7 +153,11 @@
     Re: Unclaimed Property Reported Under Former Entity: {{ company_name }}
   </div>
 
-  <p>Dear {{ salutation }},</p>
+  {% if salutation == 'To Whom It May Concern,' %}
+    <p>{{ salutation }}</p>
+  {% else %}
+    <p>Dear {{ salutation }},</p>
+  {% endif %}
 
   <p>
     There is an unclaimed property item originally reported under the former entity name
