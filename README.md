@@ -184,7 +184,5 @@ If issues occur after migration:
 python scripts/migrate_and_cleanup_lead_property.py
 ```
 
-
-
-
+ALTER TYPE lead_contact_type ADD VALUE IF NOT EXISTS 'agent_company';
 
