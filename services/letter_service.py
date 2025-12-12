@@ -17,6 +17,9 @@ from models import (
     ContactType,
 )
 from utils.name_utils import normalize_name, split_name, format_first_name
+from utils import format_currency
+from services.property_service import get_property_by_id
+from services.email_service import resolve_profile, DEFAULT_PROFILE_KEY
 
 
 class LetterGenerationError(Exception):
@@ -43,7 +46,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_ASSETS_DIR = BASE_DIR / "static"
 IMG_ASSETS_DIR = STATIC_ASSETS_DIR / "img"
 
-LOGO_PATH = (IMG_ASSETS_DIR / "favicon.ico").resolve()
+LOGO_PATH = (IMG_ASSETS_DIR / "logo.png").resolve()
 QR_PATH = (IMG_ASSETS_DIR / "qr.png").resolve()
 SIGNATURE_PATH = (IMG_ASSETS_DIR / "signature_fish.png").resolve()
 
@@ -199,6 +202,190 @@ def render_letter_pdf(
     slug_base = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in slug_source.strip().lower()).strip("_") or "letter"
     prefix = FILENAME_PREFIX.get(template_key, "")
     filename = f"{prefix}{slug_base}.pdf"
+
+    return pdf_bytes, filename
+
+
+def render_one_pager_pdf(
+    jinja_env,
+    lead: BusinessLead,
+    property_details: Optional[PropertyView],
+    db: Session,
+) -> Tuple[bytes, str]:
+    """
+    Render a one-pager PDF for a lead (no contact info).
+    """
+    template_path = "one_pagers/business_one_pager.html"
+
+    try:
+        template = jinja_env.get_template(template_path)
+    except Exception as exc:  # pragma: no cover
+        raise LetterGenerationError(f"Unable to load template '{template_path}': {exc}") from exc
+
+    from helpers.property_helpers import get_primary_property
+
+    primary_prop = get_primary_property(lead)
+
+    new_owner_name = (lead.new_business_name or "").strip()
+    owner_name = (lead.owner_name or "").strip()
+    company_legal_name = new_owner_name or owner_name
+
+    # Scenario mapping
+    if lead.business_owner_status == BusinessOwnerStatus.dissolved:
+        scenario = "dissolved"
+    elif lead.business_owner_status in (BusinessOwnerStatus.acquired_or_merged, BusinessOwnerStatus.active_renamed):
+        scenario = "former_entity"
+    else:
+        scenario = "active"
+
+    old_entity_name = owner_name if scenario == "former_entity" and owner_name else None
+
+    report_year = getattr(property_details, "reportyear", "") if property_details else ""
+    holder_name = getattr(property_details, "holdername", "") if property_details else ""
+    property_type = (
+        getattr(property_details, "propertytypedescription", None)
+        or getattr(property_details, "propertytype", None)
+        or ""
+    ) if property_details else ""
+
+    amount_val = None
+    if property_details and getattr(property_details, "propertyamount", None) not in (None, ""):
+        amount_val = property_details.propertyamount
+    elif primary_prop and getattr(primary_prop, "property_amount", None) not in (None, ""):
+        amount_val = primary_prop.property_amount
+    amount = format_currency(amount_val) if amount_val not in (None, "") else "—"
+
+    state_ref = getattr(property_details, "propertyid", "") if property_details else ""
+    if not state_ref and primary_prop:
+        state_ref = primary_prop.property_id or ""
+
+    state_portal_url = "https://gaclaims.unclaimedproperty.com/"
+    today_str = date.today().strftime("%B %d, %Y")
+
+    # Logo and sender info (use default profile for consistency)
+    logo_path = LOGO_PATH.as_uri() if LOGO_PATH.exists() else ""
+    profile = resolve_profile(DEFAULT_PROFILE_KEY)
+    sender_name = "Load Router, LLC"
+    sender_team = profile.get("full_name", profile.get("label", "Client Relations"))
+    sender_phone = profile.get("phone", "")
+    sender_email = profile.get("from_email", "")
+    sender_website = "www.loadrouter.com"
+
+    # Lead address info (for Known Address)
+    lead_address = ", ".join(
+        part for part in [
+            getattr(lead, "owner_address", None),
+            getattr(lead, "owner_city", None),
+            getattr(lead, "owner_state", None),
+            getattr(lead, "owner_zipcode", None),
+        ] if part
+    ) or "—"
+
+    # Primary contact status (for display)
+    primary_contact = next((c for c in lead.contacts if getattr(c, "is_primary", False)), None) if hasattr(lead, "contacts") else None
+    if primary_contact:
+        primary_contact_status = primary_contact.contact_name
+    else:
+        primary_contact_status = "Not yet designated"
+
+    # Build record list from lead.properties; fallback to primary property_details if none
+    records = []
+    for prop in getattr(lead, "properties", []) or []:
+        pd = get_property_by_id(db, prop.property_id) if prop.property_id else None
+        # pd may be a dict; handle both dict and object
+        def _get(obj, key):
+            if obj is None:
+                return None
+            if isinstance(obj, dict):
+                return obj.get(key)
+            return getattr(obj, key, None)
+
+        ref = _get(pd, "propertyid") or getattr(prop, "property_id", "") or ""
+        holder = _get(pd, "holdername") or getattr(prop, "holder_name", None)
+        ptype = (
+            _get(pd, "propertytypedescription")
+            or _get(pd, "propertytype")
+            or ""
+        )
+        amt_val = _get(pd, "propertyamount")
+        if amt_val in (None, ""):
+            amt_val = getattr(prop, "property_amount", None)
+        amt_fmt = format_currency(amt_val) if amt_val not in (None, "") else "—"
+        records.append({
+            "ref": ref or "—",
+            "holder": holder or "—",
+            "ptype": ptype or "—",
+            "amount": amt_fmt,
+        })
+
+    # If no records collected but property_details exists, add primary
+    if not records and property_details:
+        def _get_pd(obj, key):
+            if obj is None:
+                return None
+            if isinstance(obj, dict):
+                return obj.get(key)
+            return getattr(obj, key, None)
+
+        ref = _get_pd(property_details, "propertyid") or "—"
+        holder = _get_pd(property_details, "holdername") or "—"
+        ptype = (
+            _get_pd(property_details, "propertytypedescription")
+            or _get_pd(property_details, "propertytype")
+            or "—"
+        )
+        amt_val = _get_pd(property_details, "propertyamount")
+        amt_fmt = format_currency(amt_val) if amt_val not in (None, "") else "—"
+        records.append({
+            "ref": ref,
+            "holder": holder,
+            "ptype": ptype,
+            "amount": amt_fmt,
+        })
+
+    has_more_than_5 = len(records) > 5
+    records_display = records[:5] if has_more_than_5 else records
+
+    context = {
+        "date": today_str,
+        "state_ref": state_ref,
+        "company_legal_name": company_legal_name,
+        "scenario": scenario,
+        "old_entity_name": old_entity_name,
+        "report_year": report_year,
+        "holder_name": holder_name,
+        "property_type": property_type,
+        "amount": amount,
+        "state_portal_url": state_portal_url,
+        "has_more_than_5": has_more_than_5,
+        "records": records_display,
+        # Sender/branding
+        "LogoUrlOrPath": logo_path,
+        "YourBusinessName": sender_name,
+        "YourNameOrTeam": sender_team,
+        "YourPhone": sender_phone,
+        "YourEmail": sender_email,
+        "YourWebsite": sender_website,
+        # Prepared for
+        "CompanyName": company_legal_name,
+        "TodayDate": today_str,
+        "FEINorBlank": "—",
+        "KnownAddress": lead_address,
+        "PrimaryContactStatus": primary_contact_status,
+    }
+
+    html = template.render(**context)
+    pdf_bytes = _render_pdf_from_html(html)
+
+    def _slugify(val) -> str:
+        # Accept non-string (e.g., Decimal), convert safely
+        text = str(val or "").strip()
+        safe = "".join(ch if ch.isalnum() else "_" for ch in text)
+        return safe.strip("_") or "one_pager"
+
+    company_slug = _slugify(company_legal_name)
+    ref_slug = _slugify(state_ref) if state_ref else "ref"
+    filename = f"Unclaimed_Property_Summary_{company_slug}_{ref_slug}.pdf"
 
     return pdf_bytes, filename
 

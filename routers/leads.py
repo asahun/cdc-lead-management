@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, cast, String, and_, exists, update
@@ -41,6 +41,7 @@ from services.property_service import (
     PROPERTY_MIN_AMOUNT,
 )
 from services.journey_service import initialize_lead_journey, get_journey_data
+from services.letter_service import render_one_pager_pdf, get_property_for_lead
 from utils import (
     get_lead_or_404,
     is_lead_editable,
@@ -1259,3 +1260,22 @@ async def bulk_mark_mail_sent(
         "total": len(lead_ids)
     })
 
+
+@router.get("/leads/{lead_id}/one-pager")
+def generate_one_pager(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    """Generate a one-pager PDF for the lead (no contact context)."""
+    lead = get_lead_or_404(db, lead_id)
+
+    property_details = get_property_for_lead(db, lead)
+    if not property_details:
+        raise HTTPException(
+            status_code=400,
+            detail="Lead is not associated with a property record.",
+        )
+
+    pdf_bytes, filename = render_one_pager_pdf(templates.env, lead, property_details, db)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)

@@ -50,6 +50,11 @@
           {% endif %}
         </div>
       {% endif %}
+      {% if mode != "create" %}
+        <div class="action-cluster">
+          <a href="/leads/{{ lead.id }}/one-pager" class="btn btn-secondary">Generate One-Pager</a>
+        </div>
+      {% endif %}
 {% if mode != "create" and mode != "view" %}
         <button
           type="button"

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Unclaimed Property Recovery – One-Page Summary</title>
+  <style>
+    @page { size: letter; margin: 0.55in; }
+    body{
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+      color:#0f172a;
+      background:#fff;
+      line-height:1.25;
+      font-size:12px;
+    }
+    .page{ min-height:100%; display:flex; flex-direction:column; gap:10px; }
+
+    /* Header */
+    .header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding-bottom:10px; border-bottom:2px solid #e2e8f0;
+    }
+    .brand{ display:flex; align-items:center; gap:10px; min-width:45%; }
+    .logo{ height:34px; width:auto; display:block; }
+    .sender{ text-align:right; min-width:45%; }
+    .sender .name{ font-weight:800; font-size:13px; }
+    .sender .meta{ color:#334155; font-size:11px; margin-top:2px; }
+    .sender a{ color:#0b5fff; text-decoration:none; }
+
+    /* Title row */
+    .title{
+      display:flex; justify-content:space-between; gap:10px; align-items:flex-start;
+      margin-top:2px;
+    }
+    .title h1{ font-size:15px; margin:0; letter-spacing:.2px; }
+    .badge{
+      background:#f1f5f9; border:1px solid #cbd5e1; color:#0f172a;
+      font-weight:800; padding:5px 8px; border-radius:999px; font-size:11px;
+      white-space:nowrap;
+    }
+
+    /* Layout blocks */
+    .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .card{
+      border:1px solid #e2e8f0; border-radius:10px; padding:10px; background:#fff;
+    }
+    .card h2{ font-size:12.5px; margin:0 0 6px 0; }
+    .small{ font-size:11px; color:#334155; }
+    .muted{ color:#475569; }
+    .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace; }
+
+    .kv{
+      display:grid; grid-template-columns:120px 1fr; row-gap:4px; column-gap:8px;
+      font-size:11.5px;
+    }
+    .kv .k{ color:#475569; }
+    .kv .v{ font-weight:650; }
+
+    /* Table */
+    table{ width:100%; border-collapse:collapse; font-size:11.5px; }
+    th, td{ border-bottom:1px solid #e2e8f0; padding:7px 6px; vertical-align:top; }
+    th{
+      text-align:left; color:#334155; font-size:11px;
+      background:#f8fafc; border-top:1px solid #e2e8f0;
+    }
+    .right{ text-align:right; white-space:nowrap; }
+
+    /* Process */
+    .steps{
+      display:grid; grid-template-columns: repeat(5, 1fr);
+      gap:6px; margin-top:6px;
+    }
+    .step{
+      border:1px solid #e2e8f0; border-radius:10px; padding:8px; background:#fff;
+      min-height:64px;
+    }
+    .step .n{
+      display:inline-block; font-weight:900; font-size:11px; color:#1d4ed8;
+      background:#eff6ff; border:1px solid #bfdbfe; border-radius:999px;
+      padding:2px 6px; margin-bottom:6px;
+    }
+    .step .t{ font-weight:800; font-size:11.5px; margin:0 0 3px 0; }
+    .step .d{ font-size:10.8px; color:#334155; margin:0; }
+
+    /* CTA */
+    .cta{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      border:1px solid #cbd5e1; background:#f8fafc; border-radius:10px; padding:10px;
+    }
+    .cta .left{ display:flex; flex-direction:column; gap:2px; }
+    .cta .left b{ font-size:12px; }
+    .cta .btn{
+      display:inline-block; padding:8px 10px; border-radius:10px;
+      background:#0b5fff; color:#fff; text-decoration:none; font-weight:800;
+      font-size:11.5px; white-space:nowrap;
+    }
+
+    /* Footer */
+    .footer{
+      margin-top:auto;
+      border-top:2px solid #e2e8f0;
+      padding-top:10px;
+      font-size:10.5px;
+      color:#334155;
+      display:grid;
+      gap:6px;
+    }
+    .fineprint{ color:#475569; }
+
+    @media print{
+      a{ color:#0f172a; text-decoration:none; }
+      .btn{ background:#0f172a !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="brand">
+        <img class="logo" src="{{LogoUrlOrPath}}" alt="Load Router, LLC Logo" />
+      </div>
+
+      <div class="sender">
+        <div class="name">Load Router, LLC</div>
+        <div class="meta">
+          {{YourNameOrTeam}} · {{YourPhone}} · <a href="mailto:{{YourEmail}}">{{YourEmail}}</a><br/>
+          {{YourWebsite}}
+        </div>
+      </div>
+    </div>
+
+    <!-- Title -->
+    <div class="title">
+      <div>
+        <h1>Unclaimed Property Claim Support – One-Page Summary</h1>
+        <div class="small muted" style="margin-top:3px;">
+          Prepared for: <b>{{CompanyName}}</b> &nbsp;·&nbsp; Date: <b>{{TodayDate}}</b>
+        </div>
+      </div>
+      <div class="badge">Proposed Terms & Workflow</div>
+    </div>
+
+    <!-- Snapshot + Terms -->
+    <div class="grid">
+      <div class="card">
+        <h2>Client &amp; Record Context</h2>
+        <div class="kv">
+          <div class="k">Company</div><div class="v">{{CompanyName}}</div>
+          <div class="k">Records Identified</div><div class="v">Reference number(s) listed below</div>
+          <div class="k">Primary Contact</div><div class="v">{{PrimaryContactStatus}}</div>
+        </div>
+        <div class="small muted" style="margin-top:8px;">
+          Please confirm the best signer / reviewer so we can issue the engagement packet and begin immediately.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Proposed Engagement Terms</h2>
+        <div class="kv">
+          <div class="k">Scope</div><div class="v">Document plan + claim package preparation + submission support + follow-up</div>
+          <div class="k">Fee</div><div class="v">10% of funds recovered (success-based; no upfront payment).</div>
+          <div class="k">Payment</div><div class="v">Success-based; the State issues our fee directly upon release (no separate payment step for your team).</div>
+
+        </div>
+        <div class="small muted" style="margin-top:8px;">
+          Next step is a short written agreement. After signature, we immediately begin document identification and collection.
+        </div>
+      </div>
+    </div>
+
+    <!-- Records table -->
+      <div class="card">
+        <h2>Records Identified{% if has_more_than_5 %} (showing first 5){% endif %}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 22%;">Reference #</th>
+              <th style="width: 28%;">Holder / Reported By</th>
+              <th>Description</th>
+              <th class="right" style="width: 14%;">Reported Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if records %}
+              {% for rec in records %}
+              <tr>
+                <td class="mono">{{ rec.ref }}</td>
+                <td>{{ rec.holder }}</td>
+                <td>{{ rec.ptype }}</td>
+                <td class="right">{{ rec.amount }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="4" class="muted">No records available.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+
+        {% if has_more_than_5 %}
+        <div class="small muted" style="margin-top:8px;">
+         Additional records are available beyond the first 5; we can include the full list upon request.
+        </div>
+        {% endif %}
+      </div>
+
+    <!-- Getting Started -->
+    <div class="card">
+      <h2>Getting Started</h2>
+      <div class="small" style="margin-bottom:6px;">
+        To begin, we’ll send a short engagement packet for electronic signature.
+      </div>
+
+      <div class="kv">
+        <div class="k">Needed from you</div>
+        <div class="v">
+          Primary signer / point of contact (name, title, email, phone)
+        </div>
+
+        <div class="k">What happens next</div>
+        <div class="v">
+          Once signed, we proceed with claim preparation and manage follow-ups through resolution.
+        </div>
+      </div>
+
+      <div class="small muted" style="margin-top:8px;">
+        Note: The engagement packet captures the required business details (including FEIN) within the signature workflow.
+      </div>
+    </div>
+
+    <!-- Workflow -->
+    <div class="card">
+      <h2>Execution Workflow</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="n">1</div>
+          <div class="t">Sign</div>
+          <p class="d">Execute engagement documents (CDR/authorization as applicable).</p>
+        </div>
+        <div class="step">
+          <div class="n">2</div>
+          <div class="t">Identify</div>
+          <p class="d">Confirm requirements and build a tailored document checklist.</p>
+        </div>
+        <div class="step">
+          <div class="n">3</div>
+          <div class="t">Assemble</div>
+          <p class="d">Prepare claim package with exhibits and cover details.</p>
+        </div>
+        <div class="step">
+          <div class="n">4</div>
+          <div class="t">Submit</div>
+          <p class="d">Submit/coordinate submission and confirm acceptance.</p>
+        </div>
+        <div class="step">
+          <div class="n">5</div>
+          <div class="t">Follow Up</div>
+          <p class="d">Manage State requests and provide status updates through release.</p>
+        </div>
+      </div>
+      <div class="small muted" style="margin-top:8px;">
+        We keep an audit trail of submissions and requests to reduce internal overhead and ensure continuity.
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="card" style="background:#f8fafc; border-color:#cbd5e1;">
+      <h2 style="margin-bottom:4px;">Next Step</h2>
+      <div class="small">
+        Please confirm the best signer/reviewer (name + title) and preferred email for the engagement packet.
+      </div>
+    </div>
+    
+
+    <!-- Footer / Required disclaimer -->
+
+    <div class="footer">
+      <div class="fineprint">
+        <b>Data Handling:</b> Sensitive documents are exchanged via encrypted channels. Access is limited to authorized users, and audit logs are available upon request.
+      </div>
+      
+      <div class="fineprint">
+        <b>Solicitation / Non-Government Notice:</b> Load Router, LLC is not a government agency and is not affiliated with the State of Georgia.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
