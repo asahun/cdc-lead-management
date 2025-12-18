@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models import BusinessLead, LeadContact, LeadAttempt, ContactChannel
+from models import Lead, LeadContact, LeadAttempt, ContactChannel
 from services.property_service import get_property_details_for_lead
 from services.journey_service import link_attempt_to_milestone
 from utils import get_lead_or_404, get_contact_or_404, get_next_attempt_number
@@ -256,7 +256,7 @@ def preview_linkedin_template(
     db: Session = Depends(get_db),
 ):
     """Preview LinkedIn template with placeholders filled."""
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     

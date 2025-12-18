@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, and_, exists
 
 from models import (
-    BusinessLead,
+    Lead,
     LeadProperty,
     LeadAttempt,
     LeadStatus,
@@ -57,11 +57,11 @@ def build_lead_filters(
         # Search in owner_name and in LeadProperty.property_id
         filters.append(
             or_(
-                BusinessLead.owner_name.ilike(pattern),
+                Lead.owner_name.ilike(pattern),
                 exists(
                     select(1)
                     .select_from(LeadProperty)
-                    .where(LeadProperty.lead_id == BusinessLead.id)
+                    .where(LeadProperty.lead_id == Lead.id)
                     .where(LeadProperty.property_id.ilike(pattern))
                 )
             )
@@ -82,8 +82,8 @@ def build_lead_filters(
             # Build base subquery
             attempt_count_subq_base = (
                 select(func.coalesce(func.count(LeadAttempt.id), 0))
-                .where(LeadAttempt.lead_id == BusinessLead.id)
-                .correlate(BusinessLead)
+                .where(LeadAttempt.lead_id == Lead.id)
+                .correlate(Lead)
             )
             # Add channel filter only if attempt_type is not "all"
             if attempt_filter:
@@ -104,9 +104,9 @@ def build_lead_filters(
         # Note: if print_log_mailed is "all" or empty, no additional filter is applied
         print_log_count_subq = (
             select(func.coalesce(func.count(PrintLog.id), 0))
-            .where(PrintLog.lead_id == BusinessLead.id)
+            .where(PrintLog.lead_id == Lead.id)
             .where(*print_log_filter)
-            .correlate(BusinessLead)
+            .correlate(Lead)
             .scalar_subquery()
         )
         filter_condition = build_count_filter(print_log_operator, print_log_count_int, print_log_count_subq)
@@ -117,9 +117,9 @@ def build_lead_filters(
     if scheduled_email_operator and scheduled_email_count_int is not None:
         scheduled_email_count_subq = (
             select(func.coalesce(func.count(ScheduledEmail.id), 0))
-            .where(ScheduledEmail.lead_id == BusinessLead.id)
+            .where(ScheduledEmail.lead_id == Lead.id)
             .where(ScheduledEmail.status.in_([ScheduledEmailStatus.pending, ScheduledEmailStatus.sent]))
-            .correlate(BusinessLead)
+            .correlate(Lead)
             .scalar_subquery()
         )
         filter_condition = build_count_filter(scheduled_email_operator, scheduled_email_count_int, scheduled_email_count_subq)
@@ -130,9 +130,9 @@ def build_lead_filters(
     if failed_email_operator and failed_email_count_int is not None:
         failed_email_count_subq = (
             select(func.coalesce(func.count(ScheduledEmail.id), 0))
-            .where(ScheduledEmail.lead_id == BusinessLead.id)
+            .where(ScheduledEmail.lead_id == Lead.id)
             .where(ScheduledEmail.status == ScheduledEmailStatus.failed)
-            .correlate(BusinessLead)
+            .correlate(Lead)
             .scalar_subquery()
         )
         filter_condition = build_count_filter(failed_email_operator, failed_email_count_int, failed_email_count_subq)
@@ -143,7 +143,7 @@ def build_lead_filters(
     if status and status.strip():
         try:
             status_enum = LeadStatus[status]
-            filters.append(BusinessLead.status == status_enum)
+            filters.append(Lead.status == status_enum)
         except (KeyError, ValueError):
             pass  # Invalid status, ignore
     
@@ -221,14 +221,14 @@ def lead_navigation_info(
     )
     
     # Use the same ordering as the leads list
-    lead_ordering = BusinessLead.created_at.desc()
+    lead_ordering = Lead.created_at.desc()
     
     # Create ranked subquery with prev/next, applying filters
     ranked_query = select(
-        BusinessLead.id.label("lead_id"),
+        Lead.id.label("lead_id"),
         func.row_number().over(order_by=lead_ordering).label("order_id"),
-        func.lag(BusinessLead.id).over(order_by=lead_ordering).label("prev_lead_id"),
-        func.lead(BusinessLead.id).over(order_by=lead_ordering).label("next_lead_id"),
+        func.lag(Lead.id).over(order_by=lead_ordering).label("prev_lead_id"),
+        func.lead(Lead.id).over(order_by=lead_ordering).label("next_lead_id"),
     )
     
     if filters:

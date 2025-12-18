@@ -832,7 +832,7 @@ def cleanup_invalid_milestones(db: Session, journey_id: int):
     try:
         # Delete milestones with email_followup_3 using raw SQL
         db.execute(
-            text("DELETE FROM journey_milestone WHERE journey_id = :journey_id AND milestone_type = 'email_followup_3'"),
+            text("DELETE FROM lead_journey_milestone WHERE journey_id = :journey_id AND milestone_type = 'email_followup_3'"),
             {"journey_id": journey_id}
         )
         db.flush()

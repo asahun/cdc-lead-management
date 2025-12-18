@@ -2,10 +2,10 @@
 LinkedIn-specific helper functions for template filtering and outcome determination.
 """
 
-from models import BusinessLead, LeadContact, ContactType, BusinessOwnerStatus
+from models import Lead, LeadContact, ContactType, BusinessOwnerStatus
 
 
-def determine_business_status(lead: BusinessLead) -> str:
+def determine_business_status(lead: Lead) -> str:
     """Determine business status string from lead."""
     if lead.business_owner_status == BusinessOwnerStatus.dissolved:
         return "dissolved"

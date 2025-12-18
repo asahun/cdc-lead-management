@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from models import BusinessLead, LeadContact, PropertyView, BusinessOwnerStatus, OwnerType
+from models import Lead, LeadContact, PropertyView, BusinessOwnerStatus, OwnerType
 from utils.name_utils import format_first_name
 from helpers.property_helpers import get_primary_property
 
@@ -76,7 +76,7 @@ TEMPLATE_MAP = {
 }
 
 
-def _get_template_name(lead: BusinessLead, template_variant: str = "initial") -> Optional[str]:
+def _get_template_name(lead: Lead, template_variant: str = "initial") -> Optional[str]:
     """
     Determine which email template to use based on lead status and variant.
     
@@ -123,7 +123,7 @@ def _format_amount(amount: Optional[Decimal]) -> str:
 
 
 def _build_template_context(
-    lead: BusinessLead,
+    lead: Lead,
     contact: LeadContact,
     property_details: Optional[PropertyView],
     profile: Optional[Dict[str, str]] = None,
@@ -276,7 +276,7 @@ def _render_signature(signature_template: str, profile: Dict[str, str]) -> str:
 
 
 def build_email_body(
-    lead: BusinessLead,
+    lead: Lead,
     contact: LeadContact,
     property_details: Optional[PropertyView],
     profile_key: Optional[str] = None,
@@ -305,7 +305,7 @@ def build_email_body(
     return f"{body_content}\n{signature}"
 
 
-def build_email_subject(lead: BusinessLead, template_variant: str = "initial") -> str:
+def build_email_subject(lead: Lead, template_variant: str = "initial") -> str:
     """
     Build email subject line based on lead status and template variant.
     
@@ -475,7 +475,7 @@ def prep_contact_email(
         profile_key: Email profile key
         template_variant: One of "initial", "followup_1", "followup_2"
     """
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise ValueError(f"Lead {lead_id} not found")
     

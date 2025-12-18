@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from models import (
-    BusinessLead,
+    Lead,
     BusinessOwnerStatus,
     LeadContact,
     OwnerType,
@@ -51,7 +51,7 @@ QR_PATH = (IMG_ASSETS_DIR / "qr.png").resolve()
 SIGNATURE_PATH = (IMG_ASSETS_DIR / "signature_fish.png").resolve()
 
 
-def _determine_template_key(lead: BusinessLead) -> str:
+def _determine_template_key(lead: Lead) -> str:
     if lead.owner_type == OwnerType.individual:
         return "individual"
 
@@ -77,7 +77,7 @@ def _build_address_lines(contact: LeadContact) -> Tuple[str, str]:
 
 def render_letter_pdf(
     jinja_env,
-    lead: BusinessLead,
+    lead: Lead,
     contact: LeadContact,
     property_details: Optional[PropertyView],
 ) -> Tuple[bytes, str]:
@@ -208,7 +208,7 @@ def render_letter_pdf(
 
 def render_one_pager_pdf(
     jinja_env,
-    lead: BusinessLead,
+    lead: Lead,
     property_details: Optional[PropertyView],
     db: Session,
 ) -> Tuple[bytes, str]:
@@ -422,7 +422,7 @@ def _render_pdf_from_html(html: str) -> bytes:
     return pdf_bytes
 
 
-def get_property_for_lead(db: Session, lead: BusinessLead) -> Optional[PropertyView]:
+def get_property_for_lead(db: Session, lead: Lead) -> Optional[PropertyView]:
     from helpers.property_helpers import get_primary_property
     primary_prop = get_primary_property(lead)
     if not primary_prop or not primary_prop.property_raw_hash:

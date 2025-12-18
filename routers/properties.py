@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, cast, String, exists, and_
 
 from db import get_db
-from models import OwnerRelationshipAuthority, BusinessLead
+from models import PropertyOwnershipType, Lead
 from services.property_service import (
     get_available_years,
     get_property_table_for_year,
@@ -82,7 +82,11 @@ def list_properties(
     prop_table = get_property_table_for_year(year)
     
     # Build filters using dynamic table
-    filters = [prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT]
+    from sqlalchemy import Integer
+    filters = [
+        prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT,
+        cast(prop_table.c.reportyear, Integer) == int(year)
+    ]
     
     cutoff = previous_monday_cutoff()
     if prop_table.c.last_seen is not None:
@@ -98,7 +102,7 @@ def list_properties(
             )
         )
 
-    # Join with owner_relationship_authority and filter by Claim_Authority if specified
+    # Join with property_ownership_type and filter by Claim_Authority if specified
     claim_authority_filter = None
     if claim_authority is None:
         claim_authority_filter = "Single"
@@ -112,9 +116,9 @@ def list_properties(
     
     join_condition = None
     if claim_authority_filter and claim_authority_filter.lower() in ("unknown", "single", "joint"):
-        join_condition = func.trim(OwnerRelationshipAuthority.code) == func.trim(prop_table.c.ownerrelation)
+        join_condition = func.trim(PropertyOwnershipType.code) == func.trim(prop_table.c.ownerrelation)
         filters.append(
-            func.upper(func.trim(OwnerRelationshipAuthority.Claim_Authority)) == claim_authority_filter.upper()
+            func.upper(func.trim(PropertyOwnershipType.Claim_Authority)) == claim_authority_filter.upper()
         )
 
     property_ordering = (prop_table.c.propertyamount.desc(), prop_table.c.row_hash.asc())
@@ -123,7 +127,7 @@ def list_properties(
         count_stmt = (
             select(func.count())
             .select_from(prop_table)
-            .join(OwnerRelationshipAuthority, join_condition)
+            .join(PropertyOwnershipType, join_condition)
             .where(*filters)
         )
 
@@ -136,7 +140,7 @@ def list_properties(
                 prop_table.c.assigned_to_lead.label("assigned_to_lead"),
                 func.row_number().over(order_by=property_ordering).label("order_id"),
             )
-            .join(OwnerRelationshipAuthority, join_condition)
+            .join(PropertyOwnershipType, join_condition)
             .where(*filters)
         )
     else:

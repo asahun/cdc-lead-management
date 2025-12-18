@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from db import get_db
 from models import (
-    BusinessLead,
+    Lead,
     LeadContact,
     LeadAttempt,
     LeadComment,
@@ -33,7 +33,7 @@ def lead_attempts(
     lead_id: int,
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -83,7 +83,7 @@ def create_lead_comment(
     author: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -118,7 +118,7 @@ def list_print_logs(
     lead_id: int,
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 

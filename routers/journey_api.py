@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from models import (
-    BusinessLead,
+    Lead,
     LeadStatus,
     LeadAttempt,
     LeadJourney,
@@ -198,7 +198,7 @@ async def get_batch_journey_status(
     }
     
     for lead_id in lead_ids:
-        lead = db.get(BusinessLead, lead_id)
+        lead = db.get(Lead, lead_id)
         if not lead or lead.status in journey_hidden_statuses:
             continue
         

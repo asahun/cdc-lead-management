@@ -7,10 +7,10 @@ from typing import Optional
 import re
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, update, cast, String, Table, MetaData, inspect
+from sqlalchemy import select, func, update, cast, String, Integer, Table, MetaData, inspect
 
 from db import engine
-from models import PropertyView, BusinessLead, LeadProperty
+from models import PropertyView, Lead, LeadProperty
 from helpers.property_helpers import get_primary_property
 
 # Constants
@@ -22,60 +22,46 @@ _YEAR_TABLES_LIST: Optional[list[str]] = None
 
 
 def get_available_years(db: Session) -> list[str]:
-    """Discover available year tables from database."""
+    """Discover available years from the unified property table."""
     global _YEAR_TABLES_LIST
     
     if _YEAR_TABLES_LIST is not None:
         return _YEAR_TABLES_LIST
     
-    inspector = inspect(engine)
-    all_tables = inspector.get_table_names()
+    # Query distinct years from the unified property table
+    years = db.scalars(
+        select(PropertyView.reportyear)
+        .distinct()
+        .where(PropertyView.reportyear.is_not(None))
+        .order_by(PropertyView.reportyear.desc())
+    ).all()
     
-    # Filter tables matching pattern ucp_main_year_e_YYYY
-    year_tables = []
-    for table_name in all_tables:
-        if table_name.startswith("ucp_main_year_e_"):
-            # Extract year from table name (e.g., "ucp_main_year_e_2025" -> "2025")
-            year_match = re.search(r"ucp_main_year_e_(\d{4})$", table_name)
-            if year_match:
-                year = year_match.group(1)
-                year_tables.append(year)
-    
-    # Sort descending (newest first)
-    year_tables.sort(reverse=True)
+    # Convert to strings and sort descending (newest first)
+    year_tables = [str(year) for year in years if year is not None]
+    year_tables.sort(reverse=True, key=lambda x: int(x) if x.isdigit() else 0)
     _YEAR_TABLES_LIST = year_tables
     return year_tables
 
 
 def get_property_table_for_year(year: str | None = None) -> Table:
-    """Get SQLAlchemy Table object for the specified year's property table."""
+    """Get SQLAlchemy Table object for the unified property table.
+    
+    Note: The table is unified now, but we still filter by reportyear column.
+    This function returns the table and callers should add year filtering.
+    """
     if not year:
         year = DEFAULT_YEAR
     
-    table_name = f"ucp_main_year_e_{year}"
-    
-    # Check if table exists
-    inspector = inspect(engine)
-    if table_name not in inspector.get_table_names():
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=404,
-            detail=f"Property table for year {year} not found"
-        )
-    
-    # Use reflection to get the table
-    metadata = MetaData()
-    return Table(
-        table_name,
-        metadata,
-        autoload_with=engine,
-        schema=None
-    )
+    # Return the unified property table (PropertyView maps to 'property' table)
+    return PropertyView.__table__
 
 
-def build_property_select(prop_table):
+def build_property_select(prop_table, year: str | None = None):
     """Build the common SELECT statement for property lookups."""
-    return select(
+    if not year:
+        year = DEFAULT_YEAR
+    
+    stmt = select(
         prop_table.c.row_hash.label("raw_hash"),  # Label as raw_hash for consistency
         prop_table.c.propertyid,
         prop_table.c.ownername,
@@ -92,19 +78,44 @@ def build_property_select(prop_table):
         prop_table.c.reportyear,
         prop_table.c.holdername,
         prop_table.c.propertytypedescription,
-    ).where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+    ).where(
+        prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT,
+        cast(prop_table.c.reportyear, Integer) == int(year)
+    )
+    return stmt
 
 
 def get_property_by_id(db: Session, property_id: str, year: str | None = None) -> dict | None:
-    """Get property by ID from the specified year's table. Returns dict with property data."""
+    """Get property by ID from the unified property table. Returns dict with property data."""
     if not year:
         year = DEFAULT_YEAR
     
     prop_table = get_property_table_for_year(year)
     
+    # Build select without amount filter for single property lookup, but filter by year
     result = db.execute(
-        build_property_select(prop_table)
-        .where(cast(prop_table.c.propertyid, String) == property_id)  # Cast to match text type
+        select(
+            prop_table.c.row_hash.label("raw_hash"),
+            prop_table.c.propertyid,
+            prop_table.c.ownername,
+            prop_table.c.propertyamount,
+            prop_table.c.assigned_to_lead,
+            prop_table.c.owneraddress1,
+            prop_table.c.owneraddress2,
+            prop_table.c.owneraddress3,
+            prop_table.c.ownercity,
+            prop_table.c.ownerstate,
+            prop_table.c.ownerzipcode,
+            prop_table.c.ownerrelation,
+            prop_table.c.lastactivitydate,
+            prop_table.c.reportyear,
+            prop_table.c.holdername,
+            prop_table.c.propertytypedescription,
+        )
+        .where(
+            cast(prop_table.c.propertyid, String) == property_id,  # Cast to match text type
+            cast(prop_table.c.reportyear, Integer) == int(year)
+        )
         .limit(1)
     ).first()
     
@@ -114,15 +125,37 @@ def get_property_by_id(db: Session, property_id: str, year: str | None = None) -
 
 
 def get_property_by_raw_hash(db: Session, raw_hash: str, year: str | None = None) -> dict | None:
-    """Get property by raw hash from the specified year's table. Returns dict with property data."""
+    """Get property by raw hash from the unified property table. Returns dict with property data."""
     if not year:
         year = DEFAULT_YEAR
     
     prop_table = get_property_table_for_year(year)
     
+    # Build select without amount filter for single property lookup, but filter by year
+    # Note: raw_hash is unique across all years, but we still filter by year for consistency
     result = db.execute(
-        build_property_select(prop_table)
-        .where(prop_table.c.row_hash == raw_hash)  # Database column is "row_hash"
+        select(
+            prop_table.c.row_hash.label("raw_hash"),
+            prop_table.c.propertyid,
+            prop_table.c.ownername,
+            prop_table.c.propertyamount,
+            prop_table.c.assigned_to_lead,
+            prop_table.c.owneraddress1,
+            prop_table.c.owneraddress2,
+            prop_table.c.owneraddress3,
+            prop_table.c.ownercity,
+            prop_table.c.ownerstate,
+            prop_table.c.ownerzipcode,
+            prop_table.c.ownerrelation,
+            prop_table.c.lastactivitydate,
+            prop_table.c.reportyear,
+            prop_table.c.holdername,
+            prop_table.c.propertytypedescription,
+        )
+        .where(
+            prop_table.c.row_hash == raw_hash,  # Database column is "row_hash"
+            cast(prop_table.c.reportyear, Integer) == int(year)
+        )
         .limit(1)
     ).first()
     
@@ -132,7 +165,7 @@ def get_property_by_raw_hash(db: Session, raw_hash: str, year: str | None = None
 
 
 def get_raw_hash_for_order(db: Session, order_id: int, year: str | None = None) -> str | None:
-    """Get raw hash for a property by order ID from the specified year's table."""
+    """Get raw hash for a property by order ID from the unified property table."""
     if not year:
         year = DEFAULT_YEAR
     
@@ -144,7 +177,10 @@ def get_raw_hash_for_order(db: Session, order_id: int, year: str | None = None) 
             prop_table.c.row_hash.label("raw_hash"),  # Database column is "row_hash", label as "raw_hash"
             func.row_number().over(order_by=property_ordering).label("order_id"),
         )
-        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+        .where(
+            prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT,
+            cast(prop_table.c.reportyear, Integer) == int(year)
+        )
         .subquery()
     )
     return db.scalar(
@@ -163,7 +199,7 @@ def get_property_by_order(db: Session, order_id: int, year: str | None = None) -
     return get_property_by_raw_hash(db, raw_hash, year)
 
 
-def get_property_details_for_lead(db: Session, lead: BusinessLead, year: str | None = None) -> dict | None:
+def get_property_details_for_lead(db: Session, lead: Lead, year: str | None = None) -> dict | None:
     """Get property details for a lead, trying to find it in the specified year's table."""
     if not year:
         year = DEFAULT_YEAR
@@ -286,7 +322,7 @@ def sync_existing_property_assignments():
 
 
 def property_navigation_info(db: Session, raw_hash: str, year: str | None = None):
-    """Get property navigation info for the specified year's table."""
+    """Get property navigation info for the unified property table."""
     if not year:
         year = DEFAULT_YEAR
     
@@ -300,7 +336,10 @@ def property_navigation_info(db: Session, raw_hash: str, year: str | None = None
             func.lag(prop_table.c.row_hash).over(order_by=property_ordering).label("prev_hash"),
             func.lead(prop_table.c.row_hash).over(order_by=property_ordering).label("next_hash"),
         )
-        .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+        .where(
+            prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT,
+            cast(prop_table.c.reportyear, Integer) == int(year)
+        )
         .subquery()
     )
     nav_row = db.execute(
@@ -383,7 +422,10 @@ def find_related_properties_by_owner_name(
             prop_table.c.reportyear.label("reportyear"),
             prop_table.c.propertytypedescription.label("propertytypedescription"),
         )
-        .where(prop_table.c.ownername.is_not(None))
+        .where(
+            prop_table.c.ownername.is_not(None),
+            cast(prop_table.c.reportyear, Integer) == int(year)
+        )
     ).all()
     
     # Get all property hashes that are assigned to any lead
@@ -426,7 +468,7 @@ def find_related_properties_by_owner_name(
     return related_props
 
 
-def build_gpt_payload(lead: BusinessLead, prop: dict) -> dict:
+def build_gpt_payload(lead: Lead, prop: dict) -> dict:
     """Build GPT payload from lead and property dict."""
     report_year_value = None
     if prop.get("reportyear"):

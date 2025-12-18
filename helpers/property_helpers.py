@@ -2,10 +2,10 @@
 Property helpers for lead-property relationships.
 """
 from typing import Optional
-from models import BusinessLead, LeadProperty
+from models import Lead, LeadProperty
 
 
-def get_primary_property(lead: BusinessLead) -> Optional[LeadProperty]:
+def get_primary_property(lead: Lead) -> Optional[LeadProperty]:
     """
     Get the primary property for a lead.
     
@@ -13,7 +13,7 @@ def get_primary_property(lead: BusinessLead) -> Optional[LeadProperty]:
     Returns None if the lead has no properties.
     
     Args:
-        lead: The BusinessLead instance
+        lead: The Lead instance
         
     Returns:
         LeadProperty instance if found, None otherwise

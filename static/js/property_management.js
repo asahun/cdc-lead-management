@@ -135,6 +135,7 @@
                 <th style="text-align: left; padding: 8px;">Property ID</th>
                 <th style="text-align: left; padding: 8px;">Owner Name</th>
                 <th style="text-align: left; padding: 8px;">Amount</th>
+                <th style="text-align: left; padding: 8px;">Year</th>
                 <th style="text-align: left; padding: 8px;">Holder Name</th>
             </tr>
         `;
@@ -159,6 +160,9 @@
                 </td>
                 <td style="padding: 10px 8px;">
                     ${prop.property_amount ? '$' + formatCurrency(prop.property_amount) : '<span class="text-muted">—</span>'}
+                </td>
+                <td style="padding: 10px 8px;">
+                    ${prop.reportyear ? escapeHtml(String(prop.reportyear)) : '<span class="text-muted">—</span>'}
                 </td>
                 <td style="padding: 10px 8px;">
                     ${prop.holder_name ? escapeHtml(prop.holder_name) : '<span class="text-muted">—</span>'}

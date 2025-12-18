@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from models import (
-    BusinessLead,
+    Lead,
     LeadContact,
     LeadAttempt,
     ContactChannel,
@@ -91,7 +91,7 @@ def schedule_contact_email(
     db: Session = Depends(get_db),
 ):
     """Schedule an email to be sent later."""
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
@@ -143,7 +143,7 @@ def get_scheduled_emails(
     db: Session = Depends(get_db),
 ):
     """Get all scheduled emails for a lead."""
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     

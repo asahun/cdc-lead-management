@@ -5,12 +5,12 @@ Validation helpers for database lookups and data validation.
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models import BusinessLead, LeadContact, LeadStatus
+from models import Lead, LeadContact, LeadStatus
 
 
-def get_lead_or_404(db: Session, lead_id: int) -> BusinessLead:
+def get_lead_or_404(db: Session, lead_id: int) -> Lead:
     """Get lead by ID or raise 404 HTTPException."""
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
@@ -31,7 +31,7 @@ def normalize_contact_id(contact_id: str | None) -> int | None:
     return int(contact_id)
 
 
-def is_lead_editable(lead: BusinessLead) -> bool:
+def is_lead_editable(lead: Lead) -> bool:
     """
     Determine if a lead can be edited. Returns False for terminal/archived statuses.
     """

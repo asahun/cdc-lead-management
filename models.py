@@ -17,7 +17,7 @@ from db import Base
 import enum
 
 class PropertyView(Base):
-    __tablename__ = "ucp_main_year_e_2025"
+    __tablename__ = "property"
 
     raw_hash = Column("row_hash", Text, primary_key=True)
     propertyid = Column(Text)
@@ -38,8 +38,8 @@ class PropertyView(Base):
     propertytypedescription = Column(Text)
 
 
-class OwnerRelationshipAuthority(Base):
-    __tablename__ = "owner_relationship_authority"
+class PropertyOwnershipType(Base):
+    __tablename__ = "property_ownership_type"
 
     code = Column("Code", Text, primary_key=True)
     Claim_Authority = Column("Claim_Authority", Text)
@@ -131,14 +131,14 @@ class LeadProperty(Base):
     __tablename__ = "lead_property"
 
     id = Column(BigInteger, primary_key=True)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
     property_id = Column(Text, nullable=False)
     property_raw_hash = Column(Text, nullable=False)
     property_amount = Column(Numeric(18, 2))
     is_primary = Column(Boolean, nullable=False, default=False)
     added_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
-    lead = relationship("BusinessLead", back_populates="properties")
+    lead = relationship("Lead", back_populates="properties")
     
     __table_args__ = (
         # Unique constraint: a property can only be assigned to one lead
@@ -146,8 +146,8 @@ class LeadProperty(Base):
     )
 
 
-class BusinessLead(Base):
-    __tablename__ = "business_lead"
+class Lead(Base):
+    __tablename__ = "lead"
 
     id = Column(BigInteger, primary_key=True)
     owner_name = Column(Text, nullable=False)
@@ -175,7 +175,7 @@ class LeadContact(Base):
     __tablename__ = "lead_contact"
 
     id = Column(BigInteger, primary_key=True)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
 
     contact_name = Column(Text, nullable=False)
     title = Column(Text)
@@ -192,14 +192,14 @@ class LeadContact(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
-    lead = relationship("BusinessLead", back_populates="contacts")
+    lead = relationship("Lead", back_populates="contacts")
 
 
 class LeadAttempt(Base):
     __tablename__ = "lead_attempt"
 
     id = Column(BigInteger, primary_key=True)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
     contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
 
     channel = Column(Enum(ContactChannel, name="contact_channel"), nullable=False)
@@ -209,7 +209,7 @@ class LeadAttempt(Base):
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
-    lead = relationship("BusinessLead", back_populates="attempts")
+    lead = relationship("Lead", back_populates="attempts")
     # if you want contact relationship:
     contact = relationship("LeadContact", foreign_keys=[contact_id])
 
@@ -218,13 +218,13 @@ class LeadComment(Base):
     __tablename__ = "lead_comment"
 
     id = Column(BigInteger, primary_key=True)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
     author = Column(Text)
     body = Column(Text, nullable=False)
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
-    lead = relationship("BusinessLead", back_populates="comments")
+    lead = relationship("Lead", back_populates="comments")
 
 
 class ScheduledEmailStatus(str, enum.Enum):
@@ -236,10 +236,10 @@ class ScheduledEmailStatus(str, enum.Enum):
 
 
 class ScheduledEmail(Base):
-    __tablename__ = "scheduled_email"
+    __tablename__ = "lead_scheduled_email"
 
     id = Column(BigInteger, primary_key=True)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
     contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
     
     to_email = Column(Text, nullable=False)
@@ -253,15 +253,15 @@ class ScheduledEmail(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     sent_at = Column(DateTime(timezone=True), nullable=True)
     
-    lead = relationship("BusinessLead")
+    lead = relationship("Lead")
     contact = relationship("LeadContact", foreign_keys=[contact_id])
 
 
 class PrintLog(Base):
-    __tablename__ = "print_log"
+    __tablename__ = "lead_print_log"
 
     id = Column(BigInteger, primary_key=True)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
     contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
     filename = Column(Text, nullable=False)
     file_path = Column(Text, nullable=False)
@@ -270,7 +270,7 @@ class PrintLog(Base):
     mailed_at = Column(DateTime(timezone=True), nullable=True)
     attempt_id = Column(BigInteger, ForeignKey("lead_attempt.id", ondelete="SET NULL"), nullable=True)
 
-    lead = relationship("BusinessLead", back_populates="print_logs")
+    lead = relationship("Lead", back_populates="print_logs")
     contact = relationship("LeadContact", foreign_keys=[contact_id])
     attempt = relationship("LeadAttempt", foreign_keys=[attempt_id])
 
@@ -279,7 +279,7 @@ class LeadJourney(Base):
     __tablename__ = "lead_journey"
 
     id = Column(BigInteger, primary_key=True)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False, unique=True)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False, unique=True)
     primary_contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
     started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     status = Column(Enum(JourneyStatus, name="journey_status"), nullable=False, default=JourneyStatus.active)
@@ -287,17 +287,17 @@ class LeadJourney(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
-    lead = relationship("BusinessLead", back_populates="journey")
+    lead = relationship("Lead", back_populates="journey")
     primary_contact = relationship("LeadContact", foreign_keys=[primary_contact_id])
     milestones = relationship("JourneyMilestone", back_populates="journey", cascade="all, delete-orphan", order_by="JourneyMilestone.scheduled_day")
 
 
 class JourneyMilestone(Base):
-    __tablename__ = "journey_milestone"
+    __tablename__ = "lead_journey_milestone"
 
     id = Column(BigInteger, primary_key=True)
     journey_id = Column(BigInteger, ForeignKey("lead_journey.id", ondelete="CASCADE"), nullable=False)
-    lead_id = Column(BigInteger, ForeignKey("business_lead.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
     
     milestone_type = Column(Enum(JourneyMilestoneType, name="journey_milestone_type"), nullable=False)
     channel = Column(Enum(ContactChannel, name="contact_channel"), nullable=False)
@@ -307,7 +307,7 @@ class JourneyMilestone(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     attempt_id = Column(BigInteger, ForeignKey("lead_attempt.id", ondelete="SET NULL"), nullable=True)
     
-    parent_milestone_id = Column(BigInteger, ForeignKey("journey_milestone.id", ondelete="SET NULL"), nullable=True)
+    parent_milestone_id = Column(BigInteger, ForeignKey("lead_journey_milestone.id", ondelete="SET NULL"), nullable=True)
     branch_condition = Column(Text, nullable=True)  # "if_connected", "if_not_connected", or None
     
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

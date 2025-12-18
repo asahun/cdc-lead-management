@@ -11,11 +11,11 @@ from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, cast, String, and_, exists, update
+from sqlalchemy import select, func, or_, cast, String, Integer, and_, exists, update
 
 from db import get_db
 from models import (
-    BusinessLead,
+    Lead,
     LeadProperty,
     LeadStatus,
     LeadContact,
@@ -170,6 +170,7 @@ def new_lead_from_property(
                     "property_amount": property_amount,
                     "holder_name": rp.get("holdername") or "",
                     "owner_name": rp.get("ownername") or "",
+                    "reportyear": str(rp.get("reportyear") or "") if rp.get("reportyear") else None,
                 })
 
     return templates.TemplateResponse(
@@ -230,7 +231,7 @@ def create_lead(
     )
 
     # Create lead without property fields
-    lead = BusinessLead(
+    lead = Lead(
         owner_name=owner_name,
         status=status,
         notes=notes,
@@ -333,15 +334,24 @@ def list_leads(
     if page < 1:
         page = 1
 
-    stmt = select(BusinessLead)
-    count_stmt = select(func.count()).select_from(BusinessLead)
+    # Default to current year if not specified
+    if not year:
+        year = DEFAULT_YEAR
+    
+    # Validate year exists
+    available_years = get_available_years(db)
+    if year not in available_years:
+        year = DEFAULT_YEAR
+
+    stmt = select(Lead)
+    count_stmt = select(func.count()).select_from(Lead)
 
     prop_table = get_property_table_for_year(year)
     # Filter leads that have properties matching the year's property table
     year_filter = exists(
         select(1)
         .select_from(LeadProperty)
-        .where(LeadProperty.lead_id == BusinessLead.id)
+        .where(LeadProperty.lead_id == Lead.id)
         .where(
             or_(
                 exists(
@@ -349,12 +359,14 @@ def list_leads(
                     .select_from(prop_table)
                     .where(prop_table.c.row_hash == LeadProperty.property_raw_hash)
                     .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+                    .where(cast(prop_table.c.reportyear, Integer) == int(year))
                 ),
                 exists(
                     select(1)
                     .select_from(prop_table)
                     .where(cast(prop_table.c.propertyid, String) == LeadProperty.property_id)
                     .where(prop_table.c.propertyamount >= PROPERTY_MIN_AMOUNT)
+                    .where(cast(prop_table.c.reportyear, Integer) == int(year))
                 )
             )
         )
@@ -375,7 +387,7 @@ def list_leads(
         count_stmt = count_stmt.where(combined_filter)
 
     total = db.scalar(count_stmt) or 0
-    stmt = stmt.order_by(BusinessLead.created_at.desc()).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
+    stmt = stmt.order_by(Lead.created_at.desc()).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     leads = db.scalars(stmt).all()
 
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE if total else 1
@@ -460,7 +472,7 @@ def view_lead(
     db: Session = Depends(get_db),
 ):
     """Read-only view of a lead."""
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
@@ -605,7 +617,7 @@ def edit_lead(
     status: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
@@ -871,7 +883,7 @@ def add_property_to_lead(
         select(LeadProperty).where(LeadProperty.property_raw_hash == property_raw_hash)
     )
     if existing:
-        existing_lead = db.get(BusinessLead, existing.lead_id)
+        existing_lead = db.get(Lead, existing.lead_id)
         raise HTTPException(
             status_code=400,
             detail=f"Property already assigned to Lead #{existing_lead.id}"
@@ -1014,6 +1026,7 @@ def get_related_properties_for_lead(
                 "property_amount": property_amount,
                 "holder_name": str(prop.get("holdername") or ""),
                 "owner_name": str(prop.get("ownername") or ""),
+                "reportyear": str(prop.get("reportyear") or "") if prop.get("reportyear") else None,
             })
     
     return JSONResponse(content={"properties": result})
@@ -1064,6 +1077,7 @@ def get_related_properties_by_owner_name(
                 "property_amount": property_amount,
                 "holder_name": str(prop.get("holdername") or ""),
                 "owner_name": str(prop.get("ownername") or ""),
+                "reportyear": str(prop.get("reportyear") or "") if prop.get("reportyear") else None,
             })
     
     return JSONResponse(content={"properties": result})
@@ -1107,7 +1121,7 @@ def add_properties_bulk(
                 # Already in this lead, skip
                 continue
             else:
-                existing_lead = db.get(BusinessLead, existing.lead_id)
+                existing_lead = db.get(Lead, existing.lead_id)
                 errors.append(f"Property {property_id} already assigned to Lead #{existing_lead.id}")
                 continue
         
@@ -1165,7 +1179,7 @@ async def bulk_change_status(
     skipped = 0
     
     for lead_id in lead_ids:
-        lead = db.get(BusinessLead, lead_id)
+        lead = db.get(Lead, lead_id)
         if not lead:
             skipped += 1
             continue
@@ -1208,7 +1222,7 @@ async def bulk_mark_mail_sent(
     skipped = 0
     
     for lead_id in lead_ids:
-        lead = db.get(BusinessLead, lead_id)
+        lead = db.get(Lead, lead_id)
         if not lead:
             skipped += 1
             continue

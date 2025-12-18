@@ -5,8 +5,8 @@ Consolidated migration script: Migrate data AND drop old columns in one go.
 This script is for FRESH INSTALLS or when you want to migrate and clean up immediately.
 It does everything in one run:
 1. Creates the lead_property table
-2. Migrates existing data from business_lead to lead_property
-3. Drops old columns from business_lead immediately
+2. Migrates existing data from lead to lead_property
+3. Drops old columns from lead immediately
 4. Verifies everything is clean
 
 IMPORTANT: Backup your database before running this!
@@ -66,15 +66,15 @@ def migrate_and_cleanup():
             print("  Migration will skip existing records (ON CONFLICT).")
         
         # Step 3: Migrate data
-        print("\nStep 2: Migrating data from business_lead to lead_property...")
+        print("\nStep 2: Migrating data from lead to lead_property...")
         
         # Check if old columns still exist
-        has_old_columns = check_column_exists(db, "business_lead", "property_raw_hash")
+        has_old_columns = check_column_exists(db, "lead", "property_raw_hash")
         
         if has_old_columns:
             # Count leads with properties
             leads_with_properties = db.execute(text("""
-                SELECT COUNT(*) FROM business_lead
+                SELECT COUNT(*) FROM lead
                 WHERE property_raw_hash IS NOT NULL
             """)).scalar()
             
@@ -91,7 +91,7 @@ def migrate_and_cleanup():
                         property_amount,
                         true as is_primary,
                         created_at as added_at
-                    FROM business_lead
+                    FROM lead
                     WHERE property_raw_hash IS NOT NULL
                     ON CONFLICT (property_raw_hash) DO NOTHING
                 """))
@@ -132,12 +132,12 @@ def migrate_and_cleanup():
                 print(f"⚠ WARNING: Found {leads_without_primary} leads without a primary property")
         
         # Step 5: Drop old columns
-        print("\nStep 4: Dropping old columns from business_lead...")
+        print("\nStep 4: Dropping old columns from lead...")
         
         if has_old_columns:
-            db.execute(text("ALTER TABLE business_lead DROP COLUMN IF EXISTS property_id"))
-            db.execute(text("ALTER TABLE business_lead DROP COLUMN IF EXISTS property_raw_hash"))
-            db.execute(text("ALTER TABLE business_lead DROP COLUMN IF EXISTS property_amount"))
+            db.execute(text("ALTER TABLE lead DROP COLUMN IF EXISTS property_id"))
+            db.execute(text("ALTER TABLE lead DROP COLUMN IF EXISTS property_raw_hash"))
+            db.execute(text("ALTER TABLE lead DROP COLUMN IF EXISTS property_amount"))
             print("✓ Old columns dropped successfully")
         else:
             print("  Old columns already removed. Nothing to drop.")
@@ -145,7 +145,7 @@ def migrate_and_cleanup():
         # Verify columns are dropped
         remaining_columns = db.execute(text("""
             SELECT column_name FROM information_schema.columns 
-            WHERE table_name = 'business_lead' 
+            WHERE table_name = 'lead' 
             AND column_name IN ('property_id', 'property_raw_hash', 'property_amount')
         """)).fetchall()
         

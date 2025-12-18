@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from models import (
-    BusinessLead,
+    Lead,
     LeadContact,
     LeadStatus,
     ContactType,
@@ -36,7 +36,7 @@ def lead_contacts(
     lead_id: int,
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -173,7 +173,7 @@ def generate_contact_letter(
     contact_id: int,
     db: Session = Depends(get_db),
 ):
-    lead = db.get(BusinessLead, lead_id)
+    lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
