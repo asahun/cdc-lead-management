@@ -1,0 +1,430 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "entitled_entity_response_v12",
+  "schema_version": "v12",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "owner_name_input": {
+          "type": "string"
+        },
+        "state_focus": {
+          "type": "string",
+          "description": "Primary operating state focus for the search, e.g., GA."
+        },
+        "phase1_ga_sos_found": {
+          "type": "boolean"
+        },
+        "phase1_variants_checked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10
+        },
+        "phase1_note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner_name_input",
+        "state_focus",
+        "phase1_ga_sos_found",
+        "phase1_variants_checked",
+        "phase1_note"
+      ]
+    },
+    "context_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ga_sos_selected_record": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Provided for context only. Must not be treated as the output.",
+          "additionalProperties": false
+        },
+        "google_places_context": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Provided for context only. Must not be treated as the output.",
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ga_sos_selected_record",
+        "google_places_context"
+      ]
+    },
+    "hypotheses": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "hypothesis_type": {
+            "type": "string",
+            "enum": [
+              "same_entity",
+              "dba_trade_name_owner",
+              "out_of_state_entity",
+              "successor_by_merger_acquisition",
+              "non_sos_entity_type",
+              "unknown"
+            ]
+          },
+          "candidate_entitled_name": {
+            "type": "string"
+          },
+          "operating_status_web": {
+            "type": "string",
+            "enum": [
+              "operating",
+              "defunct",
+              "unknown"
+            ]
+          },
+          "website": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "primary_contact_page": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mailing_address_web": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10
+          },
+          "named_contacts": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "email": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "phone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "role",
+                "email",
+                "phone",
+                "source_url"
+              ]
+            }
+          },
+          "relationship_notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "source_url": {
+                  "type": "string"
+                },
+                "source_type": {
+                  "type": "string",
+                  "enum": [
+                    "official_site",
+                    "sec_filing",
+                    "state_registry",
+                    "reputable_directory",
+                    "news_release",
+                    "other"
+                  ]
+                },
+                "what_it_supports": {
+                  "type": "string"
+                },
+                "quote_or_extract": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional short extract (<= 25 words)"
+                }
+              },
+              "required": [
+                "source_url",
+                "source_type",
+                "what_it_supports",
+                "quote_or_extract"
+              ]
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "gaps_or_next_checks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10
+          }
+        },
+        "required": [
+          "rank",
+          "hypothesis_type",
+          "candidate_entitled_name",
+          "operating_status_web",
+          "website",
+          "primary_contact_page",
+          "mailing_address_web",
+          "phones",
+          "emails",
+          "named_contacts",
+          "relationship_notes",
+          "evidence",
+          "confidence",
+          "gaps_or_next_checks"
+        ]
+      }
+    },
+    "selected_entitled_entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selected_rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "entitled_business_name": {
+          "type": "string"
+        },
+        "operating_status_web": {
+          "type": "string",
+          "enum": [
+            "operating",
+            "defunct",
+            "unknown"
+          ]
+        },
+        "website": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mailing_address_web": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "best_outreach_channel": {
+          "type": "string",
+          "enum": [
+            "email",
+            "phone",
+            "contact_form",
+            "mail",
+            "unknown"
+          ]
+        },
+        "outreach_contacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "phones": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 10
+            },
+            "emails": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 10
+            },
+            "contact_forms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 5
+            },
+            "named_contacts": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "email": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "source_url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "role",
+                  "email",
+                  "phone",
+                  "source_url"
+                ]
+              }
+            }
+          },
+          "required": [
+            "phones",
+            "emails",
+            "contact_forms",
+            "named_contacts"
+          ]
+        },
+        "why_selected": {
+          "type": "string"
+        },
+        "source_urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 15
+        },
+        "note_on_context_only_sources": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "selected_rank",
+        "entitled_business_name",
+        "operating_status_web",
+        "website",
+        "mailing_address_web",
+        "best_outreach_channel",
+        "outreach_contacts",
+        "why_selected",
+        "source_urls",
+        "note_on_context_only_sources"
+      ]
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model_notes": {
+          "type": "string"
+        },
+        "timestamp_utc": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_notes",
+        "timestamp_utc"
+      ]
+    }
+  },
+  "required": [
+    "query_context",
+    "context_inputs",
+    "hypotheses",
+    "selected_entitled_entity",
+    "meta"
+  ]
+}

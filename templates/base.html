@@ -3,9 +3,12 @@
 <html>
 <head>
   <title>Leads App</title>
-  <link rel="stylesheet" href="/static/css/styles.css?v=20241128">
+  <link rel="stylesheet" href="/static/css/styles.css?v=20241222">
+  <script id="profile-registry-data" type="application/json">
+    {{ profile_registry_json | tojson | safe }}
+  </script>
   <script>
-    window.profileRegistry = {{ profile_registry_json | safe }};
+    window.profileRegistry = JSON.parse(document.getElementById('profile-registry-data').textContent);
   </script>
   <script src="/static/js/profile_selector.js?v=20241128" defer></script>
   <script src="/static/js/notifications.js?v=20241203" defer></script>

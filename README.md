@@ -61,6 +61,13 @@ $env:DATABASE_URL="postgresql+psycopg2://username:password@localhost:5432/databa
 # OpenAI API key (required for entity intelligence)
 $env:OPENAI_API_KEY="key"
 
+# Google Custom Search API (required for web scraping)
+$env:GOOGLE_CUSTOM_SEARCH_API_KEY="key"
+$env:GOOGLE_CUSTOM_SEARCH_ENGINE_ID="engine-id"
+
+# Google Places API (optional, for business location data)
+$env:GOOGLE_PLACES_API_KEY="key"
+
 # Optional: Custom GPT model
 $env:GPT_ENTITY_MODEL="gpt-5.1"
 
@@ -71,6 +78,92 @@ $env:GPT_ENTITY_TIMEOUT_SECONDS="45"
 **To make environment variables permanent:**
 - Open "Environment Variables" in Windows Settings
 - Add them under "User variables" or "System variables"
+
+## Environment Variables (Mac)
+
+### Quick Setup
+
+**Check your shell:**
+```bash
+echo $SHELL
+```
+
+### For Zsh (default on newer macOS)
+
+**1. Edit the file:**
+```bash
+nano ~/.zshrc
+```
+
+**2. Add your variables:**
+```bash
+export OPENAI_API_KEY="your-key-here"
+export GOOGLE_CUSTOM_SEARCH_API_KEY="your-key-here"
+export GOOGLE_CUSTOM_SEARCH_ENGINE_ID="your-engine-id"
+export GOOGLE_PLACES_API_KEY="your-key-here"
+export DATABASE_URL="postgresql+psycopg2://username:password@localhost:5432/database_name"
+```
+
+**3. Save and exit:**
+- **Nano**: `Ctrl+X` → `Y` → `Enter`
+- **Vim**: `Esc` → `:wq` → `Enter`
+
+**4. Reload:**
+```bash
+source ~/.zshrc
+```
+
+### For Bash (default on older macOS)
+
+**1. Edit the file:**
+```bash
+nano ~/.bash_profile
+# OR if .bash_profile doesn't exist:
+nano ~/.bashrc
+```
+
+**2. Add your variables:**
+```bash
+export OPENAI_API_KEY="your-key-here"
+export GOOGLE_CUSTOM_SEARCH_API_KEY="your-key-here"
+export GOOGLE_CUSTOM_SEARCH_ENGINE_ID="your-engine-id"
+export GOOGLE_PLACES_API_KEY="your-key-here"
+export DATABASE_URL="postgresql+psycopg2://username:password@localhost:5432/database_name"
+```
+
+**3. Save and exit:**
+- **Nano**: `Ctrl+X` → `Y` → `Enter`
+- **Vim**: `Esc` → `:wq` → `Enter`
+
+**4. Reload:**
+```bash
+source ~/.bash_profile
+# OR
+source ~/.bashrc
+```
+
+### Quick Add (One-liner)
+
+**Zsh:**
+```bash
+echo 'export GOOGLE_PLACES_API_KEY="your-key-here"' >> ~/.zshrc && source ~/.zshrc
+```
+
+**Bash:**
+```bash
+echo 'export GOOGLE_PLACES_API_KEY="your-key-here"' >> ~/.bash_profile && source ~/.bash_profile
+```
+
+### Editor Quick Reference
+
+**Nano:**
+- Save & Exit: `Ctrl+X` → `Y` → `Enter`
+- Exit without saving: `Ctrl+X` → `N`
+
+**Vim:**
+- Save & Exit: `Esc` → `:wq` → `Enter`
+- Exit without saving: `Esc` → `:q!` → `Enter`
+- Save (don't exit): `Esc` → `:w` → `Enter`
 
 **DB setup
 - DB name:ucp, u:ucp_app, p:DBPASSWORD
@@ -103,86 +196,3 @@ The app will be available at `http://localhost:8000`
 - Entity intelligence via GPT (successor research)
 - PDF letter generation for contacts
 - Responsive UI with localStorage state persistence
-
-## Migration Tasks
-
-### Multiple Properties Per Lead Migration
-
-This migration moves property data from `business_lead` table to a new `lead_property` table, enabling multiple properties per lead.
-
-#### Prerequisites
-
-1. **Backup your database** before running any migration scripts
-2. Ensure you have PostgreSQL client tools installed (`psql`, `pg_dump`)
-3. Set `DATABASE_URL` environment variable if using non-default connection
-
-#### Migration Steps
-
-**Step 1: Backup Database**
-```bash
-pg_dump -U ucp_app -d ucp -F c -f backup_before_lead_property_migration.dump
-```
-
-**Step 2: Run Migration Script**
-```bash
-python scripts/migrate_and_cleanup_lead_property.py
-```
-
-This script does everything in one run:
-- Creates `lead_property` table
-- Migrates existing property data from `business_lead` to `lead_property`
-- **Immediately drops old columns** (property_id, property_raw_hash, property_amount)
-- Verifies data integrity
-- Leaves only the new structure (no lingering old columns)
-
-**Note:** The script will prompt you for confirmation before proceeding. Make sure you have a backup before running it.
-
-#### Verification Steps
-
-After running the migration script:
-
-```sql
--- Verify old columns are gone
-SELECT column_name FROM information_schema.columns 
-WHERE table_name = 'business_lead' 
-AND column_name IN ('property_id', 'property_raw_hash', 'property_amount');
--- Should return 0 rows
-
--- Verify new structure works
-SELECT l.id, l.owner_name, lp.property_id, lp.is_primary
-FROM business_lead l
-LEFT JOIN lead_property lp ON l.id = lp.lead_id
-LIMIT 10;
-
--- Verify all leads have primary property
-SELECT COUNT(*) FROM lead_property WHERE is_primary = true;
-```
-
-#### Rollback Procedure
-
-If issues occur after migration:
-
-1. **Before dropping old columns**: Old columns still exist, so you can:
-   - Revert code to previous version
-   - Old code will continue working with old columns
-
-2. **After dropping old columns**: You must restore from backup:
-   ```bash
-   # Restore full backup
-   pg_restore -U ucp_app -d ucp -c backup_before_lead_property_migration.dump
-   
-   # Or restore SQL backup
-   psql -U ucp_app -d ucp < backup_before_lead_property_migration.sql
-   ```
-
-#### Script Reference
-
-- `scripts/migrate_and_cleanup_lead_property.py` - **Migration script** (migrates data + drops old columns in one go)
-
-**Command to run:**
-```bash
-python scripts/migrate_and_cleanup_lead_property.py
-```
-
-ALTER TYPE lead_contact_type ADD VALUE IF NOT EXISTS 'agent_company';
-

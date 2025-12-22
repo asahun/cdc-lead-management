@@ -483,5 +483,6 @@ def build_gpt_payload(lead: Lead, prop: dict) -> dict:
         "holder_name_on_record": prop.get("holdername") or "",
         "last_activity_date": prop.get("lastactivitydate") or "",
         "property_report_year": report_year_value,
+        "city": prop.get("ownercity") or None,
     }
 

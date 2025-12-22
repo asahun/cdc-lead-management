@@ -3,8 +3,10 @@ Core lead routes - handles lead CRUD operations, listing, and bulk actions.
 """
 
 from datetime import datetime, timezone
+import re
 from io import BytesIO
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query
@@ -54,9 +56,16 @@ from helpers.filter_helpers import build_lead_filters, build_filter_query_string
 from helpers.phone_scripts import load_phone_scripts, get_phone_scripts_json
 from helpers.print_log_helpers import get_print_logs_for_lead, serialize_print_log
 from helpers.property_helpers import get_primary_property
-from services.gpt_service import fetch_entity_intelligence, GPTConfigError, GPTServiceError
+from services.gpt_service import (
+    fetch_entity_intelligence,
+)
+from services.sos_service import SOSService
+from services.entity_intelligence_orchestrator import EntityIntelligenceOrchestrator
+from services.exceptions import GPTConfigError, GPTServiceError, SOSDataError
 from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
+
+logger = logging.getLogger(__name__)
 
 # Import shared templates from main to ensure filters are registered
 # This will be set by main.py after filters are registered
@@ -65,6 +74,22 @@ PAGE_SIZE = 20
 
 PHONE_SCRIPTS = load_phone_scripts()
 PHONE_SCRIPTS_JSON = get_phone_scripts_json()
+
+
+def _suffix_or_special_present(name: str) -> bool:
+    """Detect if the original name contains legal suffix tokens or special characters."""
+    if not name:
+        return False
+    lowered = name.lower()
+    has_special = bool(re.search(r"[^\w\s]", lowered))
+    suffix_pattern = r"\b(inc|inc\.|incorporated|corp|corporation|llc|l\.l\.c\.|ltd|limited|co|company|lp|l\.p\.|llp|l\.l\.p\.)\b"
+    has_suffix = bool(re.search(suffix_pattern, lowered))
+    return has_special or has_suffix
+
+
+def _flip_allowed(base_normalized: str, original_name: str) -> bool:
+    tokens = base_normalized.split()
+    return len(tokens) == 3 and not _suffix_or_special_present(original_name)
 
 def _build_phone_script_context(
     owner_name: str | None,
@@ -429,9 +454,11 @@ async def lead_entity_intelligence(
     lead_id: int,
     db: Session = Depends(get_db),
 ):
+    logger.info(f"lead_entity_intelligence: Request for lead_id={lead_id}")
     lead = get_lead_or_404(db, lead_id)
 
     prop = get_property_details_for_lead(db, lead)
+    logger.debug(f"lead_entity_intelligence: Property found: {prop is not None}")
 
     if not prop:
         raise HTTPException(
@@ -440,15 +467,135 @@ async def lead_entity_intelligence(
         )
 
     payload = build_gpt_payload(lead, prop)
+    logger.debug(f"lead_entity_intelligence: GPT payload built: business_name='{payload.get('business_name')}', property_state='{payload.get('property_state')}'")
 
     try:
-        analysis = await run_in_threadpool(fetch_entity_intelligence, payload)
+        analysis = await run_in_threadpool(fetch_entity_intelligence, payload, db)
+        logger.info(f"lead_entity_intelligence: Analysis complete, response keys: {list(analysis.keys()) if analysis else 'None'}")
+        
+        # Debug: Check for new fields
+        new_fields = ["status_profile", "address_profile", "contact_recommendation", "data_gaps", "ga_entity_mapping", "entitlement"]
+        for field in new_fields:
+            if field in analysis:
+                field_value = analysis[field]
+                if isinstance(field_value, dict):
+                    logger.debug(f"lead_entity_intelligence: {field} present with keys: {list(field_value.keys())}")
+                elif isinstance(field_value, list):
+                    logger.debug(f"lead_entity_intelligence: {field} present as list with {len(field_value)} items")
+                else:
+                    logger.debug(f"lead_entity_intelligence: {field} = {field_value}")
+            else:
+                logger.warning(f"lead_entity_intelligence: {field} is MISSING from analysis response")
+        
+        logger.debug(f"lead_entity_intelligence: Analysis preview - chain_status={analysis.get('chain_assessment', {}).get('chain_status', 'N/A')}, current_entity={analysis.get('current_entity', {}).get('legal_name', 'N/A')}")
     except GPTConfigError as exc:
+        logger.error(f"lead_entity_intelligence: GPTConfigError: {exc}")
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except GPTServiceError as exc:
+        logger.error(f"lead_entity_intelligence: GPTServiceError: {exc}")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return {"input": payload, "analysis": analysis}
+    response = {"input": payload, "analysis": analysis}
+    logger.debug(f"lead_entity_intelligence: Returning response with input keys: {list(response.get('input', {}).keys())}, analysis keys: {list(response.get('analysis', {}).keys())}")
+    return response
+
+
+@router.get("/leads/{lead_id}/entity-intel/sos-options")
+async def lead_entity_intel_sos_options(
+    lead_id: int,
+    flip: bool = Query(False, description="Apply flipped search (move first token to end)"),
+    db: Session = Depends(get_db),
+):
+    lead = get_lead_or_404(db, lead_id)
+    prop = get_property_details_for_lead(db, lead)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Linked property record not found for this lead.")
+
+    owner_name = lead.owner_name or prop.get("ownername") or ""
+    sos_service = SOSService(db)
+    base_normalized = sos_service.normalize_business_name_without_suffixes(owner_name)
+    if not base_normalized:
+        return {
+            "search_name_used": "",
+            "flip_applied": False,
+            "flip_allowed": False,
+            "sos_records": [],
+        }
+
+    flip_allowed = _flip_allowed(base_normalized, owner_name)
+    if flip and not flip_allowed:
+        raise HTTPException(status_code=400, detail="Flip search not allowed for this name (requires exactly 3 tokens and no suffix/special chars).")
+
+    search_name_used = sos_service.reorder_first_token_to_end(base_normalized) if flip else base_normalized
+    try:
+        sos_records = sos_service.search_by_normalized_name(search_name_used)
+    except SOSDataError as exc:
+        logger.error(f"lead_entity_intel_sos_options: SOS query failed: {exc}")
+        raise HTTPException(status_code=502, detail="Failed to query SOS records") from exc
+
+    return {
+        "search_name_used": search_name_used,
+        "flip_applied": flip,
+        "flip_allowed": flip_allowed,
+        "sos_records": sos_records,
+    }
+
+
+@router.post("/leads/{lead_id}/entity-intel/run")
+async def lead_entity_intelligence_run(
+    lead_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    lead = get_lead_or_404(db, lead_id)
+    prop = get_property_details_for_lead(db, lead)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Linked property record not found for this lead.")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    selected_sos_record = body.get("selected_sos_record") or None
+    sos_search_name_used = body.get("sos_search_name_used") or None
+    flip_applied = bool(body.get("flip_applied", False))
+
+    payload = build_gpt_payload(lead, prop)
+    payload.update(
+        {
+            "selected_sos_record": selected_sos_record,
+            "sos_search_name_used": sos_search_name_used,
+            "skip_sos_lookup": True,
+        }
+    )
+
+    try:
+        analysis = await run_in_threadpool(fetch_entity_intelligence, payload, db)
+    except GPTConfigError as exc:
+        logger.error(f"lead_entity_intelligence_run: GPTConfigError: {exc}")
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except GPTServiceError as exc:
+        logger.error(f"lead_entity_intelligence_run: GPTServiceError: {exc}")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Redact SOS record if needed
+    gpt_redacted_sos_data = None
+    if selected_sos_record:
+        sos_service = SOSService(db)
+        gpt_redacted_sos_data = sos_service.redact_record(selected_sos_record)
+    
+    response = {
+        "input": payload,
+        "analysis": analysis,
+        "selected_sos_data": selected_sos_record,
+        "gpt_redacted_sos_data": gpt_redacted_sos_data,
+        "meta": {
+            "sos_search_name_used": sos_search_name_used,
+            "flip_applied": flip_applied,
+        },
+    }
+    return response
 
 
 
