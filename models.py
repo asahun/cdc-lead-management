@@ -316,3 +316,35 @@ class JourneyMilestone(Base):
     journey = relationship("LeadJourney", back_populates="milestones")
     attempt = relationship("LeadAttempt", foreign_keys=[attempt_id])
     parent_milestone = relationship("JourneyMilestone", remote_side=[id], foreign_keys=[parent_milestone_id])
+
+# Agreement/Client models
+
+
+class LeadClient(Base):
+    __tablename__ = "lead_client"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("lead.id", ondelete="CASCADE"), unique=True, nullable=False)
+    slug = Column(Text, unique=True, nullable=False)  # e.g., client-{lead_id}
+    control_no = Column(Text, nullable=True)
+    formation_state = Column(Text, nullable=True)
+    fee_pct = Column(Text, nullable=True)
+    addendum_yes = Column(Boolean, default=False)
+    output_dir = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    events = relationship("LeadClientEvent", back_populates="client", cascade="all, delete-orphan")
+
+
+class LeadClientEvent(Base):
+    __tablename__ = "lead_client_event"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("lead_client.id", ondelete="CASCADE"), nullable=False)
+    state = Column(Text, nullable=False)
+    payload = Column(Text)  # store JSON string; handled by caller
+    created_by = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    client = relationship("LeadClient", back_populates="events")

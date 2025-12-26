@@ -22,6 +22,13 @@ dist/
 # Generated print artifacts
 print/_tmp_letter.html
 
+# PDF metadata dumps
+scripts/pdf_meta/
+
+# Generated PDF outputs (keep folder, ignore contents)
+scripts/pdf_output/**
+!scripts/pdf_output/
+
 # Misc version marker files
 =*
 

@@ -1488,11 +1488,22 @@ body {
     gap: 32px;
   }
 
-  .lead-section {
+.lead-section {
     display: flex;
     flex-direction: column;
     gap: 16px;
   }
+
+.lead-section.full-width {
+  width: 100%;
+  max-width: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.lead-section .section-content {
+  overflow-x: auto;
+}
 
   .lead-section header h2 {
     margin: 0;

@@ -848,6 +848,55 @@
       </div>
     </section>
 
+    {% if lead.status.value == 'response_received' %}
+    <section id="agreement-section" class="lead-section card full-width" data-lead-id="{{ lead.id }}">
+      <header>
+        <h2>Agreement Generation</h2>
+        <p class="text-muted">Generate Recovery Agreement and Authorization Letter.</p>
+      </header>
+      <div class="section-content">
+        <div class="grid two-column">
+          <div>
+            <label for="agreement-control-no">Control Number (required)</label>
+            <input id="agreement-control-no" type="text" placeholder="Enter control number">
+          </div>
+          <div>
+          <label for="agreement-formation-state">Formation State (required)</label>
+          <select id="agreement-formation-state">
+            <option value="" selected>-- select --</option>
+            {% for st in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"] %}
+            <option value="{{ st }}">{{ st }}</option>
+            {% endfor %}
+          </select>
+          </div>
+          <div>
+            <label for="agreement-fee-pct">CDR Fee %</label>
+            <select id="agreement-fee-pct">
+              {% for pct in range(5,16) %}
+              <option value="{{ pct }}" {% if pct == 10 %}selected{% endif %}>{{ pct }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="agreement-addendum">Addendum?</label>
+            <select id="agreement-addendum">
+              <option value="false" selected>No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions" style="margin-top: 12px;">
+          <button type="button" class="btn btn-primary" id="generate-agreements-btn">Generate Agreement Files</button>
+          <span id="agreement-status" class="text-muted" style="margin-left: 12px;"></span>
+        </div>
+        <div id="agreement-events" class="text-muted" style="margin-top: 12px;">
+          <h4>Agreement History</h4>
+          <ul id="agreement-events-list"></ul>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
     <section
       id="phone-scripts"
       class="lead-section card full-width phone-scripts-card"
@@ -936,6 +985,7 @@
 
 <script src="/static/js/property_detail.js?v=20241128"></script>
 <script src="/static/js/entity_intel.js?v=20241129"></script>
+<script src="/static/js/lead_agreements.js?v=20250105" defer></script>
 <script src="/static/js/lead_actions.js?v=20241202" defer></script>
 <script src="/static/js/phone_scripts.js?v=20241128" defer></script>
 <script src="/static/js/letter_print.js?v=20241203" defer></script>

@@ -59,6 +59,7 @@ from helpers.property_helpers import get_primary_property
 from services.gpt_service import (
     fetch_entity_intelligence,
 )
+from services.agreement_service import generate_agreements, list_events
 from services.sos_service import SOSService
 from services.entity_intelligence_orchestrator import EntityIntelligenceOrchestrator
 from services.exceptions import GPTConfigError, GPTServiceError, SOSDataError
@@ -1440,3 +1441,49 @@ def generate_one_pager(
     pdf_bytes, filename = render_one_pager_pdf(templates.env, lead, property_details, db)
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
+
+
+@router.post("/leads/{lead_id}/agreements/generate")
+async def lead_generate_agreements(
+    lead_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    control_no = body.get("control_no") or ""
+    formation_state = body.get("formation_state") or ""
+    fee_pct = body.get("fee_pct") or "10"
+    addendum_yes = bool(body.get("addendum_yes", False))
+
+    try:
+        result = generate_agreements(
+            db=db,
+            lead_id=lead_id,
+            control_no=control_no,
+            formation_state=formation_state,
+            fee_pct=fee_pct,
+            addendum_yes=addendum_yes,
+            user=None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("lead_generate_agreements failed")
+        raise HTTPException(status_code=500, detail="Failed to generate agreements")
+
+    return result
+
+
+@router.get("/leads/{lead_id}/agreements/events")
+def lead_agreement_events(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        events = list_events(db, lead_id)
+    except Exception:
+        logger.exception("lead_agreement_events failed")
+        raise HTTPException(status_code=500, detail="Failed to fetch agreement events")
+    return {"events": events}

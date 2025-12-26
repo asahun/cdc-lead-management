@@ -60,6 +60,12 @@ to the combined workspace, so old bookmarks continue to work.
   on the lead’s owner type/status and streams the PDF back to the user so it
   lands in their default Downloads folder, while the backend logs the job so it
   appears in the Print Log panel.
+- PDF tooling: shared fill engine `scripts/pdf_fill_engine.py` plus per-template handlers
+  `scripts/fill_recovery_agreement.py` (UP-CDR2) and `scripts/fill_recover_authorization_letter.py`
+  (Authorization Letter). Templates live in `scripts/pdf_templates/`, outputs in
+  `scripts/pdf_output/`, and static CDR data in `scripts/data/cdr_profile.json`.
+  Run `scripts/sql/001_add_lead_client_tables.sql` against the DB to create the
+  `lead_client` and `lead_client_event` tables for agreement lifecycle tracking.
 - The properties list automatically filters out stale records—only rows with
   `last_seen` greater than or equal to the most recent Monday at 6 PM (Eastern)
   are shown. This lines up with the weekly refresh cadence so the UI never shows
