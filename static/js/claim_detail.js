@@ -133,7 +133,7 @@
       const title = file.name || 'Preview';
       const ts = file.created_at ? new Date(file.created_at).toLocaleString() : '';
       const inlineUrl = file.preview_url || (file.download_url ? `${file.download_url}${file.download_url.includes('?') ? '&' : '?'}inline=1` : '');
-      const downloadUrl = file.download_url || inlineUrl || '#';
+      const downloadUrl = inlineUrl || file.download_url || '#'; // prefer inline for open-tab
       if (previewTitle) previewTitle.textContent = title;
       if (previewMeta) previewMeta.textContent = ts;
       if (previewOpenTab) previewOpenTab.href = downloadUrl;

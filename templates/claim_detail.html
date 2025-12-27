@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="page-content" style="padding: 16px;">
-  <div class="page-header" style="justify-content: space-between; align-items: center;">
+<div class="page-content claim-page">
+  <div class="page-header claim-header">
     <div>
       <h1>Claim {{ claim.claim_slug or ('claim-' ~ claim.id) }}</h1>
       <p class="text-muted">Lead #{{ claim.lead_id }}{% if claim.lead and claim.lead.owner_name %} • {{ claim.lead.owner_name }}{% endif %}</p>
     </div>
-    <div class="page-actions" style="display: flex; gap: 8px;">
+    <div class="page-actions claim-actions">
       <a href="/claims" class="btn btn-secondary">Back to Claims</a>
       {% if claim.lead_id %}
       <a href="/leads/{{ claim.lead_id }}/edit" class="btn btn-ghost">View Lead</a>
@@ -55,8 +55,8 @@
           <div class="label">Output Directory</div>
           <div>{{ claim.output_dir or '—' }}</div>
         </div>
-        <div style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="claim-status-row">
+          <div class="claim-status-label">
             <div class="label">Current Status</div>
             {% if current_status %}
               <span class="status-pill" id="claim-current-status">{{ current_status }}</span>
@@ -64,10 +64,10 @@
               <span class="text-muted" id="claim-current-status">—</span>
             {% endif %}
           </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span id="claim-status-update" class="text-muted" style="text-align: right; white-space: nowrap;"></span>
-            <label for="claim-status-select" class="text-muted" style="font-size: 13px; white-space: nowrap;">Status:</label>
-            <select id="claim-status-select" style="width: auto;">
+          <div class="claim-status-actions">
+            <span id="claim-status-update" class="text-muted claim-status-message"></span>
+            <label for="claim-status-select" class="text-muted claim-status-label">Status:</label>
+            <select id="claim-status-select">
               {% for st in claim_status_values %}
                 <option value="{{ st }}">{{ st }}</option>
               {% endfor %}
@@ -79,7 +79,7 @@
     </div>
   </section>
 
-  <section class="card" style="margin-top: 16px;" data-claim-id="{{ claim.id }}">
+  <section class="card section-stack" data-claim-id="{{ claim.id }}">
     <header>
       <h2>Agreement Files</h2>
       <p class="text-muted">Outputs save to {{ claim.output_dir or 'claim folder' }}.</p>
@@ -115,25 +115,25 @@
           </select>
         </div>
       </div>
-      <div class="form-actions" style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+      <div class="form-actions claim-form-actions">
         <button type="button" class="btn btn-primary" id="claim-generate-btn">Generate Agreement Files</button>
         <span id="claim-status" class="text-muted"></span>
       </div>
-      <div class="file-list" style="margin-top: 12px;">
-        <h4 style="margin: 0 0 4px 0;">Generated Files</h4>
+      <div class="file-list claim-file-list-wrapper">
+        <h4 class="claim-subtitle">Generated Files</h4>
         <ul id="claim-generated-list" class="claim-file-list"></ul>
       </div>
     </div>
   </section>
 
-  <section class="card" style="margin-top: 16px;" data-claim-id="{{ claim.id }}">
+  <section class="card section-stack" data-claim-id="{{ claim.id }}">
     <header>
       <h2>Claim Package</h2>
     </header>
     <div class="section-content">
       <!-- Required Documents Checklist -->
       <div class="claim-package-section">
-        <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #374151;">Required Documents</h3>
+        <h3 class="claim-subheading">Required Documents</h3>
         <ul id="claim-required-list" class="claim-checklist"></ul>
       </div>
 
@@ -142,7 +142,7 @@
 
       <!-- Current Files -->
       <div class="claim-package-section">
-        <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #374151;">Uploaded Files</h3>
+        <h3 class="claim-subheading">Uploaded Files</h3>
         <ul id="claim-package-list" class="claim-file-list"></ul>
       </div>
 
@@ -151,9 +151,9 @@
 
       <!-- Upload Form -->
       <div class="claim-package-section">
-        <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #374151;">Upload New File</h3>
+        <h3 class="claim-subheading">Upload New File</h3>
         <form id="claim-upload-form" data-claim-id="{{ claim.id }}" enctype="multipart/form-data">
-          <div class="grid two-column" style="align-items: flex-end;">
+          <div class="grid two-column claim-upload-grid">
             <div>
               <label for="claim-doc-type">Document Type</label>
               <select id="claim-doc-type" name="doc_type" required>
@@ -173,7 +173,7 @@
               <input id="claim-upload-notes" name="notes" type="text" placeholder="Notes or description">
             </div>
           </div>
-          <div class="form-actions" style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+          <div class="form-actions claim-form-actions">
             <input id="claim-upload-file" name="file" type="file" required>
             <button type="submit" class="btn btn-secondary">Upload</button>
             <span id="claim-upload-status" class="text-muted"></span>
@@ -183,14 +183,14 @@
     </div>
   </section>
 
-  <section class="card" style="margin-top: 16px;" data-claim-id="{{ claim.id }}">
+  <section class="card section-stack" data-claim-id="{{ claim.id }}">
     <header>
       <h2>Audit Timeline</h2>
-      <p class="text-muted" style="margin: 0;">Status changes, generations, uploads, deletions.</p>
+      <p class="text-muted">Status changes, generations, uploads, deletions.</p>
     </header>
     <div class="section-content">
-      <div class="form-row" style="margin-bottom: 8px; align-items: center; gap: 8px;">
-        <label class="text-muted" style="font-size: 13px;">Filter</label>
+      <div class="form-row audit-filter-row">
+        <label class="text-muted">Filter</label>
         <div class="button-group" id="audit-filter">
           <button type="button" class="btn btn-ghost btn-sm audit-filter-btn active" data-filter="all">All</button>
           <button type="button" class="btn btn-ghost btn-sm audit-filter-btn" data-filter="status">Status</button>
@@ -202,21 +202,21 @@
   </section>
 
   <!-- Preview Modal -->
-  <div id="preview-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
-    <div class="modal-content" style="width: 90%; max-width: 960px; height: 90vh; max-height: 90vh; display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+  <div id="preview-modal" class="modal preview-modal" style="display: none;">
+    <div class="modal-content preview-modal-content">
+      <div class="preview-modal-header">
         <div>
-          <div id="preview-title" style="font-weight: 600; font-size: 16px;">Preview</div>
-          <div id="preview-meta" class="text-muted" style="font-size: 12px;"></div>
+          <div id="preview-title" class="preview-title">Preview</div>
+          <div id="preview-meta" class="text-muted preview-meta"></div>
         </div>
         <button type="button" class="btn btn-ghost" data-close-preview aria-label="Close preview">&times;</button>
       </div>
-      <div style="flex: 1; min-height: 70vh; border: 1px solid #e5e7eb; overflow: hidden;">
-        <iframe id="preview-frame" src="" style="width: 100%; height: 100%; border: 0;" allow="clipboard-read; clipboard-write"></iframe>
+      <div class="preview-iframe-wrapper">
+        <iframe id="preview-frame" src="" allow="clipboard-read; clipboard-write"></iframe>
       </div>
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div class="preview-footer">
         <a id="preview-open-tab" href="#" target="_blank" class="btn btn-ghost btn-sm">Open in new tab</a>
-        <div style="display: flex; gap: 8px;">
+        <div class="preview-footer-actions">
           <button id="preview-send-signature" type="button" class="btn btn-secondary btn-sm" disabled title="Coming soon">Send for Signature</button>
           <button type="button" class="btn btn-ghost btn-sm" data-close-preview>Close</button>
         </div>
