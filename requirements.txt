@@ -10,4 +10,6 @@ apscheduler>=3.10.0
 pytz>=2023.3
 pdfrw>=0.4
 reportlab>=4.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
 
