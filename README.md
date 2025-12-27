@@ -170,6 +170,11 @@ echo 'export GOOGLE_PLACES_API_KEY="your-key-here"' >> ~/.bash_profile && source
 - psql -U postgres -c "CREATE ROLE \"ucp_app\" WITH LOGIN PASSWORD 'DBPASSWORD';"
 - psql -U postgres -c "CREATE DATABASE \"ucp\" OWNER \"ucp_app\";"
 - pg_restore -U ucp_app -d ucp /tmp/db.dump
+- Ensure `lead_status` enum includes the claim rollout value:
+
+  ```sql
+  ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'claim_created';
+  ```
 
 ### 7. Run the server
 

@@ -50,6 +50,7 @@ class LeadStatus(str, enum.Enum):
     researching = "researching"
     contact_in_progress = "contact_in_progress"
     response_received = "response_received"
+    claim_created = "claim_created"
     won = "won"
     lost = "lost"
     no_response = "no_response"
@@ -168,6 +169,7 @@ class Lead(Base):
     attempts = relationship("LeadAttempt", back_populates="lead", cascade="all, delete-orphan")
     comments = relationship("LeadComment", back_populates="lead", cascade="all, delete-orphan")
     print_logs = relationship("PrintLog", back_populates="lead", cascade="all, delete-orphan")
+    claims = relationship("Claim", back_populates="lead", cascade="all, delete-orphan")
     journey = relationship("LeadJourney", back_populates="lead", uselist=False, cascade="all, delete-orphan")
 
 
@@ -320,31 +322,60 @@ class JourneyMilestone(Base):
 # Agreement/Client models
 
 
-class LeadClient(Base):
-    __tablename__ = "lead_client"
+class Claim(Base):
+    __tablename__ = "claim"
 
     id = Column(Integer, primary_key=True, index=True)
-    lead_id = Column(Integer, ForeignKey("lead.id", ondelete="CASCADE"), unique=True, nullable=False)
-    slug = Column(Text, unique=True, nullable=False)  # e.g., client-{lead_id}
-    control_no = Column(Text, nullable=True)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
+    claim_slug = Column(Text, unique=True, nullable=False)
+
+    business_name = Column(Text, nullable=True)
     formation_state = Column(Text, nullable=True)
+    control_no = Column(Text, nullable=True)
     fee_pct = Column(Text, nullable=True)
     addendum_yes = Column(Boolean, default=False)
+    cdr_identifier = Column(Text, nullable=True)
+    cdr_agent_name = Column(Text, nullable=True)
+
+    primary_contact_name = Column(Text, nullable=True)
+    primary_contact_title = Column(Text, nullable=True)
+    primary_contact_email = Column(Text, nullable=True)
+    primary_contact_phone = Column(Text, nullable=True)
+    primary_contact_mail = Column(Text, nullable=True)
+
+    state_claim_id = Column(Text, nullable=True)
     output_dir = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    events = relationship("LeadClientEvent", back_populates="client", cascade="all, delete-orphan")
+    lead = relationship("Lead", back_populates="claims")
+    events = relationship("ClaimEvent", back_populates="claim", cascade="all, delete-orphan")
+    documents = relationship("ClaimDocument", back_populates="claim", cascade="all, delete-orphan")
 
 
-class LeadClientEvent(Base):
-    __tablename__ = "lead_client_event"
+class ClaimEvent(Base):
+    __tablename__ = "claim_event"
 
     id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, ForeignKey("lead_client.id", ondelete="CASCADE"), nullable=False)
+    claim_id = Column(Integer, ForeignKey("claim.id", ondelete="CASCADE"), nullable=False)
     state = Column(Text, nullable=False)
-    payload = Column(Text)  # store JSON string; handled by caller
+    payload = Column(Text)  # JSON string
     created_by = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
-    client = relationship("LeadClient", back_populates="events")
+    claim = relationship("Claim", back_populates="events")
+
+
+class ClaimDocument(Base):
+    __tablename__ = "claim_document"
+
+    id = Column(Integer, primary_key=True, index=True)
+    claim_id = Column(Integer, ForeignKey("claim.id", ondelete="CASCADE"), nullable=False)
+    doc_type = Column(Text, nullable=False)  # agreement_signed, authorization_signed, addendum, non_disclosure, fein_document, id_verification, address_verification, b2b_relationship, other
+    original_name = Column(Text, nullable=False)
+    file_path = Column(Text, nullable=False)
+    notes = Column(Text, nullable=True)  # required when doc_type == 'other'
+    created_by = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    claim = relationship("Claim", back_populates="documents")

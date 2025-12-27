@@ -51,8 +51,15 @@
         </div>
       {% endif %}
       {% if mode != "create" %}
-        <div class="action-cluster">
+        <div class="action-cluster" style="gap: 8px;">
           <a href="/leads/{{ lead.id }}/one-pager" class="btn btn-secondary">Generate One-Pager</a>
+          {% if latest_claim %}
+            <a href="/claims/{{ latest_claim.id }}" class="btn btn-primary" id="open-claim-link" data-lead-id="{{ lead.id }}">View Claim</a>
+            <span class="status-pill status-pill-assigned" style="margin-left: 6px;">Has Claim</span>
+          {% elif lead.status.value == 'response_received' %}
+            <button type="button" class="btn btn-secondary create-claim-btn" id="create-claim-top-btn" data-lead-id="{{ lead.id }}">Create Claim</button>
+          {% endif %}
+          <span id="claim-action-status" class="text-muted" style="margin-left: 8px;"></span>
         </div>
       {% endif %}
 {% if mode != "create" and mode != "view" %}
@@ -847,55 +854,6 @@
         </div>
       </div>
     </section>
-
-    {% if lead.status.value == 'response_received' %}
-    <section id="agreement-section" class="lead-section card full-width" data-lead-id="{{ lead.id }}">
-      <header>
-        <h2>Agreement Generation</h2>
-        <p class="text-muted">Generate Recovery Agreement and Authorization Letter.</p>
-      </header>
-      <div class="section-content">
-        <div class="grid two-column">
-          <div>
-            <label for="agreement-control-no">Control Number (required)</label>
-            <input id="agreement-control-no" type="text" placeholder="Enter control number">
-          </div>
-          <div>
-          <label for="agreement-formation-state">Formation State (required)</label>
-          <select id="agreement-formation-state">
-            <option value="" selected>-- select --</option>
-            {% for st in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"] %}
-            <option value="{{ st }}">{{ st }}</option>
-            {% endfor %}
-          </select>
-          </div>
-          <div>
-            <label for="agreement-fee-pct">CDR Fee %</label>
-            <select id="agreement-fee-pct">
-              {% for pct in range(5,16) %}
-              <option value="{{ pct }}" {% if pct == 10 %}selected{% endif %}>{{ pct }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="agreement-addendum">Addendum?</label>
-            <select id="agreement-addendum">
-              <option value="false" selected>No</option>
-              <option value="true">Yes</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-actions" style="margin-top: 12px;">
-          <button type="button" class="btn btn-primary" id="generate-agreements-btn">Generate Agreement Files</button>
-          <span id="agreement-status" class="text-muted" style="margin-left: 12px;"></span>
-        </div>
-        <div id="agreement-events" class="text-muted" style="margin-top: 12px;">
-          <h4>Agreement History</h4>
-          <ul id="agreement-events-list"></ul>
-        </div>
-      </div>
-    </section>
-    {% endif %}
 
     <section
       id="phone-scripts"

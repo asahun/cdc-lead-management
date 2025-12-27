@@ -64,8 +64,19 @@ to the combined workspace, so old bookmarks continue to work.
   `scripts/fill_recovery_agreement.py` (UP-CDR2) and `scripts/fill_recover_authorization_letter.py`
   (Authorization Letter). Templates live in `scripts/pdf_templates/`, outputs in
   `scripts/pdf_output/`, and static CDR data in `scripts/data/cdr_profile.json`.
-  Run `scripts/sql/001_add_lead_client_tables.sql` against the DB to create the
-  `lead_client` and `lead_client_event` tables for agreement lifecycle tracking.
+  Claim tracking uses `scripts/sql/003_add_claim_tables.sql`.
+- Claim-first flow (response_received leads):
+  - Header CTA sits next to One-Pager: “Create Claim” calls POST `/leads/{id}/claims`
+    to snapshot control_no/formation_state/fee_pct/addendum + primary contact/CDR profile
+    into `claim` and assigns `scripts/pdf_output/claim-{id}`. Create buttons disable once a claim exists.
+  - Lead view always shows **View Claim** when a claim exists (regardless of lead status); if no claim and the lead is `response_received`, a **Create Claim** button appears. Generation lives on the claim page.
+  - Claims list: GET `/claims` shows all claims (slug, lead, control #, fee %, last event, doc count).
+  - Claim detail: GET `/claims/{id}` shows summary, events, documents (generated vs claim package), and
+    “Generate Agreement Files” (POST `/claims/{id}/agreements/generate`).
+  - Claim package uploads: POST `/claims/{id}/documents/upload` saves files into the claim output dir and
+    logs `claim_document`; package list separates generated outputs from uploaded package artifacts.
+  - APIs: GET `/leads/{id}/claims/latest`, `/leads/{id}/agreements/events`, `/leads/{id}/agreements/documents`;
+    claim-scoped GET `/claims/{id}/events`, `/claims/{id}/documents`.
 - The properties list automatically filters out stale records—only rows with
   `last_seen` greater than or equal to the most recent Monday at 6 PM (Eastern)
   are shown. This lines up with the weekly refresh cadence so the UI never shows
@@ -88,6 +99,16 @@ to the combined workspace, so old bookmarks continue to work.
   ```sql
   ALTER TYPE lead_status ADD VALUE IF NOT EXISTS 'competitor_claimed';
   ```
+
+- The `lead_status` enum also retains `claim_created` for compatibility with
+  existing rows created during the claim rollout. The UI still surfaces the
+  claim presence via the “Has Claim” badge; no behavior change is tied to that
+  status value.
+- Claim “current status” is derived only from status events (`claim_created`,
+  `agreement_generated`, `agreement_sent`, `agreement_signed`, `claim_preparing`,
+  `claim_submitted`, `pending`, `approved`, `rejected`, `more_info`), not from
+  file-only events like uploads/deletions. Generation events are both statuses
+  and file-related, so they appear in filters for both “Status” and “Files”.
 
   To bulk update older leads during a refresh:
 

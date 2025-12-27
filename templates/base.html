@@ -27,6 +27,10 @@
         class="nav-link {% if request.url.path.startswith('/leads') %}active{% endif %}"
         href="/leads"
       >Leads</a>
+      <a
+        class="nav-link {% if request.url.path.startswith('/claims') %}active{% endif %}"
+        href="/claims"
+      >Claims</a>
   </nav>
     <div class="profile-switcher">
       <label for="profile-select">Profile</label>

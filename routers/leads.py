@@ -5,15 +5,17 @@ Core lead routes - handles lead CRUD operations, listing, and bulk actions.
 from datetime import datetime, timezone
 import re
 from io import BytesIO
+import shutil
 import json
 import logging
 from pathlib import Path
+import uuid
 
-from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse, FileResponse
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, cast, String, Integer, and_, exists, update
+from sqlalchemy import select, func, or_, cast, String, Integer, and_, exists, update, text
 
 from db import get_db
 from models import (
@@ -29,8 +31,11 @@ from models import (
     ContactType,
     LeadJourney,
     PrintLog,
+    Claim,
+    ClaimDocument,
+    ClaimEvent,
 )
-from typing import Any
+from typing import Any, List
 from services.property_service import (
     get_available_years,
     get_property_table_for_year,
@@ -59,7 +64,16 @@ from helpers.property_helpers import get_primary_property
 from services.gpt_service import (
     fetch_entity_intelligence,
 )
-from services.agreement_service import generate_agreements, list_events
+from services.agreement_service import (
+    create_claim_from_lead,
+    get_latest_claim_summary,
+    generate_agreements_for_claim,
+    generate_agreements,
+    list_events,
+    list_documents,
+    list_events_for_claim,
+    list_documents_for_claim,
+)
 from services.sos_service import SOSService
 from services.entity_intelligence_orchestrator import EntityIntelligenceOrchestrator
 from services.exceptions import GPTConfigError, GPTServiceError, SOSDataError
@@ -67,6 +81,35 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 
 logger = logging.getLogger(__name__)
+
+CLAIM_STATUS_VALUES = [
+    "claim_created",
+    "agreement_generated",
+    "agreement_sent",
+    "agreement_signed",
+    "claim_preparing",
+    "claim_submitted",
+    "pending",
+    "approved",
+    "rejected",
+    "more_info",
+]
+
+
+def _list_files_in_dir(dir_path: Path) -> List[dict]:
+    files = []
+    if not dir_path.exists() or not dir_path.is_dir():
+        return files
+    for p in sorted(dir_path.iterdir()):
+        if p.is_file():
+            files.append(
+                {
+                    "name": p.name,
+                    "path": str(p),
+                    "created_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
+                }
+            )
+    return files
 
 # Import shared templates from main to ensure filters are registered
 # This will be set by main.py after filters are registered
@@ -414,6 +457,7 @@ def list_leads(
 
     total = db.scalar(count_stmt) or 0
     stmt = stmt.order_by(Lead.created_at.desc()).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
+
     leads = db.scalars(stmt).all()
 
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE if total else 1
@@ -422,7 +466,8 @@ def list_leads(
     leads_with_data = []
     for lead in leads:
         primary_prop = get_primary_property(lead)
-        leads_with_data.append((lead, is_lead_editable(lead), primary_prop))
+        has_claim = get_latest_claim_summary(db, lead.id) is not None
+        leads_with_data.append((lead, is_lead_editable(lead), primary_prop, has_claim))
 
     return templates.TemplateResponse(
         "leads.html",
@@ -867,6 +912,8 @@ def edit_lead(
     
     journey_json = json.dumps(journey_data, default=str) if journey_data else "null"
 
+    latest_claim = get_latest_claim_summary(db, lead.id)
+
     return templates.TemplateResponse(
         "lead_form.html",
         {
@@ -918,6 +965,7 @@ def edit_lead(
                 "failed_email_count": failed_email_count or "",
                 "status": status or "",
             },
+            "latest_claim": latest_claim,
         },
     )
 
@@ -1487,3 +1535,418 @@ def lead_agreement_events(
         logger.exception("lead_agreement_events failed")
         raise HTTPException(status_code=500, detail="Failed to fetch agreement events")
     return {"events": events}
+
+
+@router.get("/leads/{lead_id}/agreements/documents")
+def lead_agreement_documents(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        docs = list_documents(db, lead_id)
+    except Exception:
+        logger.exception("lead_agreement_documents failed")
+        raise HTTPException(status_code=500, detail="Failed to fetch agreement documents")
+    return {"documents": docs}
+
+
+@router.get("/leads/{lead_id}/claims/latest")
+def lead_latest_claim(
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        claim = get_latest_claim_summary(db, lead_id)
+    except Exception:
+        logger.exception("lead_latest_claim failed")
+        raise HTTPException(status_code=500, detail="Failed to fetch claim")
+    if not claim:
+        raise HTTPException(status_code=404, detail="No claim found")
+    return claim
+
+
+@router.post("/leads/{lead_id}/claims")
+async def lead_create_claim(
+    lead_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    control_no = body.get("control_no") or ""
+    formation_state = body.get("formation_state") or ""
+    fee_pct = body.get("fee_pct") or "10"
+    addendum_yes = bool(body.get("addendum_yes", False))
+
+    try:
+        result = create_claim_from_lead(
+            db=db,
+            lead_id=lead_id,
+            control_no=control_no,
+            formation_state=formation_state,
+            fee_pct=fee_pct,
+            addendum_yes=addendum_yes,
+            user=None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("lead_create_claim failed")
+        raise HTTPException(status_code=500, detail="Failed to create claim")
+
+    return result
+
+
+@router.get("/claims", response_class=HTMLResponse)
+def claims_list(
+    request: Request,
+    status: str = Query("", description="Filter by claim status"),
+    db: Session = Depends(get_db),
+):
+    claims = (
+        db.query(Claim)
+        .order_by(Claim.created_at.desc())
+        .all()
+    )
+    claim_rows = []
+    for claim in claims:
+        events = list_events_for_claim(db, claim.id)
+        status_events = [e for e in events if e.get("state") in CLAIM_STATUS_VALUES]
+        last_event = status_events[0] if status_events else None
+        doc_count = db.query(ClaimDocument).filter(ClaimDocument.claim_id == claim.id).count()
+        last_event_created_at = None
+        if last_event:
+            ts = last_event.get("created_at")
+            last_event_created_at = ts if isinstance(ts, str) else ts.isoformat() if ts else None
+        current_state = last_event["state"] if last_event else None
+        
+        # Query lead normally; enum now includes claim_created so no raw SQL fallback needed
+        lead_owner = ""
+        lead_status = ""
+        if claim.lead_id:
+            lead = db.query(Lead).filter(Lead.id == claim.lead_id).first()
+            if lead:
+                lead_owner = lead.owner_name or ""
+                lead_status = str(lead.status) if getattr(lead, "status", None) else ""
+        
+        claim_rows.append(
+            {
+                "id": claim.id,
+                "claim_slug": claim.claim_slug,
+                "lead_id": claim.lead_id,
+                "lead_owner": lead_owner,
+                "lead_status": lead_status,
+                "control_no": claim.control_no,
+                "formation_state": claim.formation_state,
+                "fee_pct": claim.fee_pct,
+                "addendum_yes": claim.addendum_yes,
+                "output_dir": claim.output_dir,
+                "created_at": claim.created_at,
+                "last_event": last_event,
+                "last_event_created_at": last_event_created_at,
+                "current_state": current_state,
+                "doc_count": doc_count,
+            }
+        )
+    if status:
+        claim_rows = [c for c in claim_rows if c["current_state"] == status]
+
+    return templates.TemplateResponse(
+        "claims.html",
+        {
+            "request": request,
+            "claims": claim_rows,
+            "claim_status_values": CLAIM_STATUS_VALUES,
+            "status_filter": status,
+        },
+    )
+
+
+@router.get("/claims/{claim_id}", response_class=HTMLResponse)
+def claim_detail(
+    claim_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    events = list_events_for_claim(db, claim.id)
+    status_events = [e for e in events if e.get("state") in CLAIM_STATUS_VALUES]
+    current_status = status_events[0]["state"] if status_events else None
+    docs = list_documents_for_claim(db, claim.id)
+    generated_docs = [d for d in docs if d["doc_type"] in ("agreement_generated", "authorization_generated")]
+    package_docs = [d for d in docs if d["doc_type"] not in ("agreement_generated", "authorization_generated")]
+    return templates.TemplateResponse(
+        "claim_detail.html",
+        {
+            "request": request,
+            "claim": claim,
+            "events": events,
+            "current_status": current_status,
+            "generated_docs": generated_docs,
+            "package_docs": package_docs,
+            "download_base": "",
+            "claim_status_values": CLAIM_STATUS_VALUES,
+        },
+    )
+
+
+@router.get("/claims/{claim_id}/events")
+def claim_events(
+    claim_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        events = list_events_for_claim(db, claim_id)
+    except Exception:
+        logger.exception("claim_events failed")
+        raise HTTPException(status_code=500, detail="Failed to fetch claim events")
+    return {"events": events}
+
+
+@router.get("/claims/{claim_id}/documents")
+def claim_documents(
+    claim_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        docs = list_documents_for_claim(db, claim_id)
+    except Exception:
+        logger.exception("claim_documents failed")
+        raise HTTPException(status_code=500, detail="Failed to fetch claim documents")
+    # Add download URLs
+    for d in docs:
+        d["download_url"] = f"/claims/{claim_id}/documents/{d['id']}/download"
+    return {"documents": docs}
+
+
+@router.get("/claims/{claim_id}/documents/{doc_id}/download")
+def claim_document_download(
+    claim_id: int,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    doc = (
+        db.query(ClaimDocument)
+        .filter(ClaimDocument.id == doc_id, ClaimDocument.claim_id == claim_id)
+        .one_or_none()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not doc.file_path or not Path(doc.file_path).exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=doc.file_path,
+        filename=doc.original_name or Path(doc.file_path).name,
+        media_type="application/octet-stream",
+    )
+
+
+@router.get("/claims/{claim_id}/files")
+def claim_files(
+    claim_id: int,
+    type: str = Query("generated", regex="^(generated|package)$"),
+    db: Session = Depends(get_db),
+):
+    claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    base_dir = Path(claim.output_dir or "")
+    target = base_dir / ("generated" if type == "generated" else "package")
+    files = _list_files_in_dir(target)
+    for f in files:
+        f["download_url"] = f"/claims/{claim_id}/files/download?type={type}&name={f['name']}"
+    return {"files": files}
+
+
+@router.get("/claims/{claim_id}/files/download")
+def claim_file_download(
+    claim_id: int,
+    name: str = Query(...),
+    type: str = Query("generated", regex="^(generated|package)$"),
+    db: Session = Depends(get_db),
+):
+    claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    base_dir = Path(claim.output_dir or "")
+    target = base_dir / ("generated" if type == "generated" else "package")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    file_path = target / name
+    try:
+        # prevent traversal
+        file_path.resolve().relative_to(target.resolve())
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=str(file_path),
+        filename=name,
+        media_type="application/octet-stream",
+    )
+
+
+@router.delete("/claims/{claim_id}/files")
+def claim_file_delete(
+    claim_id: int,
+    name: str = Query(...),
+    type: str = Query("generated", regex="^(generated|package)$"),
+    db: Session = Depends(get_db),
+):
+    claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    base_dir = Path(claim.output_dir or "")
+    target = base_dir / ("generated" if type == "generated" else "package")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    file_path = target / name
+    try:
+        file_path.resolve().relative_to(target.resolve())
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Delete file
+    file_path.unlink(missing_ok=True)
+
+    # Log deletion event
+    event = ClaimEvent(
+        claim_id=claim.id,
+        state="document_deleted",
+        payload=json.dumps({"doc_type": type, "name": name}),
+        created_at=datetime.utcnow(),
+    )
+    db.add(event)
+    db.commit()
+
+    return {"deleted": True}
+
+
+@router.post("/claims/{claim_id}/documents/upload")
+async def claim_upload_document(
+    claim_id: int,
+    doc_type: str = Form(...),
+    notes: str | None = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    if not doc_type:
+        raise HTTPException(status_code=400, detail="doc_type is required")
+    if not file:
+        raise HTTPException(status_code=400, detail="file is required")
+
+    # Ensure output dir
+    if not claim.output_dir:
+        claim.output_dir = str(Path("scripts/pdf_output") / f"claim-{claim.id}")
+    output_dir = Path(claim.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    package_dir = output_dir / "package"
+    package_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = f"{uuid.uuid4().hex}_{file.filename}"
+    dest_path = package_dir / safe_name
+    with dest_path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    doc = ClaimDocument(
+        claim_id=claim.id,
+        doc_type=doc_type,
+        original_name=file.filename or safe_name,
+        file_path=str(dest_path),
+        notes=notes,
+    )
+    db.add(doc)
+
+    # Log upload event
+    upload_event = ClaimEvent(
+        claim_id=claim.id,
+        state="document_uploaded",
+        payload=json.dumps({"doc_type": doc_type, "name": file.filename or safe_name}),
+        created_at=datetime.utcnow(),
+    )
+    db.add(upload_event)
+    db.commit()
+
+    return {
+        "id": doc.id,
+        "doc_type": doc.doc_type,
+        "original_name": doc.original_name,
+        "file_path": doc.file_path,
+        "notes": doc.notes,
+        "created_at": doc.created_at.isoformat() if doc.created_at else None,
+    }
+
+
+@router.post("/claims/{claim_id}/agreements/generate")
+async def claim_generate_agreements(
+    claim_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    control_no = body.get("control_no") or ""
+    formation_state = body.get("formation_state") or ""
+    fee_pct = body.get("fee_pct") or "10"
+    addendum_yes = bool(body.get("addendum_yes", False))
+
+    if not control_no or not formation_state:
+        raise HTTPException(status_code=400, detail="control_no and formation_state are required")
+
+    try:
+        result = generate_agreements_for_claim(
+            db=db,
+            claim_id=claim_id,
+            control_no=control_no,
+            formation_state=formation_state,
+            fee_pct=fee_pct,
+            addendum_yes=addendum_yes,
+            user=None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("claim_generate_agreements failed")
+        raise HTTPException(status_code=500, detail="Failed to generate agreements")
+
+    return result
+
+
+@router.post("/claims/{claim_id}/status")
+async def claim_set_status(
+    claim_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    state = body.get("state")
+    if not state:
+        raise HTTPException(status_code=400, detail="state is required")
+    if state not in CLAIM_STATUS_VALUES:
+        raise HTTPException(status_code=400, detail="invalid state")
+
+    claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    # Record event
+    event = ClaimEvent(
+        claim_id=claim.id,
+        state=state,
+        payload=json.dumps({"status": state}),
+        created_at=datetime.utcnow(),
+    )
+    db.add(event)
+    db.commit()
+
+    return {
+        "id": event.id,
+        "state": event.state,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-with-sidebar">
+  <div class="page-content" style="width: 100%;">
+    <div class="page-header" style="justify-content: space-between; align-items: center;">
+      <div>
+        <h1>Claims</h1>
+        <p class="page-subtitle">All claims, newest first. Open a lead to create a new claim.</p>
+      </div>
+      <div class="page-actions" style="display: flex; gap: 12px; align-items: center;">
+        <form method="get" action="/claims" class="inline-form" style="display: flex; gap: 8px; align-items: center;">
+          <label for="status-filter" class="text-muted" style="font-size: 13px;">Status</label>
+          <select name="status" id="status-filter">
+            <option value="">All</option>
+            {% for st in claim_status_values %}
+              <option value="{{ st }}" {% if status_filter == st %}selected{% endif %}>{{ st }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+        </form>
+        <a href="/leads" class="btn btn-secondary">Go to Leads</a>
+      </div>
+    </div>
+
+    <div class="card">
+      {% if not claims %}
+        <p class="text-muted" style="padding: 16px;">No claims yet.</p>
+      {% else %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Claim</th>
+            <th>Lead</th>
+            <th>Control #</th>
+            <th>Fee %</th>
+            <th>Formation State</th>
+            <th>Addendum</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Last Event</th>
+            <th>Docs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in claims %}
+          <tr>
+            <td>
+              <a href="/claims/{{ c.id }}">{{ c.claim_slug or ('claim-' ~ c.id) }}</a>
+            </td>
+            <td>
+              {% if c.lead_id %}
+                <a href="/leads/{{ c.lead_id }}/edit">Lead #{{ c.lead_id }}</a>
+                <div class="text-muted" style="font-size: 12px;">{{ c.lead_owner or '' }}{% if c.lead_status %} • {{ c.lead_status }}{% endif %}</div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>{{ c.control_no or '—' }}</td>
+            <td>{{ c.fee_pct or '—' }}</td>
+            <td>{{ c.formation_state or '—' }}</td>
+            <td>{% if c.addendum_yes %}Yes{% else %}No{% endif %}</td>
+            <td>
+              {% if c.current_state %}
+                <span class="status-pill">{{ c.current_state }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>{{ c.created_at.strftime('%Y-%m-%d %I:%M %p') if c.created_at else '—' }}</td>
+            <td>
+              {% if c.last_event %}
+                {{ c.last_event.state }}{% if c.last_event_created_at %} at {{ c.last_event_created_at }}{% endif %}
+              {% else %}
+                <span class="text-muted">No events</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if c.doc_count is defined %}
+                {{ c.doc_count }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+

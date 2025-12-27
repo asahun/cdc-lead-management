@@ -12,6 +12,13 @@
     return data.events || [];
   }
 
+  async function fetchDocuments(leadId) {
+    const res = await fetch(`/leads/${leadId}/agreements/documents`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.documents || [];
+  }
+
   function renderEvents(listEl, events) {
     if (!listEl) return;
     listEl.innerHTML = '';
@@ -35,63 +42,102 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const section = $('agreement-section');
-    if (!section) return;
+    const openClaimLink = $('open-claim-link');
+    const createButtons = Array.from(document.querySelectorAll('.create-claim-btn'));
+    const statusEl = $('claim-action-status') || $('agreement-status');
+    const claimSummaryEl = $('claim-summary');
 
-    const leadId = section.dataset.leadId || document.body.dataset.leadId;
-    const controlNoEl = $('agreement-control-no');
-    const formationStateEl = $('agreement-formation-state');
-    const feePctEl = $('agreement-fee-pct');
-    const addendumEl = $('agreement-addendum');
-    const statusEl = $('agreement-status');
-    const btn = $('generate-agreements-btn');
-    const eventsList = $('agreement-events-list');
+    if (!createButtons.length && !openClaimLink) return;
 
-    async function loadEvents() {
-      const events = await fetchEvents(leadId);
-      renderEvents(eventsList, events);
+    // Derive leadId from dataset on any create button or on body
+    const leadId =
+      (createButtons[0] && createButtons[0].dataset.leadId) ||
+      document.body.dataset.leadId ||
+      (openClaimLink && openClaimLink.dataset.leadId);
+    if (!leadId) return;
+
+    async function fetchClaim() {
+      try {
+        const res = await fetch(`/leads/${leadId}/claims/latest`);
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error('Failed to load claim');
+        return await res.json();
+      } catch (err) {
+        console.error(err);
+        return null;
+      }
     }
 
-    btn?.addEventListener('click', async () => {
-      const control_no = (controlNoEl?.value || '').trim();
-      const formation_state = (formationStateEl?.value || '').trim();
-      const fee_pct = feePctEl?.value || '10';
-      const addendum_yes = (addendumEl?.value || 'false') === 'true';
-
-      if (!control_no || !formation_state) {
-        statusEl.textContent = 'Control number and formation state are required.';
-        statusEl.className = 'text-danger';
-        return;
+    function setClaimState(claim) {
+      const hasClaim = !!claim;
+      if (statusEl && !hasClaim) {
+        statusEl.textContent = 'No claim yet. Create a claim to continue.';
+        statusEl.className = 'text-muted';
       }
+      if (claimSummaryEl) {
+        if (hasClaim) {
+          const parts = [
+            claim.claim_slug || `claim-${claim.id}`,
+            claim.control_no ? `Control #${claim.control_no}` : null,
+            claim.formation_state ? `State ${claim.formation_state}` : null,
+            claim.fee_pct ? `Fee ${claim.fee_pct}%` : null,
+            claim.output_dir ? `Output: ${claim.output_dir}` : null,
+          ].filter(Boolean);
+          claimSummaryEl.textContent = `Claim ready: ${parts.join(' • ')}`;
+          claimSummaryEl.className = 'text-success';
+        } else {
+          claimSummaryEl.textContent = 'No claim yet. Create a claim to continue.';
+          claimSummaryEl.className = 'text-muted';
+        }
+      }
+      if (openClaimLink) {
+        if (hasClaim) {
+          openClaimLink.href = `/claims/${claim.id}`;
+          openClaimLink.style.display = '';
+        } else {
+          openClaimLink.style.display = 'none';
+        }
+      }
+      createButtons.forEach((b) => (b.disabled = hasClaim));
+    }
 
-      statusEl.textContent = 'Generating...';
+    async function handleCreateClaim() {
+      statusEl.textContent = 'Creating claim...';
       statusEl.className = 'text-muted';
-      btn.disabled = true;
-      btn.classList.add('loading');
+      createButtons.forEach((b) => (b.disabled = true));
 
       try {
-        const res = await fetch(`/leads/${leadId}/agreements/generate`, {
+        const res = await fetch(`/leads/${leadId}/claims`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ control_no, formation_state, fee_pct, addendum_yes }),
+          body: JSON.stringify({}),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || 'Generation failed');
+          throw new Error(err.detail || 'Claim creation failed');
         }
-        await loadEvents();
-        statusEl.textContent = 'Generated successfully.';
+        const claim = await res.json();
+        setClaimState(claim);
+        statusEl.textContent = 'Claim created. Open claim to generate agreements.';
         statusEl.className = 'text-success';
+        if (openClaimLink) {
+          openClaimLink.href = `/claims/${claim.id}`;
+          openClaimLink.style.display = '';
+        }
       } catch (e) {
         statusEl.textContent = e.message;
         statusEl.className = 'text-danger';
       } finally {
-        btn.disabled = false;
-        btn.classList.remove('loading');
+        createButtons.forEach((b) => (b.disabled = false));
       }
-    });
+    }
 
-    loadEvents();
+    createButtons.forEach((btn) => btn.addEventListener('click', handleCreateClaim));
+
+    (async () => {
+      const claim = await fetchClaim();
+      setClaimState(claim);
+    })();
   });
 })();
 

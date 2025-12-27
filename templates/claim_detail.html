@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-content" style="padding: 16px;">
+  <div class="page-header" style="justify-content: space-between; align-items: center;">
+    <div>
+      <h1>Claim {{ claim.claim_slug or ('claim-' ~ claim.id) }}</h1>
+      <p class="text-muted">Lead #{{ claim.lead_id }}{% if claim.lead and claim.lead.owner_name %} • {{ claim.lead.owner_name }}{% endif %}</p>
+    </div>
+    <div class="page-actions" style="display: flex; gap: 8px;">
+      <a href="/claims" class="btn btn-secondary">Back to Claims</a>
+      {% if claim.lead_id %}
+      <a href="/leads/{{ claim.lead_id }}/edit" class="btn btn-ghost">View Lead</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <section id="claim-detail" class="card" data-claim-id="{{ claim.id }}">
+    <header>
+      <h2>Claim Summary</h2>
+    </header>
+    <div class="section-content">
+      <div class="grid two-column">
+        <div>
+          <div class="label">Claim Slug</div>
+          <div>{{ claim.claim_slug or ('claim-' ~ claim.id) }}</div>
+        </div>
+        <div>
+          <div class="label">Lead</div>
+          <div>
+            {% if claim.lead_id %}
+              <a href="/leads/{{ claim.lead_id }}/edit">Lead #{{ claim.lead_id }}</a>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+        <div>
+          <div class="label">Control Number</div>
+          <div>{{ claim.control_no or '—' }}</div>
+        </div>
+        <div>
+          <div class="label">Formation State</div>
+          <div>{{ claim.formation_state or '—' }}</div>
+        </div>
+        <div>
+          <div class="label">Fee %</div>
+          <div>{{ claim.fee_pct or '—' }}</div>
+        </div>
+        <div>
+          <div class="label">Addendum</div>
+          <div>{% if claim.addendum_yes %}Yes{% else %}No{% endif %}</div>
+        </div>
+        <div>
+          <div class="label">Output Directory</div>
+          <div>{{ claim.output_dir or '—' }}</div>
+        </div>
+        <div style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="label">Current Status</div>
+            {% if current_status %}
+              <span class="status-pill" id="claim-current-status">{{ current_status }}</span>
+            {% else %}
+              <span class="text-muted" id="claim-current-status">—</span>
+            {% endif %}
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="claim-status-update" class="text-muted" style="text-align: right; white-space: nowrap;"></span>
+            <label for="claim-status-select" class="text-muted" style="font-size: 13px; white-space: nowrap;">Status:</label>
+            <select id="claim-status-select" style="width: auto;">
+              {% for st in claim_status_values %}
+                <option value="{{ st }}">{{ st }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" class="btn btn-secondary" id="claim-status-btn">Set</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 16px;" data-claim-id="{{ claim.id }}">
+    <header>
+      <h2>Agreement Files</h2>
+      <p class="text-muted">Outputs save to {{ claim.output_dir or 'claim folder' }}.</p>
+    </header>
+    <div class="section-content">
+      <div class="grid two-column">
+        <div>
+          <label for="claim-control-no">Control Number</label>
+          <input id="claim-control-no" type="text" value="{{ claim.control_no or '' }}">
+        </div>
+        <div>
+          <label for="claim-formation-state">Formation State</label>
+          <select id="claim-formation-state">
+            <option value="" {% if not claim.formation_state %}selected{% endif %}>-- select --</option>
+            {% for st in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"] %}
+            <option value="{{ st }}" {% if claim.formation_state == st %}selected{% endif %}>{{ st }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="claim-fee-pct">CDR Fee %</label>
+          <select id="claim-fee-pct">
+            {% for pct in range(5,16) %}
+            <option value="{{ pct }}" {% if claim.fee_pct and claim.fee_pct|string == pct|string %}selected{% elif (not claim.fee_pct) and pct == 10 %}selected{% endif %}>{{ pct }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="claim-addendum">Addendum?</label>
+          <select id="claim-addendum">
+            <option value="false" {% if not claim.addendum_yes %}selected{% endif %}>No</option>
+            <option value="true" {% if claim.addendum_yes %}selected{% endif %}>Yes</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions" style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+        <button type="button" class="btn btn-primary" id="claim-generate-btn">Generate Agreement Files</button>
+        <span id="claim-status" class="text-muted"></span>
+      </div>
+      <div class="file-list" style="margin-top: 12px;">
+        <h4 style="margin: 0 0 4px 0;">Generated Files</h4>
+        <ul id="claim-generated-list" class="claim-file-list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 16px;" data-claim-id="{{ claim.id }}">
+    <header>
+      <h2>Claim Package</h2>
+    </header>
+    <div class="section-content">
+      <!-- Required Documents Checklist -->
+      <div class="claim-package-section">
+        <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #374151;">Required Documents</h3>
+        <ul id="claim-required-list" class="claim-checklist"></ul>
+      </div>
+
+      <!-- Divider -->
+      <div class="claim-package-divider"></div>
+
+      <!-- Current Files -->
+      <div class="claim-package-section">
+        <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #374151;">Uploaded Files</h3>
+        <ul id="claim-package-list" class="claim-file-list"></ul>
+      </div>
+
+      <!-- Divider -->
+      <div class="claim-package-divider"></div>
+
+      <!-- Upload Form -->
+      <div class="claim-package-section">
+        <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #374151;">Upload New File</h3>
+        <form id="claim-upload-form" data-claim-id="{{ claim.id }}" enctype="multipart/form-data">
+          <div class="grid two-column" style="align-items: flex-end;">
+            <div>
+              <label for="claim-doc-type">Document Type</label>
+              <select id="claim-doc-type" name="doc_type" required>
+                <option value="agreement_signed">Agreement Signed</option>
+                <option value="authorization_signed">Authorization Signed</option>
+                <option value="addendum">Addendum</option>
+                <option value="non_disclosure">Non Disclosure</option>
+                <option value="fein_document">FEIN Document</option>
+                <option value="id_verification">ID Verification</option>
+                <option value="address_verification">Address Verification</option>
+                <option value="b2b_relationship">B2B Relationship</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label for="claim-upload-notes">Notes (optional)</label>
+              <input id="claim-upload-notes" name="notes" type="text" placeholder="Notes or description">
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+            <input id="claim-upload-file" name="file" type="file" required>
+            <button type="submit" class="btn btn-secondary">Upload</button>
+            <span id="claim-upload-status" class="text-muted"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 16px;" data-claim-id="{{ claim.id }}">
+    <header>
+      <h2>Audit Timeline</h2>
+      <p class="text-muted" style="margin: 0;">Status changes, generations, uploads, deletions.</p>
+    </header>
+    <div class="section-content">
+      <div class="form-row" style="margin-bottom: 8px; align-items: center; gap: 8px;">
+        <label class="text-muted" style="font-size: 13px;">Filter</label>
+        <div class="button-group" id="audit-filter">
+          <button type="button" class="btn btn-ghost btn-sm audit-filter-btn active" data-filter="all">All</button>
+          <button type="button" class="btn btn-ghost btn-sm audit-filter-btn" data-filter="status">Status</button>
+          <button type="button" class="btn btn-ghost btn-sm audit-filter-btn" data-filter="files">Files</button>
+        </div>
+      </div>
+      <ul id="claim-audit-list" class="audit-list"></ul>
+    </div>
+  </section>
+
+  <!-- Delete File Confirmation Modal -->
+  <div id="delete-file-modal" class="modal confirm-modal" style="display: none;">
+    <div class="modal-content confirm-modal-content">
+      <div class="modal-header">
+        <h2>Delete File</h2>
+        <button type="button" class="modal-close" data-close-delete-file aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete <strong id="delete-file-name"></strong>?</p>
+        <p style="margin-top: 8px; color: #6b7280; font-size: 13px;">This action cannot be undone.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close-delete-file>Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-delete-file">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/claim_detail.js?v=20241226" defer></script>
+{% endblock %}
+

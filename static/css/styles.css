@@ -1320,6 +1320,125 @@ body {
     background-repeat: no-repeat;
   }
 
+  #claim-status-select {
+    width: auto;
+    min-width: max-content;
+    padding: 6px 32px 6px 12px;
+  }
+
+  #claim-status-update {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+
+  #claim-status-update.text-success {
+    color: #059669;
+    background-color: #d1fae5;
+  }
+
+  #claim-status-update.text-danger {
+    color: #dc2626;
+    background-color: #fee2e2;
+  }
+
+  #claim-status-update.text-muted {
+    color: #6b7280;
+  }
+
+  /* Claim Package Section Styling */
+  .claim-package-section {
+    padding: 16px 0;
+  }
+
+  .claim-package-section:first-child {
+    padding-top: 0;
+  }
+
+  .claim-package-section:last-child {
+    padding-bottom: 0;
+  }
+
+  .claim-package-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+    margin: 8px 0;
+  }
+
+  .claim-checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .claim-checklist li {
+    padding: 10px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    background-color: #f9fafb;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+  }
+
+  .claim-checklist li.text-success {
+    border-left-color: #10b981;
+    background-color: #ecfdf5;
+  }
+
+  .claim-checklist li.text-success span:first-child {
+    color: #10b981;
+  }
+
+  .claim-checklist li.text-danger {
+    border-left-color: #ef4444;
+    background-color: #fef2f2;
+  }
+
+  .claim-checklist li.text-danger span:first-child {
+    color: #ef4444;
+  }
+
+  .claim-file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .claim-file-list li {
+    padding: 12px;
+    margin: 6px 0;
+    border-radius: 6px;
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: all 0.2s ease;
+  }
+
+  .claim-file-list li > div {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .claim-file-list li:hover {
+    background-color: #f3f4f6;
+    border-color: #d1d5db;
+  }
+
+  .claim-file-list li.text-muted {
+    background-color: transparent;
+    border: none;
+    padding: 12px;
+    color: #9ca3af;
+    font-style: italic;
+  }
+
   textarea {
     resize: vertical;
     min-height: 90px;
