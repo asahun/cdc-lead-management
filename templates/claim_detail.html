@@ -201,6 +201,29 @@
     </div>
   </section>
 
+  <!-- Preview Modal -->
+  <div id="preview-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
+    <div class="modal-content" style="width: 90%; max-width: 960px; height: 90vh; max-height: 90vh; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <div>
+          <div id="preview-title" style="font-weight: 600; font-size: 16px;">Preview</div>
+          <div id="preview-meta" class="text-muted" style="font-size: 12px;"></div>
+        </div>
+        <button type="button" class="btn btn-ghost" data-close-preview aria-label="Close preview">&times;</button>
+      </div>
+      <div style="flex: 1; min-height: 70vh; border: 1px solid #e5e7eb; overflow: hidden;">
+        <iframe id="preview-frame" src="" style="width: 100%; height: 100%; border: 0;" allow="clipboard-read; clipboard-write"></iframe>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <a id="preview-open-tab" href="#" target="_blank" class="btn btn-ghost btn-sm">Open in new tab</a>
+        <div style="display: flex; gap: 8px;">
+          <button id="preview-send-signature" type="button" class="btn btn-secondary btn-sm" disabled title="Coming soon">Send for Signature</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-close-preview>Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Delete File Confirmation Modal -->
   <div id="delete-file-modal" class="modal confirm-modal" style="display: none;">
     <div class="modal-content confirm-modal-content">
@@ -220,6 +243,6 @@
   </div>
 </div>
 
-<script src="/static/js/claim_detail.js?v=20241226" defer></script>
+<script src="/static/js/claim_detail.js?v=20241227" defer></script>
 {% endblock %}
 

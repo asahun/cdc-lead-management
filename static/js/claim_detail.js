@@ -54,6 +54,11 @@
       'document_deleted',
       'document_record',
     ];
+    const previewModal = $('preview-modal');
+    const previewFrame = $('preview-frame');
+    const previewTitle = $('preview-title');
+    const previewMeta = $('preview-meta');
+    const previewOpenTab = $('preview-open-tab');
 
     function renderTimeline(target, events, filter) {
       if (!target) return;
@@ -116,6 +121,24 @@
       }
       pill.textContent = sorted[0].state;
       pill.className = 'status-pill';
+    }
+
+    function closePreview() {
+      if (previewFrame) previewFrame.src = '';
+      if (previewModal) previewModal.style.display = 'none';
+    }
+
+    function openPreview(file) {
+      if (!file) return;
+      const title = file.name || 'Preview';
+      const ts = file.created_at ? new Date(file.created_at).toLocaleString() : '';
+      const inlineUrl = file.preview_url || (file.download_url ? `${file.download_url}${file.download_url.includes('?') ? '&' : '?'}inline=1` : '');
+      const downloadUrl = file.download_url || inlineUrl || '#';
+      if (previewTitle) previewTitle.textContent = title;
+      if (previewMeta) previewMeta.textContent = ts;
+      if (previewOpenTab) previewOpenTab.href = downloadUrl;
+      if (previewFrame && inlineUrl) previewFrame.src = inlineUrl;
+      if (previewModal) previewModal.style.display = 'flex';
     }
 
     async function loadEvents() {
@@ -195,6 +218,11 @@
           del.textContent = 'Delete';
           del.className = 'btn btn-ghost btn-sm';
           del.addEventListener('click', () => openDeleteModal('generated', f.name));
+          const previewBtn = document.createElement('button');
+          previewBtn.textContent = 'Preview';
+          previewBtn.className = 'btn btn-ghost btn-sm';
+          previewBtn.addEventListener('click', () => openPreview(f));
+          li.appendChild(previewBtn);
           li.appendChild(del);
           generatedList.appendChild(li);
         });
@@ -253,6 +281,11 @@
           del.textContent = 'Delete';
           del.className = 'btn btn-ghost btn-sm';
           del.addEventListener('click', () => openDeleteModal('package', f.name));
+          const previewBtn = document.createElement('button');
+          previewBtn.textContent = 'Preview';
+          previewBtn.className = 'btn btn-ghost btn-sm';
+          previewBtn.addEventListener('click', () => openPreview(f));
+          li.appendChild(previewBtn);
           li.appendChild(del);
           packageList.appendChild(li);
         });
@@ -338,6 +371,18 @@
       deleteFileModal.addEventListener('click', (event) => {
         if (event.target === deleteFileModal) {
           closeDeleteModal();
+        }
+      });
+    }
+
+    // Preview modal events
+    document.querySelectorAll('[data-close-preview]').forEach((btn) => {
+      btn.addEventListener('click', closePreview);
+    });
+    if (previewModal) {
+      previewModal.addEventListener('click', (event) => {
+        if (event.target === previewModal) {
+          closePreview();
         }
       });
     }

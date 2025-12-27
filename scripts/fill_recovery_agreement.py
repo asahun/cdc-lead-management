@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 Recovery Agreement handler for UP-CDR2: build field mapping from lead/property/contact
-data and delegate filling to the shared pdf_filler.
+data and delegate filling to the reportlab/pdfrw filler.
 """
 
 import json
 import sys
 from pathlib import Path
 
-from scripts.pdf_fill_engine import fill_pdf_fields
+from scripts.pdf_fill_reportlab import fill_pdf_fields_reportlab
 
 
 def parse_input(data):
@@ -42,6 +42,7 @@ def build_field_mapping(properties, primary_contact, meta, cdr_profile):
         except Exception:
             pass
     fee_pct_val = float(meta.get("cdr_fee_percentage", meta.get("cdr_fee_flat", 10.0)))
+    recovered_pct = max(0.0, 100.0 - fee_pct_val)
     fee_amount = round(total_sum * (fee_pct_val / 100.0), 2)
     net_pay = round(total_sum - fee_amount, 2)
 
@@ -79,6 +80,16 @@ def build_field_mapping(properties, primary_contact, meta, cdr_profile):
             "cdr_agent_email": cdr_profile.get("agent_email", ""),
             "addendum_yes": addendum_yes,
             "addendum_no": not addendum_yes,
+            # Fee fields (ensure explicitly present)
+            "cdr_fee_percentage": f"{fee_pct_val:.0f}",
+            "cdr_fee_amount": f"{fee_amount:,.2f}",
+            "claimant_net_pay": f"{net_pay:,.2f}",
+            "claimant_recovered_percentage": f"{recovered_pct:.0f}",
+            # Aliases in case template duplicates
+            "cdr_fee_percentage_2": f"{fee_pct_val:.0f}",
+            "cdr_fee_amount_2": f"{fee_amount:,.2f}",
+            "claimant_net_pay_2": f"{net_pay:,.2f}",
+            "claimant_recovered_percentage_2": f"{recovered_pct:.0f}",
         }
     )
 
@@ -128,7 +139,8 @@ def main():
     for field_name, value in sorted(field_mapping.items()):
         print(f"  {field_name:25s} = {value}")
 
-    success = fill_pdf_fields(pdf_path, field_mapping, output_path, draw_fallback=False, lock_fields=True)
+    # Flatten via reportlab/pdfrw to ensure consistent rendering across viewers.
+    success = fill_pdf_fields_reportlab(pdf_path, field_mapping, output_path)
     sys.exit(0 if success else 1)
 
 

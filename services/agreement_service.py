@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from models import Lead, LeadContact, LeadProperty, LeadStatus, Claim, ClaimEvent, ClaimDocument
 from scripts.fill_recovery_agreement import build_field_mapping as build_recovery_mapping
 from scripts.fill_recover_authorization_letter import build_field_mapping as build_auth_mapping
-from scripts.pdf_fill_engine import fill_pdf_fields
+from scripts.pdf_fill_reportlab import fill_pdf_fields_reportlab
 import json
 
 
@@ -103,8 +103,6 @@ def create_claim_from_lead(
     lead = db.query(Lead).filter(Lead.id == lead_id).one_or_none()
     if not lead:
         raise ValueError("Lead not found")
-    if lead.status != LeadStatus.response_received:
-        raise ValueError("Lead status must be response_received to create a claim")
 
     primary_contact = _get_primary_contact(lead)
     if not primary_contact:
@@ -214,8 +212,6 @@ def generate_agreements_for_claim(
     lead = claim.lead
     if not lead:
         raise ValueError("Lead not found for claim")
-    if lead.status != LeadStatus.response_received:
-        raise ValueError("Lead status must be response_received to generate agreements")
 
     primary_contact = _get_primary_contact(lead)
     if not primary_contact:
@@ -278,12 +274,10 @@ def generate_agreements_for_claim(
     recovery_field_mapping = build_recovery_mapping(properties, primary_contact_payload, meta, cdr_profile)
     ts_suffix = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     rec_output = generated_dir / f"UP-CDR2 Recovery Agreement_{ts_suffix}.pdf"
-    ok_rec = fill_pdf_fields(
+    ok_rec = fill_pdf_fields_reportlab(
         str(TEMPLATES_DIR / "UP-CDR2 Recovery Agreement.pdf"),
         recovery_field_mapping,
         str(rec_output),
-        draw_fallback=False,
-        lock_fields=True,
     )
     if (not ok_rec) or (not rec_output.exists()):
         raise ValueError("Failed to generate Recovery Agreement PDF")
@@ -307,12 +301,10 @@ def generate_agreements_for_claim(
     }
     auth_field_mapping = build_auth_mapping(business_payload, claimant_payload, cdr_profile)
     auth_output = generated_dir / f"Recover_Authorization_Letter_{ts_suffix}.pdf"
-    ok_auth = fill_pdf_fields(
+    ok_auth = fill_pdf_fields_reportlab(
         str(TEMPLATES_DIR / "Recover_Authorization_Letter.pdf"),
         auth_field_mapping,
         str(auth_output),
-        draw_fallback=False,
-        lock_fields=True,
     )
     if (not ok_auth) or (not auth_output.exists()):
         raise ValueError("Failed to generate Authorization Letter PDF")

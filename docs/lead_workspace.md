@@ -60,11 +60,12 @@ to the combined workspace, so old bookmarks continue to work.
   on the lead’s owner type/status and streams the PDF back to the user so it
   lands in their default Downloads folder, while the backend logs the job so it
   appears in the Print Log panel.
-- PDF tooling: shared fill engine `scripts/pdf_fill_engine.py` plus per-template handlers
-  `scripts/fill_recovery_agreement.py` (UP-CDR2) and `scripts/fill_recover_authorization_letter.py`
-  (Authorization Letter). Templates live in `scripts/pdf_templates/`, outputs in
-  `scripts/pdf_output/`, and static CDR data in `scripts/data/cdr_profile.json`.
-  Claim tracking uses `scripts/sql/003_add_claim_tables.sql`.
+- PDF tooling: pdfrw + reportlab filler (`scripts/pdf_fill_reportlab.py`) plus
+  per-template handlers `scripts/fill_recovery_agreement.py` (UP-CDR2) and
+  `scripts/fill_recover_authorization_letter.py` (Authorization Letter).
+  Templates live in `scripts/pdf_templates/`, outputs in `scripts/pdf_output/`,
+  and static CDR data in `scripts/data/cdr_profile.json`. Claim tracking uses
+  `scripts/sql/003_add_claim_tables.sql`.
 - Claim-first flow (response_received leads):
   - Header CTA sits next to One-Pager: “Create Claim” calls POST `/leads/{id}/claims`
     to snapshot control_no/formation_state/fee_pct/addendum + primary contact/CDR profile
@@ -109,6 +110,13 @@ to the combined workspace, so old bookmarks continue to work.
   `claim_submitted`, `pending`, `approved`, `rejected`, `more_info`), not from
   file-only events like uploads/deletions. Generation events are both statuses
   and file-related, so they appear in filters for both “Status” and “Files”.
+- Claim detail now supports PDF preview: a “Preview” button opens a modal with an
+  inline iframe; “Open in new tab” is available, and a disabled “Send for
+  Signature” button is staged for the next phase. Downloads support `?inline=1`
+  via `/claims/{id}/files/download` and `/claims/{id}/documents/{doc_id}/download`.
+- PDF generation uses pdfrw+reportlab to draw text directly for consistent
+  rendering across viewers. Authorization letter maps `entity_name` (new
+  template field) and `business_name` to the lead’s `owner_name`.
 
   To bulk update older leads during a refresh:
 

@@ -10,6 +10,7 @@ import json
 import logging
 from pathlib import Path
 import uuid
+import mimetypes
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse, FileResponse
@@ -1717,6 +1718,7 @@ def claim_documents(
     # Add download URLs
     for d in docs:
         d["download_url"] = f"/claims/{claim_id}/documents/{d['id']}/download"
+        d["preview_url"] = f"/claims/{claim_id}/documents/{d['id']}/download?inline=1"
     return {"documents": docs}
 
 
@@ -1724,6 +1726,7 @@ def claim_documents(
 def claim_document_download(
     claim_id: int,
     doc_id: int,
+    inline: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     doc = (
@@ -1735,10 +1738,14 @@ def claim_document_download(
         raise HTTPException(status_code=404, detail="Document not found")
     if not doc.file_path or not Path(doc.file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
+    media_type, _ = mimetypes.guess_type(doc.file_path)
+    media_type = media_type or "application/octet-stream"
+    disposition = "inline" if inline else "attachment"
     return FileResponse(
         path=doc.file_path,
         filename=doc.original_name or Path(doc.file_path).name,
-        media_type="application/octet-stream",
+        media_type=media_type,
+        headers={"Content-Disposition": f'{disposition}; filename="{Path(doc.file_path).name}"'},
     )
 
 
@@ -1756,6 +1763,7 @@ def claim_files(
     files = _list_files_in_dir(target)
     for f in files:
         f["download_url"] = f"/claims/{claim_id}/files/download?type={type}&name={f['name']}"
+        f["preview_url"] = f"{f['download_url']}&inline=1"
     return {"files": files}
 
 
@@ -1764,6 +1772,7 @@ def claim_file_download(
     claim_id: int,
     name: str = Query(...),
     type: str = Query("generated", regex="^(generated|package)$"),
+    inline: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
@@ -1781,10 +1790,14 @@ def claim_file_download(
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    media_type = media_type or "application/octet-stream"
+    disposition = "inline" if inline else "attachment"
     return FileResponse(
         path=str(file_path),
         filename=name,
-        media_type="application/octet-stream",
+        media_type=media_type,
+        headers={"Content-Disposition": f'{disposition}; filename="{name}"'},
     )
 
 

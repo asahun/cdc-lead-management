@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 Handler for Recover Authorization Letter: builds field mapping from test data
-and delegates filling to the shared pdf_filler.
+and delegates filling to the reportlab/pdfrw filler.
 """
 
 import json
 import sys
 from pathlib import Path
 
-from scripts.pdf_fill_engine import fill_pdf_fields
+from scripts.pdf_fill_reportlab import fill_pdf_fields_reportlab
 
 
 def build_field_mapping(business: dict, claimant: dict, cdr_profile: dict) -> dict:
@@ -19,9 +19,11 @@ def build_field_mapping(business: dict, claimant: dict, cdr_profile: dict) -> di
     field_mapping.update(
         {
             "business_name": business.get("name", ""),
+            "entity_name": business.get("name", ""),  # new field in template
             "business_formation_state": business.get("formation_state", ""),
             "business_taxid": business.get("fein", ""),
-            "business_control_no ": business.get("control_no", ""),
+            "business_control_no": business.get("control_no", ""),   # trim trailing space
+            "business_control_no_2": business.get("control_no", ""), # alias if template uses a second field
             "business_street": business.get("street", ""),
             "business_city": business.get("city", ""),
             "business_state": business.get("state", ""),
@@ -47,7 +49,7 @@ def build_field_mapping(business: dict, claimant: dict, cdr_profile: dict) -> di
         {
             "primary_claimant_fullname": claimant.get("name", ""),
             "primary_claimant_title": claimant.get("title", ""),
-            "business_name": business.get("name", ""),
+            "business_name": business.get("name", ""),  # keep for claimant block if reused
             "primary_claimant_sign": "",
             "primary_claimant_sign_date": "",
         }
@@ -117,8 +119,8 @@ def main():
     for field_name, value in sorted(field_mapping.items()):
         print(f"  {field_name:30s} = {value}")
 
-    # Preserve template alignment/appearance and mark fields read-only (no drawing fallback).
-    success = fill_pdf_fields(pdf_path, field_mapping, output_path, draw_fallback=False, lock_fields=True)
+    # Flatten via reportlab/pdfrw to ensure consistent rendering across viewers.
+    success = fill_pdf_fields_reportlab(pdf_path, field_mapping, output_path)
     sys.exit(0 if success else 1)
 
 
