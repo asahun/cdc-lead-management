@@ -102,22 +102,21 @@
   <section class="card section-stack" data-claim-id="{{ claim.id }}" id="client-claim-info-section">
     <header>
       <h2>Client & Claim Information</h2>
-      <p class="text-muted">Configure client details and claim information before generating authorization letters.</p>
     </header>
     <div class="section-content">
       <!-- Claim Details Card -->
-      <div class="form-group" style="background: #f9fafb; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #e5e7eb;">
-        <h3 style="margin-top: 0; margin-bottom: 16px; color: #111827; font-size: 16px; font-weight: 600;">Claim Details</h3>
-        <div class="grid two-column" style="gap: 16px;">
+      <div class="form-group claim-form-card">
+        <h3>Claim Details</h3>
+        <div class="grid two-column claim-grid-gap-md">
           <div>
-            <label for="claim-fee-type" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Fee Type</label>
+            <label for="claim-fee-type" class="claim-form-label-inline">Fee Type</label>
             <select id="claim-fee-type">
               <option value="percentage" {% if not claim.fee_flat %}selected{% endif %}>Percentage</option>
               <option value="flat" {% if claim.fee_flat %}selected{% endif %}>Flat Amount</option>
             </select>
           </div>
           <div id="fee-pct-field" {% if claim.fee_flat %}style="display: none;"{% endif %}>
-            <label for="claim-fee-pct" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">CDR Fee Percentage</label>
+            <label for="claim-fee-pct" class="claim-form-label-inline">CDR Fee Percentage</label>
             <select id="claim-fee-pct">
               {% set current_fee_pct = claim.fee_pct if claim.fee_pct else 10 %}
               {% for pct in range(5,16) %}
@@ -126,11 +125,11 @@
             </select>
           </div>
           <div id="fee-flat-field" {% if not claim.fee_flat %}style="display: none;"{% endif %}>
-            <label for="claim-fee-flat" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">CDR Fee (Flat Amount)</label>
+            <label for="claim-fee-flat" class="claim-form-label-inline">CDR Fee (Flat Amount)</label>
             <input type="number" step="0.01" id="claim-fee-flat" value="{{ claim.fee_flat if claim.fee_flat else '' }}" placeholder="0.00">
           </div>
           <div>
-            <label for="claim-addendum" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Addendum Required?</label>
+            <label for="claim-addendum" class="claim-form-label-inline">Addendum Required?</label>
             <select id="claim-addendum">
               <option value="false" {% if not claim.addendum_yes %}selected{% endif %}>No</option>
               <option value="true" {% if claim.addendum_yes %}selected{% endif %}>Yes</option>
@@ -140,33 +139,33 @@
       </div>
 
       <!-- Client Information Card -->
-      <div class="form-group" style="background: #f9fafb; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #e5e7eb;">
-        <h3 style="margin-top: 0; margin-bottom: 16px; color: #111827; font-size: 16px; font-weight: 600;">Client Information</h3>
-        <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr; gap: 16px; align-items: end;">
+      <div class="form-group claim-form-card">
+        <h3>Client Information</h3>
+        <div class="claim-grid-three-col">
           <div>
-            <label for="entitled-business-name" style="font-size: 13px; color: #6b7280; margin-bottom: 6px; display: block;">Entitled Business Name</label>
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <label for="entitled-business-name" class="claim-form-label">Entitled Business Name</label>
+            <div class="claim-flex-row">
               <input 
                 type="text" 
                 id="entitled-business-name" 
                 value="{{ claim.entitled_business_name or (claim.lead.owner_name if claim.lead else '') }}"
                 {% if claim.entitled_business_same_as_owner %}disabled{% endif %}
                 placeholder="Entitled Business Name"
-                style="flex: 1;"
+                class="claim-input-flex"
               >
-              <label for="entitled-business-same-as-owner" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal; font-size: 13px; color: #6b7280; white-space: nowrap; margin-bottom: 0; flex-shrink: 0;">
-                <input type="checkbox" id="entitled-business-same-as-owner" style="width: 18px; height: 18px; margin: 0; cursor: pointer;" {% if claim.entitled_business_same_as_owner %}checked{% endif %}>
+              <label for="entitled-business-same-as-owner" class="claim-checkbox-label">
+                <input type="checkbox" id="entitled-business-same-as-owner" class="claim-checkbox-input" {% if claim.entitled_business_same_as_owner %}checked{% endif %}>
                 <span>Same as owner</span>
               </label>
             </div>
           </div>
           <div>
-            <label for="claim-control-no" style="font-size: 13px; color: #6b7280; margin-bottom: 6px; display: block;">Control Number</label>
-            <input id="claim-control-no" type="text" value="{{ client.control_no if client else '' }}" placeholder="Enter control number" style="width: 100%;">
+            <label for="claim-control-no" class="claim-form-label">Control Number</label>
+            <input id="claim-control-no" type="text" value="{{ client.control_no if client else '' }}" placeholder="Enter control number" class="claim-input-full">
           </div>
           <div>
-            <label for="claim-formation-state" style="font-size: 13px; color: #6b7280; margin-bottom: 6px; display: block;">Formation State</label>
-            <select id="claim-formation-state" style="width: 100%;">
+            <label for="claim-formation-state" class="claim-form-label">Formation State</label>
+            <select id="claim-formation-state" class="claim-input-full">
               <option value="" {% if not client or not client.formation_state %}selected{% endif %}>-- select --</option>
               {% for st in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"] %}
               <option value="{{ st }}" {% if client and client.formation_state == st %}selected{% endif %}>{{ st }}</option>
@@ -177,71 +176,71 @@
       </div>
 
       <!-- Signer Contacts Card -->
-      <div class="form-group" style="background: #f9fafb; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #e5e7eb;">
+      <div class="form-group claim-form-card">
         <!-- <h3 style="margin-top: 0; margin-bottom: 20px; color: #111827; font-size: 16px; font-weight: 600;">Authorized Signers</h3> -->
         
         <!-- Primary Signer -->
-        <div style="margin-bottom: 24px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-            <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: #374151;">Primary Signer <span style="color: #ef4444;">*</span></h4>
-            <label for="primary-signer-same-as-contact" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal; font-size: 13px; color: #6b7280;">
-              <input type="checkbox" id="primary-signer-same-as-contact" style="width: 18px; height: 18px; margin: 0; cursor: pointer;" {% if primary_contact and lead_primary_contact and primary_contact.lead_contact_id == lead_primary_contact.id %}checked{% endif %}>
+        <div class="claim-section-spacing">
+          <div class="claim-flex-between claim-margin-bottom-sm">
+            <h4>Primary Signer <span class="claim-required-asterisk">*</span></h4>
+            <label for="primary-signer-same-as-contact" class="claim-checkbox-label-large">
+              <input type="checkbox" id="primary-signer-same-as-contact" class="claim-checkbox-input" {% if primary_contact and lead_primary_contact and primary_contact.lead_contact_id == lead_primary_contact.id %}checked{% endif %}>
               <span>Use primary contact</span>
             </label>
           </div>
-          <div class="grid two-column" style="gap: 12px;">
+          <div class="grid two-column claim-grid-gap-sm">
             <div>
-              <label for="primary-signer-first-name" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">First Name <span style="color: #ef4444;">*</span></label>
+              <label for="primary-signer-first-name" class="claim-form-label-inline">First Name <span class="claim-required-asterisk">*</span></label>
               <input type="text" id="primary-signer-first-name" value="{{ primary_contact.first_name if primary_contact else (lead_primary_contact.contact_name.split(' ')[0] if lead_primary_contact and lead_primary_contact.contact_name else '') }}" placeholder="First name" required {% if primary_contact and lead_primary_contact and primary_contact.lead_contact_id == lead_primary_contact.id %}disabled{% endif %}>
             </div>
             <div>
-              <label for="primary-signer-last-name" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Last Name <span style="color: #ef4444;">*</span></label>
+              <label for="primary-signer-last-name" class="claim-form-label-inline">Last Name <span class="claim-required-asterisk">*</span></label>
               <input type="text" id="primary-signer-last-name" value="{{ primary_contact.last_name if primary_contact else (lead_primary_contact.contact_name.split(' ')[1] if lead_primary_contact and lead_primary_contact.contact_name and ' ' in lead_primary_contact.contact_name else '') }}" placeholder="Last name" required {% if primary_contact and lead_primary_contact and primary_contact.lead_contact_id == lead_primary_contact.id %}disabled{% endif %}>
             </div>
             <div>
-              <label for="primary-signer-title" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Title <span style="color: #ef4444;">*</span></label>
+              <label for="primary-signer-title" class="claim-form-label-inline">Title <span class="claim-required-asterisk">*</span></label>
               <input type="text" id="primary-signer-title" value="{{ primary_contact.title if primary_contact else (lead_primary_contact.title if lead_primary_contact else '') }}" placeholder="Job title" required {% if primary_contact and lead_primary_contact and primary_contact.lead_contact_id == lead_primary_contact.id %}disabled{% endif %}>
             </div>
             <div>
-              <label for="primary-signer-email" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Email <span style="color: #ef4444;">*</span></label>
+              <label for="primary-signer-email" class="claim-form-label-inline">Email <span class="claim-required-asterisk">*</span></label>
               <input type="email" id="primary-signer-email" value="{{ primary_contact.email if primary_contact else (lead_primary_contact.email if lead_primary_contact else '') }}" placeholder="email@example.com" required {% if primary_contact and lead_primary_contact and primary_contact.lead_contact_id == lead_primary_contact.id %}disabled{% endif %}>
             </div>
             <div>
-              <label for="primary-signer-phone" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Phone <span style="color: #ef4444;">*</span></label>
+              <label for="primary-signer-phone" class="claim-form-label-inline">Phone <span class="claim-required-asterisk">*</span></label>
               <input type="text" id="primary-signer-phone" value="{{ primary_contact.phone if primary_contact else (lead_primary_contact.phone if lead_primary_contact else '') }}" placeholder="(555) 123-4567" required {% if primary_contact and lead_primary_contact and primary_contact.lead_contact_id == lead_primary_contact.id %}disabled{% endif %}>
             </div>
           </div>
         </div>
 
         <!-- Secondary Signer (Optional) -->
-        <div style="border-top: 1px solid #e5e7eb; padding-top: 20px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-            <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: #374151;">Secondary Signer <span style="color: #9ca3af; font-weight: normal;">(Optional)</span></h4>
-            <label for="secondary-signer-enabled" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal; font-size: 13px; color: #6b7280;">
-              <input type="checkbox" id="secondary-signer-enabled" style="width: 18px; height: 18px; margin: 0; cursor: pointer;" {% if secondary_contact %}checked{% endif %}>
+        <div class="claim-section-divider">
+          <div class="claim-flex-between claim-margin-bottom-sm">
+            <h4>Secondary Signer <span class="claim-optional-label">(Optional)</span></h4>
+            <label for="secondary-signer-enabled" class="claim-checkbox-label-large">
+              <input type="checkbox" id="secondary-signer-enabled" class="claim-checkbox-input" {% if secondary_contact %}checked{% endif %}>
               <span>Add secondary signer</span>
             </label>
           </div>
           <div id="secondary-signer-fields" class="contact-fields" {% if not secondary_contact %}style="display: none;"{% endif %}>
-            <div class="grid two-column" style="gap: 12px;">
+            <div class="grid two-column claim-grid-gap-sm">
               <div>
-                <label for="secondary-signer-first-name" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">First Name</label>
+                <label for="secondary-signer-first-name" class="claim-form-label-inline">First Name</label>
                 <input type="text" id="secondary-signer-first-name" value="{{ secondary_contact.first_name if secondary_contact else '' }}" placeholder="First name">
               </div>
               <div>
-                <label for="secondary-signer-last-name" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Last Name</label>
+                <label for="secondary-signer-last-name" class="claim-form-label-inline">Last Name</label>
                 <input type="text" id="secondary-signer-last-name" value="{{ secondary_contact.last_name if secondary_contact else '' }}" placeholder="Last name">
               </div>
               <div>
-                <label for="secondary-signer-title" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Title</label>
+                <label for="secondary-signer-title" class="claim-form-label-inline">Title</label>
                 <input type="text" id="secondary-signer-title" value="{{ secondary_contact.title if secondary_contact else '' }}" placeholder="Job title">
               </div>
               <div>
-                <label for="secondary-signer-email" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Email</label>
+                <label for="secondary-signer-email" class="claim-form-label-inline">Email</label>
                 <input type="email" id="secondary-signer-email" value="{{ secondary_contact.email if secondary_contact else '' }}" placeholder="email@example.com">
               </div>
               <div>
-                <label for="secondary-signer-phone" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Phone</label>
+                <label for="secondary-signer-phone" class="claim-form-label-inline">Phone</label>
                 <input type="text" id="secondary-signer-phone" value="{{ secondary_contact.phone if secondary_contact else '' }}" placeholder="(555) 123-4567">
               </div>
             </div>
@@ -250,30 +249,30 @@
       </div>
 
       <!-- Check Mailing Address Card -->
-      <div class="form-group" style="background: #f9fafb; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #e5e7eb;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-          <h3 style="margin: 0; color: #111827; font-size: 16px; font-weight: 600;">Check Mailing Address <span style="color: #ef4444;">*</span></h3>
-          <label for="check-address-same-as-contact" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal; font-size: 13px; color: #6b7280;">
-            <input type="checkbox" id="check-address-same-as-contact" style="width: 18px; height: 18px; margin: 0; cursor: pointer;" {% if check_address_same_as_contact %}checked{% endif %}>
+      <div class="form-group claim-form-card">
+        <div class="claim-flex-between claim-margin-bottom-sm">
+          <h3 class="claim-margin-zero">Check Mailing Address <span class="claim-required-asterisk">*</span></h3>
+          <label for="check-address-same-as-contact" class="claim-checkbox-label-large">
+            <input type="checkbox" id="check-address-same-as-contact" class="claim-checkbox-input" {% if check_address_same_as_contact %}checked{% endif %}>
             <span>Use primary contact address</span>
           </label>
         </div>
-        <div class="grid two-column" style="gap: 12px;">
+        <div class="grid two-column claim-grid-gap-sm">
           <div>
-            <label for="check-address-street" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Street Address <span style="color: #ef4444;">*</span></label>
+            <label for="check-address-street" class="claim-form-label-inline">Street Address <span class="claim-required-asterisk">*</span></label>
             <input type="text" id="check-address-street" value="{{ check_address.street if check_address else (lead_primary_contact.address_street if lead_primary_contact else '') }}" placeholder="123 Main Street" required {% if check_address_same_as_contact %}disabled{% endif %}>
           </div>
           <div>
-            <label for="check-address-line2" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">Address Line 2 <span style="color: #9ca3af; font-weight: normal;">(Optional)</span></label>
+            <label for="check-address-line2" class="claim-form-label-inline">Address Line 2 <span class="claim-optional-label">(Optional)</span></label>
             <input type="text" id="check-address-line2" value="{{ check_address.line2 if check_address else '' }}" placeholder="Suite, Unit, etc." {% if check_address_same_as_contact %}disabled{% endif %}>
           </div>
           <div>
-            <label for="check-address-city" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">City <span style="color: #ef4444;">*</span></label>
+            <label for="check-address-city" class="claim-form-label-inline">City <span class="claim-required-asterisk">*</span></label>
             <input type="text" id="check-address-city" value="{{ check_address.city if check_address else (lead_primary_contact.address_city if lead_primary_contact else '') }}" placeholder="City" required {% if check_address_same_as_contact %}disabled{% endif %}>
           </div>
           <div>
-            <label for="check-address-state" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">State <span style="color: #ef4444;">*</span></label>
-            <select id="check-address-state" style="width: 100%;" required {% if check_address_same_as_contact %}disabled{% endif %}>
+            <label for="check-address-state" class="claim-form-label-inline">State <span class="claim-required-asterisk">*</span></label>
+            <select id="check-address-state" class="claim-input-full" required {% if check_address_same_as_contact %}disabled{% endif %}>
               <option value="" {% if not check_address or not check_address.state %}selected{% endif %}>-- select --</option>
               {% for st in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"] %}
               <option value="{{ st }}" {% if check_address and check_address.state == st %}selected{% elif not check_address and lead_primary_contact and lead_primary_contact.address_state == st %}selected{% endif %}>{{ st }}</option>
@@ -281,7 +280,7 @@
             </select>
           </div>
           <div>
-            <label for="check-address-zip" style="font-size: 13px; color: #6b7280; margin-bottom: 6px;">ZIP Code <span style="color: #ef4444;">*</span></label>
+            <label for="check-address-zip" class="claim-form-label-inline">ZIP Code <span class="claim-required-asterisk">*</span></label>
             <input type="text" id="check-address-zip" value="{{ check_address.zip if check_address else (lead_primary_contact.address_zipcode if lead_primary_contact else '') }}" placeholder="12345" maxlength="10" required {% if check_address_same_as_contact %}disabled{% endif %}>
           </div>
         </div>
@@ -289,9 +288,9 @@
 
 
       <!-- Save Button -->
-      <div class="form-actions" style="padding-top: 16px; border-top: 1px solid #e5e7eb; margin-top: 8px;">
-        <button type="button" class="btn btn-primary" id="save-client-claim-info-btn" style="min-width: 200px;">Save Client & Claim Information</button>
-        <span id="client-claim-info-status" class="text-muted" style="margin-left: 12px;"></span>
+      <div class="form-actions claim-form-actions-top">
+        <button type="button" class="btn btn-primary claim-min-width-btn" id="save-client-claim-info-btn">Save Client & Claim Information</button>
+        <span id="client-claim-info-status" class="text-muted claim-status-margin"></span>
       </div>
     </div>
   </section>
@@ -342,7 +341,7 @@
         <form id="claim-upload-form" data-claim-id="{{ claim.id }}" enctype="multipart/form-data">
           <div class="grid two-column claim-upload-grid">
             <div>
-              <label for="claim-doc-type" style="font-size: 13px; color: #6b7280; margin-bottom: 6px; display: block;">Document Type</label>
+              <label for="claim-doc-type" class="claim-form-label">Document Type</label>
               <select id="claim-doc-type" name="doc_type" required>
                 <option value="agreement_signed">Agreement Signed</option>
                 <option value="authorization_signed">Authorization Signed</option>
@@ -356,16 +355,16 @@
               </select>
             </div>
             <div>
-              <label for="claim-upload-notes" style="font-size: 13px; color: #6b7280; margin-bottom: 6px; display: block;">Notes <span style="color: #9ca3af; font-weight: normal;">(optional)</span></label>
+              <label for="claim-upload-notes" class="claim-form-label">Notes <span class="claim-optional-label">(optional)</span></label>
               <input id="claim-upload-notes" name="notes" type="text" placeholder="Notes or description">
             </div>
           </div>
-          <div class="form-actions claim-form-actions" style="display: flex; align-items: flex-end; gap: 12px;">
-            <div style="flex: 1;">
-              <label for="claim-upload-file" style="font-size: 13px; color: #6b7280; margin-bottom: 6px; display: block;">File <span style="color: #ef4444;">*</span></label>
-              <input id="claim-upload-file" name="file" type="file" required style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+          <div class="form-actions claim-form-actions claim-form-actions-inline">
+            <div class="claim-flex-grow">
+              <label for="claim-upload-file" class="claim-form-label">File <span class="claim-required-asterisk">*</span></label>
+              <input id="claim-upload-file" name="file" type="file" required class="claim-file-input">
             </div>
-            <div style="display: flex; align-items: flex-end; gap: 8px; padding-bottom: 2px;">
+            <div class="claim-form-actions-inline-end">
               <button type="submit" class="btn btn-secondary">Upload</button>
               <span id="claim-upload-status" class="text-muted"></span>
             </div>
@@ -394,7 +393,7 @@
   </section>
 
   <!-- Preview Modal -->
-  <div id="preview-modal" class="modal preview-modal" style="display: none;">
+  <div id="preview-modal" class="modal preview-modal">
     <div class="modal-content preview-modal-content">
       <div class="preview-modal-header">
         <div>
@@ -417,7 +416,7 @@
   </div>
 
   <!-- Delete File Confirmation Modal -->
-  <div id="delete-file-modal" class="modal confirm-modal" style="display: none;">
+  <div id="delete-file-modal" class="modal confirm-modal">
     <div class="modal-content confirm-modal-content">
       <div class="modal-header">
         <h2>Delete File</h2>
@@ -425,7 +424,7 @@
       </div>
       <div class="modal-body">
         <p>Are you sure you want to delete <strong id="delete-file-name"></strong>?</p>
-        <p style="margin-top: 8px; color: #6b7280; font-size: 13px;">This action cannot be undone.</p>
+        <p class="claim-text-muted-small">This action cannot be undone.</p>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" data-close-delete-file>Cancel</button>

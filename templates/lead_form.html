@@ -41,25 +41,25 @@
           {% if prev_lead_id %}
           <a href="/leads/{{ prev_lead_id }}/{{ mode }}{{ filter_qs }}" class="btn btn-ghost btn-inline">← Prev</a>
           {% else %}
-          <span class="btn btn-ghost btn-inline" style="opacity: 0.5; pointer-events: none;">← Prev</span>
+          <span class="btn btn-ghost btn-inline btn-disabled">← Prev</span>
           {% endif %}
           {% if next_lead_id %}
           <a href="/leads/{{ next_lead_id }}/{{ mode }}{{ filter_qs }}" class="btn btn-ghost btn-inline">Next →</a>
           {% else %}
-          <span class="btn btn-ghost btn-inline" style="opacity: 0.5; pointer-events: none;">Next →</span>
+          <span class="btn btn-ghost btn-inline btn-disabled">Next →</span>
           {% endif %}
         </div>
       {% endif %}
       {% if mode != "create" %}
-        <div class="action-cluster" style="gap: 8px;">
+        <div class="action-cluster action-cluster-gap">
           <a href="/leads/{{ lead.id }}/one-pager" class="btn btn-secondary">Generate One-Pager</a>
           {% if latest_claim %}
             <a href="/claims/{{ latest_claim.id }}" class="btn btn-primary" id="open-claim-link" data-lead-id="{{ lead.id }}">View Claim</a>
-            <span class="status-pill status-pill-assigned" style="margin-left: 6px;">Has Claim</span>
+            <span class="status-pill status-pill-assigned status-margin-left">Has Claim</span>
           {% elif lead.status.value == 'response_received' %}
             <button type="button" class="btn btn-secondary create-claim-btn" id="create-claim-top-btn" data-lead-id="{{ lead.id }}">Create Claim</button>
           {% endif %}
-          <span id="claim-action-status" class="text-muted" style="margin-left: 8px;"></span>
+          <span id="claim-action-status" class="text-muted text-muted-margin-left"></span>
         </div>
       {% endif %}
 {% if mode != "create" and mode != "view" %}
@@ -165,8 +165,8 @@
     <header>
       <h2>Properties for <span class="owner-name">{{ lead.owner_name }}</span></h2>
       {% if mode != 'view' %}
-      <button type="button" class="btn btn-secondary btn-sm" id="add-property-btn" title="Link related properties to this lead" style="margin-bottom: 8px;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+      <button type="button" class="btn btn-secondary btn-sm btn-margin-bottom" id="add-property-btn" title="Link related properties to this lead">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-inline">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
         </svg>
@@ -191,7 +191,7 @@
           </thead>
           <tbody>
             {% for prop, prop_details in properties_with_details %}
-            <tr {% if prop.is_primary %}class="primary-property" style="font-weight: bold; background-color: #f0f8ff;"{% endif %}>
+            <tr {% if prop.is_primary %}class="primary-property primary-property-row"{% endif %}>
               <td>
                 <code>{{ prop.property_id }}</code>
               </td>
@@ -216,7 +216,7 @@
                   <span class="text-muted">—</span>
                 {% endif %}
               </td>
-              <td style="width: 40px; text-align: center;">
+              <td class="table-cell-center">
                 <button type="button" 
                         class="property-detail-btn" 
                         data-property-hash="{{ prop.property_raw_hash }}"
@@ -233,18 +233,18 @@
               <td class="property-actions">
                 {% if all_properties|length > 1 %}
                   {% if prop.is_primary %}
-                  <span class="text-muted" title="Cannot remove the primary property. Set another property as primary first." style="opacity: 0.4; cursor: not-allowed; font-size: 16px;">🗑️</span>
+                  <span class="text-muted text-muted-disabled" title="Cannot remove the primary property. Set another property as primary first.">🗑️</span>
                   {% else %}
                   <button type="button" class="btn btn-sm btn-ghost danger remove-property-btn" 
                           data-property-id="{{ prop.property_id }}"
                           data-property-form-action="/leads/{{ lead.id }}/properties/{{ prop.property_id }}/remove"
                           title="Remove property" 
-                          style="border: none; background: none; padding: 4px 8px; cursor: pointer; font-size: 16px;">
+                          class="btn-icon-only">
                     🗑️
                   </button>
                   {% endif %}
                 {% else %}
-                <span class="text-muted" title="Cannot remove the only property" style="opacity: 0.4; cursor: not-allowed; font-size: 16px;">🗑️</span>
+                <span class="text-muted text-muted-disabled" title="Cannot remove the only property">🗑️</span>
                 {% endif %}
               </td>
               {% endif %}
@@ -259,24 +259,24 @@
   </section>
   
   <!-- Modal for adding properties -->
-  <div id="add-property-modal" class="modal" style="display: none;">
+  <div id="add-property-modal" class="modal modal-hidden">
     <div class="modal-content">
       <h2>Add Properties for <span id="modal-owner-name" class="owner-name"></span></h2>
-      <div id="modal-loading" style="text-align: center; padding: 20px;">
+      <div id="modal-loading" class="modal-loading-center">
         <p>Loading related properties...</p>
       </div>
-      <div id="modal-content" style="display: none;">
-        <div style="margin-bottom: 16px;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="checkbox" id="select-all-properties" class="property-checkbox-small" style="cursor: pointer;">
+      <div id="modal-content" class="modal-content-hidden">
+        <div class="modal-margin-bottom">
+          <label class="checkbox-label-flex">
+            <input type="checkbox" id="select-all-properties" class="property-checkbox-small checkbox-cursor">
             <strong>Select All</strong>
           </label>
         </div>
         <div id="properties-list" class="related-properties-container">
           <!-- Properties will be loaded here -->
         </div>
-        <div id="modal-errors" style="color: #dc2626; margin-top: 12px; display: none;"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+        <div id="modal-errors" class="modal-errors"></div>
+        <div class="modal-actions-flex">
           <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
           <button type="button" class="btn btn-primary" id="modal-add-btn" disabled>
             Add Selected (<span id="selected-count">0</span>)
@@ -287,7 +287,7 @@
   </div>
   
   <!-- Remove Property Confirmation Modal -->
-  <div id="remove-property-modal" class="modal confirm-modal" style="display: none;">
+  <div id="remove-property-modal" class="modal confirm-modal modal-hidden">
     <div class="modal-content confirm-modal-content">
       <div class="modal-header">
         <h2>Remove Property</h2>
@@ -295,11 +295,11 @@
       </div>
       <div class="modal-body">
         <p>Are you sure you want to remove this property from the lead?</p>
-        <p id="remove-property-details" style="margin-top: 8px; color: #6b7280; font-size: 13px;"></p>
+        <p id="remove-property-details" class="text-muted-small-margin"></p>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" data-close-remove-property>Cancel</button>
-        <form id="remove-property-form" method="post" style="display: inline;">
+        <form id="remove-property-form" method="post" class="form-inline">
           <button type="submit" class="btn btn-danger">Remove Property</button>
         </form>
       </div>
@@ -308,60 +308,60 @@
 {% endif %}
 
 {% if mode == 'create' and related_properties %}
-  <section class="card" style="margin-top: 24px;">
+  <section class="card card-margin-top">
     <header>
       <h2>Related Properties ({{ related_properties|length }} found)</h2>
     </header>
     <div class="section-content">
-      <div style="margin-bottom: 12px;">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="select-all-related" class="property-checkbox-small" style="cursor: pointer;">
+      <div class="section-margin-bottom">
+        <label class="checkbox-label-flex">
+          <input type="checkbox" id="select-all-related" class="property-checkbox-small checkbox-cursor">
           <strong>Select All</strong>
         </label>
       </div>
       <div class="related-properties-container">
         <table class="related-properties-table">
           <thead>
-            <tr style="border-bottom: 1px solid #e5e7eb;">
-              <th style="text-align: left; padding: 8px; width: 40px;"></th>
-              <th style="text-align: left; padding: 8px;">Property ID</th>
-              <th style="text-align: left; padding: 8px;">Owner Name</th>
-              <th style="text-align: left; padding: 8px;">Amount</th>
-              <th style="text-align: left; padding: 8px;">Year</th>
-              <th style="text-align: left; padding: 8px;">Holder Name</th>
+            <tr class="table-header-border">
+              <th class="table-header-cell"></th>
+              <th class="table-header-cell">Property ID</th>
+              <th class="table-header-cell">Owner Name</th>
+              <th class="table-header-cell">Amount</th>
+              <th class="table-header-cell">Year</th>
+              <th class="table-header-cell">Holder Name</th>
             </tr>
           </thead>
           <tbody>
             {% for prop in related_properties %}
-            <tr class="property-row" style="border-bottom: 1px solid #f3f4f6;">
-              <td style="padding: 8px;">
+            <tr class="property-row table-row-border">
+              <td class="table-cell-padding">
                 <input type="checkbox" class="related-property-checkbox property-checkbox-small" 
                        data-property-id="{{ prop.property_id }}"
                        data-property-raw-hash="{{ prop.property_raw_hash }}"
                        data-property-amount="{{ prop.property_amount or '' }}"
-                       style="cursor: pointer;">
+                       class="checkbox-cursor">
               </td>
-              <td style="padding: 8px;">
+              <td class="table-cell-padding">
                 <code>{{ prop.property_id }}</code>
               </td>
-              <td style="padding: 8px;">
+              <td class="table-cell-padding">
                 {% if prop.owner_name %}<span class="owner-name">{{ prop.owner_name }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
               </td>
-              <td style="padding: 8px;">
+              <td class="table-cell-padding">
                 {% if prop.property_amount %}
                   ${{ "{:,.2f}".format(prop.property_amount) }}
                 {% else %}
                   <span class="text-muted">—</span>
                 {% endif %}
               </td>
-              <td style="padding: 8px;">
+              <td class="table-cell-padding">
                 {% if prop.reportyear %}
                   {{ prop.reportyear }}
                 {% else %}
                   <span class="text-muted">—</span>
                 {% endif %}
               </td>
-              <td style="padding: 8px;">
+              <td class="table-cell-padding">
                 {{ prop.holder_name or '<span class="text-muted">—</span>'|safe }}
               </td>
             </tr>
@@ -369,7 +369,7 @@
           </tbody>
         </table>
       </div>
-      <p style="margin-top: 12px; color: #6b7280; font-size: 13px;">
+      <p class="text-muted-info">
         Select additional properties to associate with this lead. They will be added as secondary properties.
       </p>
     </div>
@@ -914,7 +914,7 @@
         </div>
       </div>
     </div>
-    <div id="delete-print-log-modal" class="modal confirm-modal" style="display: none;">
+    <div id="delete-print-log-modal" class="modal confirm-modal modal-hidden">
       <div class="modal-content confirm-modal-content">
         <div class="modal-header">
           <h2>Delete Print Log</h2>

@@ -147,7 +147,7 @@
     </div>
 
     <!-- Bulk Actions Bar -->
-    <div id="bulk-actions-bar" class="bulk-actions-bar" style="display: none;">
+    <div id="bulk-actions-bar" class="bulk-actions-bar bulk-actions-bar-hidden">
       <div class="bulk-actions-info">
         <span id="bulk-selection-count">0</span> lead(s) selected
       </div>
@@ -189,7 +189,7 @@
   </thead>
   <tbody>
         {% if not leads_with_data %}
-          <tr><td colspan="9" style="text-align: center; padding: 20px;">No leads found matching the filters.</td></tr>
+          <tr><td colspan="9" class="table-empty-state">No leads found matching the filters.</td></tr>
         {% endif %}
         {% for l, is_editable, primary_prop, has_claim in leads_with_data %}
           <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
@@ -210,7 +210,7 @@
             <td>
               <span class="status-pill">{{ l.status.value }}</span>
               {% if has_claim %}
-                <span class="status-pill status-pill-assigned" style="margin-left: 6px;">Has Claim</span>
+                <span class="status-pill status-pill-assigned status-pill-margin">Has Claim</span>
               {% endif %}
             </td>
       <td>
@@ -274,7 +274,7 @@
 </div>
 
 <!-- Task Details Popup -->
-<div id="task-popup" class="task-popup" style="display: none;">
+<div id="task-popup" class="task-popup task-popup-hidden">
   <div class="task-popup-content">
     <div class="task-popup-header">
       <h3>Outreach Tasks</h3>
@@ -282,20 +282,20 @@
     </div>
     <div class="task-popup-body">
       <div id="task-popup-loading" class="task-popup-loading">Loading tasks...</div>
-      <div id="task-popup-content" style="display: none;">
-        <div id="task-overdue-section" class="task-section" style="display: none;">
+      <div id="task-popup-content" class="task-popup-hidden">
+        <div id="task-overdue-section" class="task-section task-section-hidden">
           <h4 class="task-section-title task-overdue">🔴 Overdue</h4>
           <ul id="task-overdue-list" class="task-list"></ul>
         </div>
-        <div id="task-due-soon-section" class="task-section" style="display: none;">
+        <div id="task-due-soon-section" class="task-section task-section-hidden">
           <h4 class="task-section-title task-due-soon">🟡 Due Soon (0-2 days)</h4>
           <ul id="task-due-soon-list" class="task-list"></ul>
         </div>
-        <div id="task-upcoming-section" class="task-section" style="display: none;">
+        <div id="task-upcoming-section" class="task-section task-section-hidden">
           <h4 class="task-section-title task-upcoming">🔵 Upcoming (3-7 days)</h4>
           <ul id="task-upcoming-list" class="task-list"></ul>
         </div>
-        <div id="task-empty" class="task-empty" style="display: none;">
+        <div id="task-empty" class="task-empty task-empty-hidden">
           <p>No active tasks. All milestones are completed or not yet due.</p>
         </div>
       </div>

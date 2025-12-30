@@ -2,15 +2,15 @@
 {% block content %}
 
 <div class="page-with-sidebar">
-  <div class="page-content" style="width: 100%;">
-    <div class="page-header" style="justify-content: space-between; align-items: center;">
+  <div class="page-content page-content-full-width">
+    <div class="page-header">
       <div>
         <h1>Claims</h1>
         <p class="page-subtitle">All claims, newest first. Open a lead to create a new claim.</p>
       </div>
-      <div class="page-actions" style="display: flex; gap: 12px; align-items: center;">
-        <form method="get" action="/claims" class="inline-form" style="display: flex; gap: 8px; align-items: center;">
-          <label for="status-filter" class="text-muted" style="font-size: 13px;">Status</label>
+      <div class="page-actions page-actions-gap-lg">
+        <form method="get" action="/claims" class="inline-form">
+          <label for="status-filter" class="text-muted text-muted-label">Status</label>
           <select name="status" id="status-filter">
             <option value="">All</option>
             {% for st in claim_status_values %}
@@ -25,7 +25,7 @@
 
     <div class="card">
       {% if not claims %}
-        <p class="text-muted" style="padding: 16px;">No claims yet.</p>
+        <p class="text-muted empty-state-padding">No claims yet.</p>
       {% else %}
       <table class="data-table">
         <thead>
@@ -51,7 +51,7 @@
             <td>
               {% if c.lead_id %}
                 <a href="/leads/{{ c.lead_id }}/edit">Lead #{{ c.lead_id }}</a>
-                <div class="text-muted" style="font-size: 12px;">{{ c.lead_owner or '' }}{% if c.lead_status %} • {{ c.lead_status }}{% endif %}</div>
+                <div class="text-muted text-muted-small">{{ c.lead_owner or '' }}{% if c.lead_status %} • {{ c.lead_status }}{% endif %}</div>
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
