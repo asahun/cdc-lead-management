@@ -76,11 +76,12 @@
       }
       if (claimSummaryEl) {
         if (hasClaim) {
+          const feeDisplay = claim.fee_display || (claim.fee_pct ? `${claim.fee_pct}%` : null) || (claim.fee_flat ? `$${claim.fee_flat}` : null);
           const parts = [
             claim.claim_slug || `claim-${claim.id}`,
             claim.control_no ? `Control #${claim.control_no}` : null,
             claim.formation_state ? `State ${claim.formation_state}` : null,
-            claim.fee_pct ? `Fee ${claim.fee_pct}%` : null,
+            feeDisplay ? `Fee ${feeDisplay}` : null,
             claim.output_dir ? `Output: ${claim.output_dir}` : null,
           ].filter(Boolean);
           claimSummaryEl.textContent = `Claim ready: ${parts.join(' • ')}`;

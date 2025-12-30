@@ -1460,6 +1460,28 @@ body {
   padding: 16px;
 }
 
+/* Claim Summary section styling - consistent with Client Information and Claim Details */
+#claim-detail .label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-bottom: 6px;
+  display: block;
+}
+
+#claim-detail .grid.two-column > div > div:not(.label) {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+#claim-detail .grid.two-column > div > div:not(.label) a {
+  color: #3b82f6;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
 .claim-header {
   display: flex;
   justify-content: space-between;
@@ -2479,17 +2501,33 @@ body {
     color: #334155;
   }
 
-  .address-display {
-    font-size: 14px;
-    color: #1e293b;
-    line-height: 1.6;
-    white-space: pre-line;
-    margin-bottom: 8px;
-  }
 
   .address-type {
     font-size: 12px;
     color: #64748b;
+  }
+
+  /* Style file input in claim package section */
+  #claim-upload-file {
+    cursor: pointer;
+  }
+
+  #claim-upload-file::file-selector-button {
+    padding: 8px 16px;
+    margin-right: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #claim-upload-file::file-selector-button:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
   }
 
   .addresses-list {

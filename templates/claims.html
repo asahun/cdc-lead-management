@@ -57,7 +57,7 @@
               {% endif %}
             </td>
             <td>{{ c.control_no or '—' }}</td>
-            <td>{{ c.fee_pct or '—' }}</td>
+            <td>{{ c.fee_display or c.fee_pct or '—' }}</td>
             <td>{{ c.formation_state or '—' }}</td>
             <td>{% if c.addendum_yes %}Yes{% else %}No{% endif %}</td>
             <td>

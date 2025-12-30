@@ -5,7 +5,11 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from models import Lead, LeadContact, LeadProperty, LeadStatus, Claim, ClaimEvent, ClaimDocument
+from models import (
+    Lead, LeadContact, LeadProperty, LeadStatus,
+    Claim, ClaimEvent, ClaimDocument,
+    Client, ClientContact, ClientMailingAddress, SignerType
+)
 from scripts.fill_recovery_agreement import build_field_mapping as build_recovery_mapping
 from scripts.fill_recover_authorization_letter import build_field_mapping as build_auth_mapping
 from scripts.pdf_fill_reportlab import fill_pdf_fields_reportlab
@@ -47,6 +51,70 @@ def _load_cdr_profile() -> Dict[str, Any]:
     return json.loads(CDR_PROFILE_PATH.read_text())
 
 
+def _get_or_create_client(
+    db: Session,
+    lead: Lead,
+    control_no: str,
+    formation_state: str,
+    entitled_business_name: str,
+) -> Client:
+    """Get or create a client. For now, we create a new client for each claim.
+    In the future, we can add logic to find existing clients by business name."""
+    # Create new client (can be enhanced later to find existing clients)
+    client = Client(
+        entitled_business_name=entitled_business_name,
+        formation_state=formation_state,
+        control_no=control_no,
+    )
+    db.add(client)
+    db.flush()
+    return client
+
+
+def _copy_contact_to_client(
+    db: Session,
+    client: Client,
+    lead_contact: LeadContact,
+    signer_type: SignerType,
+) -> ClientContact:
+    """Copy lead contact to client contact."""
+    # Split contact name into first and last name
+    name_parts = (lead_contact.contact_name or "").strip().split(" ", 1)
+    first_name = name_parts[0] if name_parts else ""
+    last_name = name_parts[1] if len(name_parts) > 1 else ""
+    
+    client_contact = ClientContact(
+        client_id=client.id,
+        lead_contact_id=lead_contact.id,
+        signer_type=signer_type,
+        first_name=first_name,
+        last_name=last_name,
+        title=lead_contact.title,
+        email=lead_contact.email,
+        phone=lead_contact.phone,
+    )
+    db.add(client_contact)
+    return client_contact
+
+
+def _copy_address_to_client(
+    db: Session,
+    client: Client,
+    lead_contact: LeadContact,
+) -> ClientMailingAddress:
+    """Copy lead contact address to client mailing address."""
+    client_address = ClientMailingAddress(
+        client_id=client.id,
+        street=lead_contact.address_street or "",
+        line2=None,
+        city=lead_contact.address_city or "",
+        state=lead_contact.address_state or "",
+        zip=lead_contact.address_zipcode or "",
+    )
+    db.add(client_address)
+    return client_address
+
+
 def _ensure_claim(
     db: Session,
     lead: Lead,
@@ -56,38 +124,79 @@ def _ensure_claim(
     addendum_yes: bool,
     primary_contact: LeadContact,
     cdr_profile: Dict[str, Any],
+    entitled_business_name: str = None,
+    entitled_business_same_as_owner: bool = True,
 ) -> Claim:
+    """Create or update claim with new client structure."""
     existing = (
         db.query(Claim)
         .filter(Claim.lead_id == lead.id)
         .order_by(Claim.id.desc())
         .first()
     )
+    
     if existing:
         claim = existing
-        claim.control_no = control_no
-        claim.formation_state = formation_state
-        claim.fee_pct = str(fee_pct)
+        # Update client if needed
+        if claim.client:
+            if formation_state:
+                claim.client.formation_state = formation_state
+            if control_no:
+                claim.client.control_no = control_no
+        # Update claim fields
+        if fee_pct:
+            claim.fee_pct = float(fee_pct)
+            claim.fee_flat = None
         claim.addendum_yes = bool(addendum_yes)
     else:
+        # Create new client
+        business_name = entitled_business_name if entitled_business_name else lead.owner_name
+        client = _get_or_create_client(
+            db=db,
+            lead=lead,
+            control_no=control_no,
+            formation_state=formation_state,
+            entitled_business_name=business_name,
+        )
+        db.flush()
+        
+        # Copy primary contact to client
+        primary_client_contact = _copy_contact_to_client(
+            db=db,
+            client=client,
+            lead_contact=primary_contact,
+            signer_type=SignerType.primary,
+        )
+        db.flush()
+        
+        # Copy address to client
+        client_address = _copy_address_to_client(
+            db=db,
+            client=client,
+            lead_contact=primary_contact,
+        )
+        db.flush()
+        
+        # Calculate fee
+        fee_pct_val = float(fee_pct) if fee_pct else 10.0
+        
+        # Create claim
         claim = Claim(
+            client_id=client.id,
             lead_id=lead.id,
             claim_slug=f"claim-{lead.id}-{int(datetime.utcnow().timestamp())}",
-            business_name=lead.owner_name,
-            formation_state=formation_state,
-            control_no=control_no,
-            fee_pct=str(fee_pct),
+            entitled_business_name=business_name,
+            entitled_business_same_as_owner=entitled_business_same_as_owner,
+            fee_pct=fee_pct_val,
+            fee_flat=None,
+            cdr_fee=None,  # Will be calculated later
             addendum_yes=bool(addendum_yes),
-            cdr_identifier=cdr_profile.get("cdr_identifier", ""),
-            cdr_agent_name=cdr_profile.get("agent_name", ""),
-            primary_contact_name=primary_contact.contact_name,
-            primary_contact_title=primary_contact.title or "",
-            primary_contact_email=primary_contact.email,
-            primary_contact_phone=primary_contact.phone,
-            primary_contact_mail=f"{primary_contact.address_street}, {primary_contact.address_city} {primary_contact.address_state} {primary_contact.address_zipcode}",
+            check_mailing_address_id=client_address.id,
             output_dir=None,
         )
         db.add(claim)
+        db.flush()
+    
     return claim
 
 
@@ -99,6 +208,8 @@ def create_claim_from_lead(
     fee_pct: str,
     addendum_yes: bool,
     user: str = None,
+    entitled_business_name: str = None,
+    entitled_business_same_as_owner: bool = True,
 ) -> Dict[str, Any]:
     lead = db.query(Lead).filter(Lead.id == lead_id).one_or_none()
     if not lead:
@@ -119,6 +230,7 @@ def create_claim_from_lead(
         raise ValueError("Primary contact must have email, phone, and full address")
 
     cdr_profile = _load_cdr_profile()
+    business_name = entitled_business_name if entitled_business_name else lead.owner_name
     claim = _ensure_claim(
         db,
         lead,
@@ -128,6 +240,8 @@ def create_claim_from_lead(
         addendum_yes,
         primary_contact,
         cdr_profile,
+        entitled_business_name=business_name,
+        entitled_business_same_as_owner=entitled_business_same_as_owner,
     )
     db.flush()
 
@@ -205,6 +319,7 @@ def generate_agreements_for_claim(
     fee_pct: str,
     addendum_yes: bool,
     user: str = None,
+    fee_flat: str = None,
 ) -> Dict[str, Any]:
     claim = db.query(Claim).filter(Claim.id == claim_id).one_or_none()
     if not claim:
@@ -212,23 +327,36 @@ def generate_agreements_for_claim(
     lead = claim.lead
     if not lead:
         raise ValueError("Lead not found for claim")
+    client = claim.client
+    if not client:
+        raise ValueError("Client not found for claim")
 
-    primary_contact = _get_primary_contact(lead)
-    if not primary_contact:
-        raise ValueError("No primary contact found")
-    required_contact_fields = [
-        primary_contact.email,
-        primary_contact.phone,
-        primary_contact.address_street,
-        primary_contact.address_city,
-        primary_contact.address_state,
-        primary_contact.address_zipcode,
-    ]
-    if not all(required_contact_fields):
-        raise ValueError("Primary contact must have email, phone, and full address")
+    # Get primary signer contact from client
+    primary_client_contact = (
+        db.query(ClientContact)
+        .filter(ClientContact.client_id == client.id, ClientContact.signer_type == SignerType.primary)
+        .first()
+    )
+    if not primary_client_contact:
+        raise ValueError("No primary signer contact found for client")
+
+    # Get secondary signer contact if exists
+    secondary_client_contact = (
+        db.query(ClientContact)
+        .filter(ClientContact.client_id == client.id, ClientContact.signer_type == SignerType.secondary)
+        .first()
+    )
+
+    # Get check mailing address
+    check_address = claim.check_mailing_address
+    if not check_address:
+        raise ValueError("No check mailing address found for claim")
 
     properties = []
+    total_amount = 0.0
     for prop in lead.properties:
+        amount = float(prop.property_amount) if prop.property_amount else 0.0
+        total_amount += amount
         properties.append(
             {
                 "property_id": prop.property_id,
@@ -238,15 +366,28 @@ def generate_agreements_for_claim(
     if not properties:
         raise ValueError("No linked properties to populate agreement")
 
-    # Update claim snapshot fields
-    claim.control_no = control_no
-    claim.formation_state = formation_state
-    claim.fee_pct = str(fee_pct)
-    claim.addendum_yes = bool(addendum_yes)
-    cdr_profile = _load_cdr_profile()
-    claim.cdr_identifier = cdr_profile.get("cdr_identifier", "")
-    claim.cdr_agent_name = cdr_profile.get("agent_name", "")
+    # Update client fields if provided
+    if control_no:
+        client.control_no = control_no
+    if formation_state:
+        client.formation_state = formation_state
 
+    # Update claim fields
+    if fee_flat:
+        claim.fee_flat = float(fee_flat)
+        claim.fee_pct = None
+        claim.cdr_fee = float(fee_flat)
+    else:
+        fee_pct_val = float(fee_pct) if fee_pct else 10.0
+        claim.fee_pct = fee_pct_val
+        claim.fee_flat = None
+        claim.cdr_fee = round(total_amount * (fee_pct_val / 100.0), 2)
+    
+    claim.addendum_yes = bool(addendum_yes)
+    claim.total_properties = len(properties)
+    claim.total_amount = total_amount
+
+    cdr_profile = _load_cdr_profile()
     db.flush()
 
     if not claim.output_dir:
@@ -256,20 +397,46 @@ def generate_agreements_for_claim(
     generated_dir = output_dir / "generated"
     generated_dir.mkdir(parents=True, exist_ok=True)
 
+    # Build primary contact payload
+    primary_contact_name = f"{primary_client_contact.first_name} {primary_client_contact.last_name}".strip()
     primary_contact_payload = {
-        "name": primary_contact.contact_name,
-        "phone": primary_contact.phone,
-        "mail": f"{primary_contact.address_street}, {primary_contact.address_city} {primary_contact.address_state} {primary_contact.address_zipcode}",
-        "email": primary_contact.email,
+        "name": primary_contact_name,
+        "phone": primary_client_contact.phone or "",
+        "mail": f"{check_address.street}, {check_address.city} {check_address.state} {check_address.zip}",
+        "email": primary_client_contact.email or "",
         "taxid_ssn": "",
     }
-    meta = {
-        "cdr_fee_percentage": str(fee_pct),
-        "addendum_yes": bool(addendum_yes),
-        "cdr_control_no": control_no,
-        "cdr_fee_amount": "",
-        "cdr_fee_flat": 10.00,
-    }
+    
+    # Build secondary contact payload if exists
+    secondary_contact_payload = None
+    if secondary_client_contact:
+        secondary_contact_name = f"{secondary_client_contact.first_name} {secondary_client_contact.last_name}".strip()
+        secondary_contact_payload = {
+            "name": secondary_contact_name,
+            "phone": secondary_client_contact.phone or "",
+            "mail": f"{check_address.street}, {check_address.city} {check_address.state} {check_address.zip}",
+            "email": secondary_client_contact.email or "",
+            "taxid_ssn": "",
+        }
+    
+    # Build meta with fee information
+    fee_value = claim.cdr_fee if claim.cdr_fee else 0.0
+    if claim.fee_flat:
+        meta = {
+            "cdr_fee_percentage": "",
+            "cdr_fee_flat": str(claim.fee_flat),
+            "addendum_yes": bool(addendum_yes),
+            "cdr_control_no": client.control_no or "",
+            "cdr_fee_amount": str(fee_value),
+        }
+    else:
+        meta = {
+            "cdr_fee_percentage": str(claim.fee_pct) if claim.fee_pct else "10",
+            "cdr_fee_flat": "",
+            "addendum_yes": bool(addendum_yes),
+            "cdr_control_no": client.control_no or "",
+            "cdr_fee_amount": str(fee_value),
+        }
 
     recovery_field_mapping = build_recovery_mapping(properties, primary_contact_payload, meta, cdr_profile)
     ts_suffix = datetime.utcnow().strftime("%Y%m%d%H%M%S")
@@ -283,21 +450,21 @@ def generate_agreements_for_claim(
         raise ValueError("Failed to generate Recovery Agreement PDF")
 
     business_payload = {
-        "name": lead.owner_name,
-        "formation_state": formation_state,
+        "name": claim.entitled_business_name,
+        "formation_state": client.formation_state or "",
         "fein": "",
-        "control_no": control_no,
-        "street": primary_contact.address_street,
-        "city": primary_contact.address_city,
-        "state": primary_contact.address_state,
-        "zip": primary_contact.address_zipcode,
+        "control_no": client.control_no or "",
+        "street": check_address.street,
+        "city": check_address.city,
+        "state": check_address.state,
+        "zip": check_address.zip,
     }
     claimant_payload = {
-        "name": primary_contact.contact_name,
-        "title": primary_contact.title or "",
-        "email": primary_contact.email,
-        "phone": primary_contact.phone,
-        "mail": f"{primary_contact.address_street}, {primary_contact.address_city} {primary_contact.address_state} {primary_contact.address_zipcode}",
+        "name": primary_contact_name,
+        "title": primary_client_contact.title or "",
+        "email": primary_client_contact.email or "",
+        "phone": primary_client_contact.phone or "",
+        "mail": f"{check_address.street}, {check_address.city} {check_address.state} {check_address.zip}",
     }
     auth_field_mapping = build_auth_mapping(business_payload, claimant_payload, cdr_profile)
     auth_output = generated_dir / f"Recover_Authorization_Letter_{ts_suffix}.pdf"
@@ -309,17 +476,31 @@ def generate_agreements_for_claim(
     if (not ok_auth) or (not auth_output.exists()):
         raise ValueError("Failed to generate Authorization Letter PDF")
 
-    payload_snapshot = {
-        "control_no": control_no,
-        "formation_state": formation_state,
-        "fee_pct": fee_pct,
+    # Create separate events for each generated file
+    agreement_event_payload = {
+        "control_no": client.control_no or "",
+        "formation_state": client.formation_state or "",
+        "fee_pct": str(claim.fee_pct) if claim.fee_pct else "",
+        "fee_flat": str(claim.fee_flat) if claim.fee_flat else "",
+        "cdr_fee": str(claim.cdr_fee) if claim.cdr_fee else "",
         "addendum_yes": addendum_yes,
-        "files": {
-            "recovery_agreement": str(rec_output),
-            "authorization_letter": str(auth_output),
-        },
+        "file_name": rec_output.name,
+        "file_path": str(rec_output),
     }
-    event = _record_event(db, claim, "agreement_generated", payload_snapshot, user=user)
+    agreement_event = _record_event(db, claim, "agreement_file_generated", agreement_event_payload, user=user)
+    
+    authorization_event_payload = {
+        "control_no": client.control_no or "",
+        "formation_state": client.formation_state or "",
+        "fee_pct": str(claim.fee_pct) if claim.fee_pct else "",
+        "fee_flat": str(claim.fee_flat) if claim.fee_flat else "",
+        "cdr_fee": str(claim.cdr_fee) if claim.cdr_fee else "",
+        "addendum_yes": addendum_yes,
+        "file_name": auth_output.name,
+        "file_path": str(auth_output),
+    }
+    authorization_event = _record_event(db, claim, "authorization_file_generated", authorization_event_payload, user=user)
+    
     db.add_all(
         [
             ClaimDocument(
@@ -344,8 +525,11 @@ def generate_agreements_for_claim(
         "claim_id": claim.id,
         "claim_slug": claim.claim_slug,
         "output_dir": claim.output_dir,
-        "files": payload_snapshot["files"],
-        "event_id": event.id,
+        "files": {
+            "recovery_agreement": str(rec_output),
+            "authorization_letter": str(auth_output),
+        },
+        "event_ids": [agreement_event.id, authorization_event.id],
     }
 
 
@@ -440,12 +624,23 @@ def get_latest_claim_summary(db: Session, lead_id: int) -> Optional[Dict[str, An
         .first()
     )
     current_state = latest_event.state if latest_event else None
+    
+    # Get client data
+    client = claim.client
+    fee_display = None
+    if claim.fee_flat:
+        fee_display = f"${claim.fee_flat:,.2f}"
+    elif claim.fee_pct:
+        fee_display = f"{claim.fee_pct}%"
+    
     return {
         "id": claim.id,
         "claim_slug": claim.claim_slug,
-        "control_no": claim.control_no,
-        "formation_state": claim.formation_state,
-        "fee_pct": claim.fee_pct,
+        "control_no": client.control_no if client else None,
+        "formation_state": client.formation_state if client else None,
+        "fee_pct": str(claim.fee_pct) if claim.fee_pct else None,
+        "fee_flat": str(claim.fee_flat) if claim.fee_flat else None,
+        "fee_display": fee_display,
         "addendum_yes": claim.addendum_yes,
         "output_dir": claim.output_dir,
         "created_at": claim.created_at.isoformat() if claim.created_at else None,

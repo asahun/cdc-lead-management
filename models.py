@@ -321,34 +321,92 @@ class JourneyMilestone(Base):
 
 # Agreement/Client models
 
+class SignerType(str, enum.Enum):
+    primary = "primary"
+    secondary = "secondary"
+
+
+class Client(Base):
+    __tablename__ = "client"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entitled_business_name = Column(Text, nullable=False)
+    formation_state = Column(Text, nullable=True)
+    control_no = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    contacts = relationship("ClientContact", back_populates="client", cascade="all, delete-orphan")
+    mailing_addresses = relationship("ClientMailingAddress", back_populates="client", cascade="all, delete-orphan")
+    claims = relationship("Claim", back_populates="client", cascade="all, delete-orphan")
+
+
+class ClientContact(Base):
+    __tablename__ = "client_contact"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False)
+    lead_contact_id = Column(BigInteger, ForeignKey("lead_contact.id", ondelete="SET NULL"), nullable=True)
+    signer_type = Column(Enum(SignerType, name="signer_type_enum"), nullable=False)
+    first_name = Column(Text, nullable=False)
+    last_name = Column(Text, nullable=False)
+    title = Column(Text, nullable=True)
+    email = Column(Text, nullable=True)
+    phone = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    client = relationship("Client", back_populates="contacts")
+    lead_contact = relationship("LeadContact", foreign_keys=[lead_contact_id])
+
+
+class ClientMailingAddress(Base):
+    __tablename__ = "client_mailing_address"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False)
+    street = Column(Text, nullable=False)
+    line2 = Column(Text, nullable=True)
+    city = Column(Text, nullable=False)
+    state = Column(Text, nullable=False)
+    zip = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    client = relationship("Client", back_populates="mailing_addresses")
+    claims = relationship("Claim", back_populates="check_mailing_address", foreign_keys="Claim.check_mailing_address_id")
+
 
 class Claim(Base):
     __tablename__ = "claim"
 
     id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False)
     lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
     claim_slug = Column(Text, unique=True, nullable=False)
 
-    business_name = Column(Text, nullable=True)
-    formation_state = Column(Text, nullable=True)
-    control_no = Column(Text, nullable=True)
-    fee_pct = Column(Text, nullable=True)
+    # Business name snapshot (duplicated from client for historical record)
+    entitled_business_name = Column(Text, nullable=False)
+    entitled_business_same_as_owner = Column(Boolean, default=True)
+
+    # Fee structure (one of fee_pct or fee_flat must be set)
+    fee_pct = Column(Numeric(5, 2), nullable=True)  # Percentage (e.g., 10.50 for 10.5%), NULL if using flat fee
+    fee_flat = Column(Numeric(18, 2), nullable=True)  # Flat dollar amount, NULL if using percentage
+    cdr_fee = Column(Numeric(18, 2), nullable=True)  # Calculated fee amount
+
+    # Claim-specific data
     addendum_yes = Column(Boolean, default=False)
-    cdr_identifier = Column(Text, nullable=True)
-    cdr_agent_name = Column(Text, nullable=True)
-
-    primary_contact_name = Column(Text, nullable=True)
-    primary_contact_title = Column(Text, nullable=True)
-    primary_contact_email = Column(Text, nullable=True)
-    primary_contact_phone = Column(Text, nullable=True)
-    primary_contact_mail = Column(Text, nullable=True)
-
+    total_properties = Column(Integer, nullable=True)
+    total_amount = Column(Numeric(18, 2), nullable=True)
     state_claim_id = Column(Text, nullable=True)
+    check_mailing_address_id = Column(Integer, ForeignKey("client_mailing_address.id", ondelete="SET NULL"), nullable=True)
     output_dir = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    client = relationship("Client", back_populates="claims")
     lead = relationship("Lead", back_populates="claims")
+    check_mailing_address = relationship("ClientMailingAddress", foreign_keys=[check_mailing_address_id])
     events = relationship("ClaimEvent", back_populates="claim", cascade="all, delete-orphan")
     documents = relationship("ClaimDocument", back_populates="claim", cascade="all, delete-orphan")
 
