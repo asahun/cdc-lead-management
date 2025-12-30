@@ -249,6 +249,10 @@ def create_claim_from_lead(
         claim.output_dir = str(OUTPUT_ROOT / f"claim-{claim.id}")
     Path(claim.output_dir).mkdir(parents=True, exist_ok=True)
 
+    # Update lead status to claim_created
+    lead.status = LeadStatus.claim_created
+    db.flush()
+    
     # Record claim_created event
     event_payload = {
         "claim_id": claim.id,

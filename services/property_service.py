@@ -401,10 +401,18 @@ def find_related_properties_by_owner_name(
     
     prop_table = get_property_table_for_year(year)
     
-    # Get all properties with matching owner name (case-insensitive, normalized)
+    # Use hybrid approach: database-level filtering with ILIKE (can use index), then normalize in Python
+    # First, use ILIKE for case-insensitive matching - this will leverage the existing index
+    # We'll match on the raw owner name, then normalize the filtered results for exact matching
+    # Use the normalized name (lowercased) for ILIKE pattern matching
+    # This will filter most rows at the database level before Python normalization
+    ilike_pattern = f"%{normalized_owner_name}%"
+    
+    # Get properties with matching owner name using ILIKE (database-level filtering)
     # NOTE: We do NOT apply the 10k amount filter here - we want to show ALL properties
     # with the same owner name so users can choose which ones to add
-    all_props = db.execute(
+    # Using func.lower() with ILIKE pattern to match case-insensitively
+    filtered_props = db.execute(
         select(
             prop_table.c.row_hash.label("raw_hash"),
             prop_table.c.propertyid.label("propertyid"),
@@ -424,7 +432,8 @@ def find_related_properties_by_owner_name(
         )
         .where(
             prop_table.c.ownername.is_not(None),
-            cast(prop_table.c.reportyear, Integer) == int(year)
+            cast(prop_table.c.reportyear, Integer) == int(year),
+            func.lower(cast(prop_table.c.ownername, String)).like(ilike_pattern)
         )
     ).all()
     
@@ -444,8 +453,9 @@ def find_related_properties_by_owner_name(
         assigned_to_this_lead_set = set()
     
     # Filter properties by normalized owner name and exclude already assigned
+    # Now normalize the filtered results for exact matching
     related_props = []
-    for prop_row in all_props:
+    for prop_row in filtered_props:
         prop_dict = dict(prop_row._mapping)
         prop_owner_name = (prop_dict.get("ownername") or "").strip()
         normalized_prop_owner = normalize_name(prop_owner_name).lower().strip()

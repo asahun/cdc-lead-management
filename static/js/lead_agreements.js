@@ -77,8 +77,9 @@
       if (claimSummaryEl) {
         if (hasClaim) {
           const feeDisplay = claim.fee_display || (claim.fee_pct ? `${claim.fee_pct}%` : null) || (claim.fee_flat ? `$${claim.fee_flat}` : null);
+          const claimId = claim.claim_id || claim.id;
           const parts = [
-            claim.claim_slug || `claim-${claim.id}`,
+            claim.claim_slug || (claimId ? `claim-${claimId}` : 'claim'),
             claim.control_no ? `Control #${claim.control_no}` : null,
             claim.formation_state ? `State ${claim.formation_state}` : null,
             feeDisplay ? `Fee ${feeDisplay}` : null,
@@ -93,7 +94,8 @@
       }
       if (openClaimLink) {
         if (hasClaim) {
-          openClaimLink.href = `/claims/${claim.id}`;
+          const claimId = claim.claim_id || claim.id;
+          openClaimLink.href = `/claims/${claimId}`;
           openClaimLink.style.display = '';
         } else {
           openClaimLink.style.display = 'none';
@@ -119,11 +121,13 @@
         }
         const claim = await res.json();
         setClaimState(claim);
-        statusEl.textContent = 'Claim created. Open claim to generate agreements.';
-        statusEl.className = 'text-success';
-        if (openClaimLink) {
-          openClaimLink.href = `/claims/${claim.id}`;
-          openClaimLink.style.display = '';
+        // Navigate to the claim page
+        const claimId = claim.claim_id || claim.id;
+        if (claimId) {
+          window.location.href = `/claims/${claimId}`;
+        } else {
+          statusEl.textContent = 'Claim created but could not navigate. Please refresh the page.';
+          statusEl.className = 'text-warning';
         }
       } catch (e) {
         statusEl.textContent = e.message;
