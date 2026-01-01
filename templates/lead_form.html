@@ -828,7 +828,7 @@
     {% if lead %}
       <section
         id="print-log"
-        class="lead-section card full-width print-log-card"
+        class="lead-section card print-log-card"
         data-print-logs="{{ print_logs_json | e }}"
         data-lead-id="{{ lead.id }}">
         <header>
@@ -843,7 +843,7 @@
       </section>
     {% endif %}
 
-    <section id="scheduled-emails" class="lead-section card full-width">
+    <section id="scheduled-emails" class="lead-section card">
       <header>
         <h2>Scheduled & Failed Emails</h2>
       </header>
@@ -857,7 +857,7 @@
 
     <section
       id="phone-scripts"
-      class="lead-section card full-width phone-scripts-card"
+      class="lead-section card phone-scripts-card"
       data-phone-scripts="{{ phone_scripts_json | e }}"
       data-phone-context="{{ phone_script_context_json | e }}">
       <header class="phone-scripts-header">

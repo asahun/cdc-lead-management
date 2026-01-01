@@ -401,6 +401,24 @@ def generate_agreements_for_claim(
     generated_dir = output_dir / "generated"
     generated_dir.mkdir(parents=True, exist_ok=True)
 
+    # Delete all existing generated files and database records before generating new ones
+    # This ensures we only have the latest version of each file type
+    if generated_dir.exists():
+        for file_path in generated_dir.glob("*"):
+            if file_path.is_file():
+                file_path.unlink(missing_ok=True)
+    
+    # Delete all existing generated ClaimDocument records for this claim
+    existing_generated_docs = db.query(ClaimDocument).filter(
+        ClaimDocument.claim_id == claim.id,
+        ClaimDocument.doc_type.in_(["agreement_generated", "authorization_generated"])
+    ).all()
+    
+    for doc in existing_generated_docs:
+        db.delete(doc)
+    
+    db.flush()  # Flush before creating new records
+
     # Build primary contact payload
     primary_contact_name = f"{primary_client_contact.first_name} {primary_client_contact.last_name}".strip()
     primary_contact_payload = {
@@ -446,7 +464,7 @@ def generate_agreements_for_claim(
     ts_suffix = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     rec_output = generated_dir / f"UP-CDR2 Recovery Agreement_{ts_suffix}.pdf"
     ok_rec = fill_pdf_fields_reportlab(
-        str(TEMPLATES_DIR / "UP-CDR2 Recovery Agreement.pdf"),
+        str(TEMPLATES_DIR / "UP-CDR2_Recovery_Agreement.pdf"),
         recovery_field_mapping,
         str(rec_output),
     )

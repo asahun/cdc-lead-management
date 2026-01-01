@@ -101,7 +101,7 @@ def main():
         print("Usage: python scripts/fill_recovery_agreement.py <pdf_path> [data_json_path] [output_path]")
         sys.exit(1)
 
-    pdf_path = sys.argv[1] if len(sys.argv) > 1 else "scripts/pdf_templates/UP-CDR2 Recovery Agreement.pdf"
+    pdf_path = sys.argv[1] if len(sys.argv) > 1 else "scripts/pdf_templates/UP-CDR2_Recovery_Agreement.pdf"
     data_path = sys.argv[2] if len(sys.argv) > 2 else "scripts/test_data_recovery_agreement.json"
     output_path = sys.argv[3] if len(sys.argv) > 3 else "scripts/pdf_output/UP-CDR2 Recovery Agreement_filled.pdf"
 
