@@ -141,7 +141,7 @@ def mark_contact_as_primary(
     lead = get_lead_or_404(db, lead_id)
     contact = get_contact_or_404(db, contact_id, lead_id)
     
-    if lead.status in {LeadStatus.new, LeadStatus.researching, LeadStatus.invalid, LeadStatus.competitor_claimed}:
+    if lead.status in {LeadStatus.new, LeadStatus.researching, LeadStatus.competitor_claimed}:
         raise HTTPException(
             status_code=400, 
             detail=f"Cannot mark contact as primary. Lead must be in 'ready' status or later. Current status: {lead.status.value}"

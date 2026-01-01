@@ -73,6 +73,7 @@ def build_field_mapping(properties, primary_contact, meta, cdr_profile):
     field_mapping.update(
         {
             "cdr_name": cdr_profile.get("cdr_name", ""),
+            "cdr_name_2": cdr_profile.get("cdr_name", ""),  # Alias for template duplicate field
             "cdr_address": f"{cdr_profile.get('agent_street', '')}, {cdr_profile.get('agent_city', '')} {cdr_profile.get('agent_state', '')} {cdr_profile.get('agent_zip', '')}".strip(),
             "cdr_identifier": cdr_profile.get("cdr_identifier", ""),
             "cdr_agent_name": cdr_profile.get("agent_name", ""),

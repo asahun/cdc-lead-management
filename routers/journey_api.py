@@ -41,7 +41,6 @@ def get_lead_journey(
     journey_hidden_statuses = {
         LeadStatus.new,
         LeadStatus.researching,
-        LeadStatus.invalid,
         LeadStatus.competitor_claimed
     }
     
@@ -193,7 +192,6 @@ async def get_batch_journey_status(
     journey_hidden_statuses = {
         LeadStatus.new,
         LeadStatus.researching,
-        LeadStatus.invalid,
         LeadStatus.competitor_claimed
     }
     

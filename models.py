@@ -51,10 +51,7 @@ class LeadStatus(str, enum.Enum):
     contact_in_progress = "contact_in_progress"
     response_received = "response_received"
     claim_created = "claim_created"
-    won = "won"
-    lost = "lost"
     no_response = "no_response"
-    invalid = "invalid"
     competitor_claimed = "competitor_claimed"
     ready = "ready"
 

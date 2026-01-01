@@ -110,10 +110,7 @@
             <option value="ready" {% if status == 'ready' %}selected{% endif %}>Ready</option>
             <option value="contact_in_progress" {% if status == 'contact_in_progress' %}selected{% endif %}>Contact In Progress</option>
             <option value="response_received" {% if status == 'response_received' %}selected{% endif %}>Response Received</option>
-            <option value="won" {% if status == 'won' %}selected{% endif %}>Won</option>
-            <option value="lost" {% if status == 'lost' %}selected{% endif %}>Lost</option>
             <option value="no_response" {% if status == 'no_response' %}selected{% endif %}>No Response</option>
-            <option value="invalid" {% if status == 'invalid' %}selected{% endif %}>Invalid</option>
             <option value="competitor_claimed" {% if status == 'competitor_claimed' %}selected{% endif %}>Competitor Claimed</option>
           </select>
         </div>
@@ -159,10 +156,7 @@
           <option value="ready">Ready</option>
           <option value="contact_in_progress">Contact In Progress</option>
           <option value="response_received">Response Received</option>
-          <option value="won">Won</option>
-          <option value="lost">Lost</option>
           <option value="no_response">No Response</option>
-          <option value="invalid">Invalid</option>
           <option value="competitor_claimed">Competitor Claimed</option>
         </select>
         <button type="button" id="bulk-mark-mail-sent" class="btn btn-secondary btn-sm">Mark Mail Sent</button>

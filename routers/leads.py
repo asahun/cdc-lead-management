@@ -908,7 +908,6 @@ def edit_lead(
     journey_hidden_statuses = {
         LeadStatus.new,
         LeadStatus.researching,
-        LeadStatus.invalid,
         LeadStatus.competitor_claimed
     }
     
@@ -1031,7 +1030,7 @@ def update_lead(
         db.add(primary_property)
         mark_property_assigned(db, property_raw_hash, property_id)
     
-    if old_status in {LeadStatus.new, LeadStatus.researching} and lead.status not in {LeadStatus.new, LeadStatus.researching, LeadStatus.invalid, LeadStatus.competitor_claimed}:
+    if old_status in {LeadStatus.new, LeadStatus.researching} and lead.status not in {LeadStatus.new, LeadStatus.researching, LeadStatus.competitor_claimed}:
         primary_contact = db.query(LeadContact).filter(
             LeadContact.lead_id == lead_id,
             LeadContact.is_primary == True

@@ -12,10 +12,10 @@
   // Get lead status from parent section
   const journeySection = journeyDisplay.closest('#journey-tracking');
   const leadStatus = journeySection?.dataset.leadStatus || '';
-  const isResponseReceived = leadStatus === 'response_received';
   
-  // Set initial collapsed state based on status
-  let isCollapsed = isResponseReceived; // collapsed for response_received, expanded for others
+  // Statuses where the journey section should be collapsed by default
+  const collapsedStatuses = ['response_received', 'claim_created'];
+  const isCollapsed = collapsedStatuses.includes(leadStatus);
   
   const toggleButton = document.getElementById('journey-toggle');
   const goalMessage = document.getElementById('journey-goal-message');
@@ -29,9 +29,9 @@
       journeySection.classList.remove('collapsed');
     }
     
-    // Show goal message only when collapsed AND status is response_received
+    // Show goal message only when collapsed AND status is in completed statuses
     if (goalMessage) {
-      if (isCollapsed && isResponseReceived) {
+      if (isCollapsed && collapsedStatuses.includes(leadStatus)) {
         goalMessage.classList.add('show');
       } else {
         goalMessage.classList.remove('show');

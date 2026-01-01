@@ -376,7 +376,7 @@
   </section>
 {% endif %}
 
-{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'competitor_claimed'] %}
     {% if journey_data and journey_data != 'null' %}
     <section id="journey-tracking" class="card journey-card" data-lead-status="{{ lead.status.value }}">
       <header class="journey-header-section">
@@ -663,7 +663,7 @@
                             type="submit" 
                             class="btn btn-secondary btn-sm mark-primary-btn" 
                             data-lead-status="{{ lead.status.value }}"
-                            {% if lead.status.value in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+                            {% if lead.status.value in ['new', 'researching', 'competitor_claimed'] %}
                             disabled
                             title="Lead must be in 'ready' status or later to mark a contact as primary. Current status: {{ lead.status.value }}"
                             {% else %}
@@ -1138,7 +1138,7 @@
 <script src="/static/js/scheduled_emails.js?v=20241128" defer></script>
 <script src="/static/js/linkedin_templates.js?v=20241128" defer></script>
 <script src="/static/js/attempt_form.js?v=20241203" defer></script>
-{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'competitor_claimed'] %}
 <link rel="stylesheet" href="/static/css/journey.css">
 <script src="/static/js/journey_display.js?v=20241203" defer></script>
 {% endif %}
