@@ -7,7 +7,7 @@ from typing import Optional
 import re
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, update, cast, String, Integer, Table, MetaData, inspect
+from sqlalchemy import select, func, update, cast, String, Integer, Table, MetaData, inspect, exists, and_, or_
 
 from db import engine
 from models import PropertyView, Lead, LeadProperty
@@ -19,6 +19,95 @@ DEFAULT_YEAR = "2025"
 
 # Cache for available years
 _YEAR_TABLES_LIST: Optional[list[str]] = None
+
+
+# ============================================================================
+# Property Owner Name Normalization Functions
+# ============================================================================
+# These functions handle normalization of property owner names (business names)
+# for matching and searching purposes.
+
+def normalize_property_owner_name(name: str) -> str:
+    """
+    Normalize property owner name (business name) for matching:
+    - lowercase
+    - trim
+    - remove punctuation (commas/periods)
+    - collapse whitespace
+    - remove common legal suffix tokens (inc, llc, ltd, corp, company, co, incorporated, corporation)
+    
+    This is used for matching property owner names across different formats.
+    """
+    if not name:
+        return ""
+    normalized = name.lower().strip()
+    # Remove punctuation
+    normalized = re.sub(r'[,\.;:!?]', '', normalized)
+    # Remove common legal suffix tokens
+    normalized = re.sub(
+        r'\b(inc|incorporated|corp|corporation|llc|l\.l\.c\.|ltd|limited|co|company|lp|l\.p\.|llp|l\.l\.p\.)\b',
+        '',
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    # Collapse whitespace
+    normalized = ' '.join(normalized.split())
+    return normalized
+
+
+def reorder_first_token_to_end(normalized: str) -> str:
+    """
+    Reorder tokens: move first token to end.
+    
+    Used for flipped name matching (e.g., "ABC Corp LLC" -> "Corp LLC ABC").
+    
+    Examples:
+        "abc corp llc" -> "corp llc abc"
+        "xyz" -> "xyz" (single token, unchanged)
+        "a b c" -> "b c a"
+    """
+    if not normalized:
+        return normalized
+    
+    tokens = normalized.split()
+    if len(tokens) < 2:
+        return normalized
+    
+    # Move first token to end
+    return ' '.join(tokens[1:] + [tokens[0]])
+
+
+def suffix_or_special_present(name: str) -> bool:
+    """
+    Detect if the original name contains legal suffix tokens or special characters.
+    
+    Used to determine if flip matching is allowed (flip only works for 3-token names
+    without suffixes or special characters).
+    """
+    if not name:
+        return False
+    lowered = name.lower()
+    has_special = bool(re.search(r"[^\w\s]", lowered))
+    suffix_pattern = r"\b(inc|inc\.|incorporated|corp|corporation|llc|l\.l\.c\.|ltd|limited|co|company|lp|l\.p\.|llp|l\.l\.p\.)\b"
+    has_suffix = bool(re.search(suffix_pattern, lowered))
+    return has_special or has_suffix
+
+
+def flip_allowed(normalized_name: str, original_name: str) -> bool:
+    """
+    Check if flip matching is allowed for a name.
+    
+    Flip is only allowed for names with exactly 3 tokens and no suffix/special characters.
+    
+    Args:
+        normalized_name: The normalized name (without suffixes)
+        original_name: The original name (to check for suffixes/special chars)
+    
+    Returns:
+        True if flip matching is allowed, False otherwise
+    """
+    tokens = normalized_name.split()
+    return len(tokens) == 3 and not suffix_or_special_present(original_name)
 
 
 def get_available_years(db: Session) -> list[str]:
@@ -375,16 +464,18 @@ def find_related_properties_by_owner_name(
     db: Session, 
     owner_name: str, 
     exclude_lead_id: int | None = None,
-    year: str | None = None
+    year: str | None = None,
+    flip: bool = False
 ) -> list[dict]:
     """
-    Find properties with the same owner name (normalized) that are not already assigned to a lead.
+    Find properties with the same owner name (normalized for business names) that are not already assigned to a lead.
     
     Args:
         db: Database session
-        owner_name: Owner name to search for
+        owner_name: Owner name to search for (business name)
         exclude_lead_id: Optional lead ID to exclude from "already assigned" check (for existing leads)
         year: Year for property table (defaults to DEFAULT_YEAR)
+        flip: If True, also search for flipped names (first token moved to end)
     
     Returns:
         List of property dictionaries that match the owner name and are not assigned
@@ -392,87 +483,89 @@ def find_related_properties_by_owner_name(
     if not year:
         year = DEFAULT_YEAR
     
-    from utils.name_utils import normalize_name
-    
-    # Normalize the owner name for comparison
-    normalized_owner_name = normalize_name(owner_name).lower().strip()
+    # Normalize the owner name using property owner name normalization (removes suffixes like inc, corp, llc)
+    normalized_owner_name = normalize_property_owner_name(owner_name)
     if not normalized_owner_name:
         return []
     
+    # If flip is enabled, check if flip is allowed and prepare flipped name
+    normalized_names_to_match = [normalized_owner_name]
+    if flip:
+        # Only flip if allowed (3 tokens, no suffix/special chars)
+        if flip_allowed(normalized_owner_name, owner_name):
+            flipped_name = reorder_first_token_to_end(normalized_owner_name)
+            if flipped_name and flipped_name != normalized_owner_name:
+                normalized_names_to_match.append(flipped_name)
+    
     prop_table = get_property_table_for_year(year)
     
-    # Use hybrid approach: database-level filtering with ILIKE (can use index), then normalize in Python
-    # First, use ILIKE for case-insensitive matching - this will leverage the existing index
-    # We'll match on the raw owner name, then normalize the filtered results for exact matching
-    # Use the normalized name (lowercased) for ILIKE pattern matching
-    # This will filter most rows at the database level before Python normalization
-    ilike_pattern = f"%{normalized_owner_name}%"
-    
-    # Get properties with matching owner name using ILIKE (database-level filtering)
-    # NOTE: We do NOT apply the 10k amount filter here - we want to show ALL properties
-    # with the same owner name so users can choose which ones to add
-    # Using func.lower() with ILIKE pattern to match case-insensitively
-    filtered_props = db.execute(
-        select(
-            prop_table.c.row_hash.label("raw_hash"),
-            prop_table.c.propertyid.label("propertyid"),
-            prop_table.c.ownername.label("ownername"),
-            prop_table.c.propertyamount.label("propertyamount"),
-            prop_table.c.holdername.label("holdername"),
-            prop_table.c.owneraddress1.label("owneraddress1"),
-            prop_table.c.owneraddress2.label("owneraddress2"),
-            prop_table.c.owneraddress3.label("owneraddress3"),
-            prop_table.c.ownercity.label("ownercity"),
-            prop_table.c.ownerstate.label("ownerstate"),
-            prop_table.c.ownerzipcode.label("ownerzipcode"),
-            prop_table.c.ownerrelation.label("ownerrelation"),
-            prop_table.c.lastactivitydate.label("lastactivitydate"),
-            prop_table.c.reportyear.label("reportyear"),
-            prop_table.c.propertytypedescription.label("propertytypedescription"),
+    # Build base query with SQL-level filtering to exclude assigned properties
+    # This is much more efficient than loading all assigned hashes into memory
+    base_query = select(
+        prop_table.c.row_hash.label("raw_hash"),
+        prop_table.c.propertyid.label("propertyid"),
+        prop_table.c.ownername.label("ownername"),
+        prop_table.c.propertyamount.label("propertyamount"),
+        prop_table.c.holdername.label("holdername"),
+        prop_table.c.owneraddress1.label("owneraddress1"),
+        prop_table.c.owneraddress2.label("owneraddress2"),
+        prop_table.c.owneraddress3.label("owneraddress3"),
+        prop_table.c.ownercity.label("ownercity"),
+        prop_table.c.ownerstate.label("ownerstate"),
+        prop_table.c.ownerzipcode.label("ownerzipcode"),
+        prop_table.c.ownerrelation.label("ownerrelation"),
+        prop_table.c.lastactivitydate.label("lastactivitydate"),
+        prop_table.c.reportyear.label("reportyear"),
+        prop_table.c.propertytypedescription.label("propertytypedescription"),
+    ).where(
+        prop_table.c.ownername.is_not(None),
+        cast(prop_table.c.reportyear, Integer) == int(year),
+        # Exclude properties already assigned to OTHER leads (not the current one)
+        ~exists(
+            select(1).where(
+                LeadProperty.property_raw_hash == prop_table.c.row_hash,
+                # If exclude_lead_id is provided, allow properties assigned to that lead
+                # (we'll exclude them separately if needed)
+                (LeadProperty.lead_id != exclude_lead_id) if exclude_lead_id else True
+            )
         )
-        .where(
-            prop_table.c.ownername.is_not(None),
-            cast(prop_table.c.reportyear, Integer) == int(year),
-            func.lower(cast(prop_table.c.ownername, String)).like(ilike_pattern)
-        )
-    ).all()
+    )
     
-    # Get all property hashes that are assigned to any lead
-    all_assigned = db.scalars(
-        select(LeadProperty.property_raw_hash).where(LeadProperty.property_raw_hash.is_not(None))
-    ).all()
-    assigned_hashes = set(all_assigned)
-    
-    # If exclude_lead_id is provided, get properties already in that lead to exclude them
+    # If exclude_lead_id is provided, also exclude properties already in that lead
     if exclude_lead_id:
-        assigned_to_this_lead = db.scalars(
-            select(LeadProperty.property_raw_hash).where(LeadProperty.lead_id == exclude_lead_id)
-        ).all()
-        assigned_to_this_lead_set = set(assigned_to_this_lead)
-    else:
-        assigned_to_this_lead_set = set()
+        base_query = base_query.where(
+            ~exists(
+                select(1).where(
+                    LeadProperty.property_raw_hash == prop_table.c.row_hash,
+                    LeadProperty.lead_id == exclude_lead_id
+                )
+            )
+        )
     
-    # Filter properties by normalized owner name and exclude already assigned
-    # Now normalize the filtered results for exact matching
+    # Execute query to get candidate properties
+    # We use a broad ILIKE pattern first, then do exact normalized matching in Python
+    # since business name normalization can't be done purely in SQL
+    # Use ILIKE directly (without cast/lower) to allow GIN index usage
+    ilike_patterns = [f"%{name}%" for name in normalized_names_to_match]
+    ilike_conditions = [
+        prop_table.c.ownername.ilike(pattern)
+        for pattern in ilike_patterns
+    ]
+    # Use OR to match any of the patterns (original or flipped)
+    base_query = base_query.where(or_(*ilike_conditions))
+    
+    filtered_props = db.execute(base_query).all()
+    
+    # Filter properties by exact normalized owner name matching (property owner name normalization)
+    # This must be done in Python since normalization removes suffixes and can't be done in SQL
     related_props = []
     for prop_row in filtered_props:
         prop_dict = dict(prop_row._mapping)
         prop_owner_name = (prop_dict.get("ownername") or "").strip()
-        normalized_prop_owner = normalize_name(prop_owner_name).lower().strip()
+        normalized_prop_owner = normalize_property_owner_name(prop_owner_name)
         
-        # Match if normalized names are the same
-        if normalized_prop_owner == normalized_owner_name:
-            raw_hash = prop_dict.get("raw_hash")
-            # Exclude if already assigned to another lead
-            if raw_hash and raw_hash in assigned_hashes:
-                # Only include if it's assigned to the current lead (we want to show it)
-                if not (exclude_lead_id and raw_hash in assigned_to_this_lead_set):
-                    continue  # Skip - assigned to another lead
-            
-            # Exclude if already in current lead (for existing leads)
-            if exclude_lead_id and raw_hash and raw_hash in assigned_to_this_lead_set:
-                continue  # Skip - already in this lead
-            
+        # Match if normalized names are the same (or flipped if enabled)
+        if normalized_prop_owner in normalized_names_to_match:
             related_props.append(prop_dict)
     
     return related_props

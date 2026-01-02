@@ -51,6 +51,13 @@
             updateSelectedCount();
         });
 
+        // Flip names checkbox - reload properties when toggled
+        const flipNamesCheckbox = document.getElementById('flip-names-checkbox');
+        flipNamesCheckbox?.addEventListener('change', function() {
+            // Reload properties with new flip setting
+            openModal(leadId);
+        });
+
         // Add selected properties
         modalAddBtn?.addEventListener('click', function() {
             addSelectedProperties(leadId);
@@ -81,10 +88,18 @@
         modalErrors.style.display = 'none';
         propertiesList.innerHTML = '';
         selectAllCheckbox.checked = false;
+        const flipNamesCheckbox = document.getElementById('flip-names-checkbox');
+        if (flipNamesCheckbox) {
+            // Don't reset checkbox - keep user's choice
+        }
         updateSelectedCount();
 
+        // Get flip parameter from checkbox
+        const flip = flipNamesCheckbox ? flipNamesCheckbox.checked : false;
+        const flipParam = flip ? '?flip=true' : '';
+
         // Fetch related properties
-        fetch(`/leads/${leadId}/properties/related`)
+        fetch(`/leads/${leadId}/properties/related${flipParam}`)
             .then(response => response.json())
             .then(data => {
                 modalLoading.style.display = 'none';

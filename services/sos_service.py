@@ -86,47 +86,19 @@ class SOSService:
     
     def normalize_business_name_without_suffixes(self, name: str) -> str:
         """
-        Normalize business name for SOS UI flow:
-        - lowercase
-        - trim
-        - remove punctuation (commas/periods)
-        - collapse whitespace
-        - remove common legal suffix tokens (inc, llc, ltd, corp, company, co, incorporated, corporation)
+        Normalize property owner name (removes suffixes).
+        Delegates to property_service since this is for property owner names.
         """
-        if not name:
-            return ""
-        normalized = name.lower().strip()
-        # Remove punctuation
-        normalized = re.sub(r'[,\.;:!?]', '', normalized)
-        # Remove common legal suffix tokens
-        normalized = re.sub(
-            r'\b(inc|incorporated|corp|corporation|llc|l\.l\.c\.|ltd|limited|co|company|lp|l\.p\.|llp|l\.l\.p\.)\b',
-            '',
-            normalized,
-            flags=re.IGNORECASE,
-        )
-        # Collapse whitespace
-        normalized = ' '.join(normalized.split())
-        return normalized
+        from services.property_service import normalize_property_owner_name
+        return normalize_property_owner_name(name)
     
     def reorder_first_token_to_end(self, normalized: str) -> str:
         """
         Reorder tokens: move first token to end.
-        
-        Examples:
-            "abc corp llc" -> "corp llc abc"
-            "xyz" -> "xyz" (single token, unchanged)
-            "a b c" -> "b c a"
+        Delegates to property_service since this is for property owner names.
         """
-        if not normalized:
-            return normalized
-        
-        tokens = normalized.split()
-        if len(tokens) < 2:
-            return normalized
-        
-        # Move first token to end
-        return ' '.join(tokens[1:] + [tokens[0]])
+        from services.property_service import reorder_first_token_to_end
+        return reorder_first_token_to_end(normalized)
     
     def search_by_normalized_name(self, normalized_name: str) -> List[Dict[str, Any]]:
         """

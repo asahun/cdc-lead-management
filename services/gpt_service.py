@@ -260,24 +260,11 @@ def normalize_business_name(name: str) -> str:
 
 def normalize_business_name_without_suffixes(name: str) -> str:
     """
-    Backward-compatible wrapper for SOSService.normalize_business_name_without_suffixes.
+    Backward-compatible wrapper for property_service.normalize_property_owner_name.
+    This function normalizes property owner names (business names from property records).
     """
-    from services.sos_service import SOSService
-    from sqlalchemy.orm import Session
-    # Create a temporary service instance with a dummy db (no db needed for this function)
-    # We'll use a minimal implementation that doesn't require db
-    if not name:
-        return ""
-    normalized = name.lower().strip()
-    normalized = re.sub(r'[,\.;:!?]', '', normalized)
-    normalized = re.sub(
-        r'\b(inc|incorporated|corp|corporation|llc|l\.l\.c\.|ltd|limited|co|company|lp|l\.p\.|llp|l\.l\.p\.)\b',
-        '',
-        normalized,
-        flags=re.IGNORECASE,
-    )
-    normalized = ' '.join(normalized.split())
-    return normalized
+    from services.property_service import normalize_property_owner_name
+    return normalize_property_owner_name(name)
 
 
 def redact_sos_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -296,14 +283,10 @@ def redact_sos_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 def reorder_first_token_to_end(normalized: str) -> str:
     """
-    Backward-compatible wrapper for SOSService.reorder_first_token_to_end.
+    Backward-compatible wrapper for property_service.reorder_first_token_to_end.
     """
-    from services.sos_service import SOSService
-    # Create a temporary service instance (no db needed for this function)
-    class DummyDB:
-        pass
-    sos_service = SOSService(DummyDB())
-    return sos_service.reorder_first_token_to_end(normalized)
+    from services.property_service import reorder_first_token_to_end
+    return reorder_first_token_to_end(normalized)
 
 
 def _sos_search_by_normalized_name(

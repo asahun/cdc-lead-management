@@ -149,11 +149,9 @@ class EntityIntelligenceOrchestrator:
             # Use the actual business name from the SOS record
             best_name_for_web_search = sos_record_for_analysis.get("business_name") or sos_result.get("sos_matched_name") or business_name
         else:
-            # Use normalized name without suffixes
-            if self.sos_service:
-                best_name_for_web_search = self.sos_service.normalize_business_name_without_suffixes(business_name) or business_name
-            else:
-                best_name_for_web_search = business_name
+            # Use normalized name without suffixes (from property owner name)
+            from services.property_service import normalize_property_owner_name
+            best_name_for_web_search = normalize_property_owner_name(business_name) or business_name
         
         logger.info(f"analyze_entity: Selected best name for web search: '{best_name_for_web_search}'")
         

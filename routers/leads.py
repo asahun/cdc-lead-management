@@ -127,20 +127,6 @@ PHONE_SCRIPTS = load_phone_scripts()
 PHONE_SCRIPTS_JSON = get_phone_scripts_json()
 
 
-def _suffix_or_special_present(name: str) -> bool:
-    """Detect if the original name contains legal suffix tokens or special characters."""
-    if not name:
-        return False
-    lowered = name.lower()
-    has_special = bool(re.search(r"[^\w\s]", lowered))
-    suffix_pattern = r"\b(inc|inc\.|incorporated|corp|corporation|llc|l\.l\.c\.|ltd|limited|co|company|lp|l\.p\.|llp|l\.l\.p\.)\b"
-    has_suffix = bool(re.search(suffix_pattern, lowered))
-    return has_special or has_suffix
-
-
-def _flip_allowed(base_normalized: str, original_name: str) -> bool:
-    tokens = base_normalized.split()
-    return len(tokens) == 3 and not _suffix_or_special_present(original_name)
 
 def _build_phone_script_context(
     owner_name: str | None,
@@ -565,8 +551,9 @@ async def lead_entity_intel_sos_options(
         raise HTTPException(status_code=404, detail="Linked property record not found for this lead.")
 
     owner_name = lead.owner_name or prop.get("ownername") or ""
-    sos_service = SOSService(db)
-    base_normalized = sos_service.normalize_business_name_without_suffixes(owner_name)
+    from services.property_service import normalize_property_owner_name, reorder_first_token_to_end, flip_allowed
+    
+    base_normalized = normalize_property_owner_name(owner_name)
     if not base_normalized:
         return {
             "search_name_used": "",
@@ -575,11 +562,12 @@ async def lead_entity_intel_sos_options(
             "sos_records": [],
         }
 
-    flip_allowed = _flip_allowed(base_normalized, owner_name)
-    if flip and not flip_allowed:
+    flip_allowed_result = flip_allowed(base_normalized, owner_name)
+    if flip and not flip_allowed_result:
         raise HTTPException(status_code=400, detail="Flip search not allowed for this name (requires exactly 3 tokens and no suffix/special chars).")
 
-    search_name_used = sos_service.reorder_first_token_to_end(base_normalized) if flip else base_normalized
+    sos_service = SOSService(db)
+    search_name_used = reorder_first_token_to_end(base_normalized) if flip else base_normalized
     try:
         sos_records = sos_service.search_by_normalized_name(search_name_used)
     except SOSDataError as exc:
@@ -589,7 +577,7 @@ async def lead_entity_intel_sos_options(
     return {
         "search_name_used": search_name_used,
         "flip_applied": flip,
-        "flip_allowed": flip_allowed,
+        "flip_allowed": flip_allowed_result,
         "sos_records": sos_records,
     }
 
@@ -1184,6 +1172,7 @@ def set_primary_property(
 @router.get("/leads/{lead_id}/properties/related")
 def get_related_properties_for_lead(
     lead_id: int,
+    flip: bool = Query(False, description="Include flipped name matching"),
     db: Session = Depends(get_db),
 ):
     """Get related properties for an existing lead (same owner_name, not already assigned)."""
@@ -1191,45 +1180,39 @@ def get_related_properties_for_lead(
     
     from services.property_service import find_related_properties_by_owner_name
     
+    # find_related_properties_by_owner_name already excludes properties in this lead
+    # via exclude_lead_id, so no need for additional filtering
     related_props = find_related_properties_by_owner_name(
         db, 
         lead.owner_name, 
-        exclude_lead_id=lead_id
+        exclude_lead_id=lead_id,
+        flip=flip
     )
     
-    # Format for JSON response
+    # Format for JSON response - all properties returned are already filtered
     result = []
     for prop in related_props:
-        # Check if this property is already in the lead's properties
-        already_in_lead = db.scalar(
-            select(LeadProperty).where(
-                LeadProperty.lead_id == lead_id,
-                LeadProperty.property_raw_hash == prop.get("raw_hash")
-            )
-        ) is not None
-        
-        if not already_in_lead:
-            # Convert Decimal to float for JSON serialization
-            property_amount = prop.get("propertyamount")
-            if property_amount is not None:
-                if isinstance(property_amount, Decimal):
+        # Convert Decimal to float for JSON serialization
+        property_amount = prop.get("propertyamount")
+        if property_amount is not None:
+            if isinstance(property_amount, Decimal):
+                property_amount = float(property_amount)
+            elif property_amount is not None:
+                try:
                     property_amount = float(property_amount)
-                elif property_amount is not None:
-                    try:
-                        property_amount = float(property_amount)
-                    except (TypeError, ValueError):
-                        property_amount = None
-            else:
-                property_amount = None
-            
-            result.append({
-                "property_id": str(prop.get("propertyid") or ""),
-                "property_raw_hash": str(prop.get("raw_hash") or ""),
-                "property_amount": property_amount,
-                "holder_name": str(prop.get("holdername") or ""),
-                "owner_name": str(prop.get("ownername") or ""),
-                "reportyear": str(prop.get("reportyear") or "") if prop.get("reportyear") else None,
-            })
+                except (TypeError, ValueError):
+                    property_amount = None
+        else:
+            property_amount = None
+        
+        result.append({
+            "property_id": str(prop.get("propertyid") or ""),
+            "property_raw_hash": str(prop.get("raw_hash") or ""),
+            "property_amount": property_amount,
+            "holder_name": str(prop.get("holdername") or ""),
+            "owner_name": str(prop.get("ownername") or ""),
+            "reportyear": str(prop.get("reportyear") or "") if prop.get("reportyear") else None,
+        })
     
     return JSONResponse(content={"properties": result})
 
