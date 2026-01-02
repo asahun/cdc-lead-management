@@ -33,6 +33,10 @@ from fastapi.templating import Jinja2Templates
 # Import routers
 from routers import properties as properties_router
 from routers import leads as leads_router
+from routers import lead_properties as lead_properties_router
+from routers import lead_entity_intel as lead_entity_intel_router
+from routers import lead_bulk as lead_bulk_router
+from routers import claims as claims_router
 from routers import contacts as contacts_router
 from routers import linkedin as linkedin_router
 from routers import emails as emails_router
@@ -43,6 +47,7 @@ from routers import journey_api as journey_api_router
 import routers.leads
 import routers.contacts
 import routers.properties
+import routers.claims
 
 # Import utilities
 from utils import format_currency
@@ -96,12 +101,17 @@ templates.env.filters["currency"] = format_currency
 # Share templates instance with routers (so they have access to filters)
 # This must be done after templates is created and filter is registered
 routers.leads.templates = templates
+routers.claims.templates = templates
 routers.contacts.templates = templates
 routers.properties.templates = templates
 
 # Register routers
 app.include_router(properties_router.router)
 app.include_router(leads_router.router)
+app.include_router(lead_properties_router.router)
+app.include_router(lead_entity_intel_router.router)
+app.include_router(lead_bulk_router.router)
+app.include_router(claims_router.router)
 app.include_router(contacts_router.router)
 app.include_router(linkedin_router.router)
 app.include_router(emails_router.router)

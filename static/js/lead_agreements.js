@@ -5,15 +5,15 @@
     return document.getElementById(id);
   }
 
-  async function fetchEvents(leadId) {
-    const res = await fetch(`/leads/${leadId}/agreements/events`);
+  async function fetchEvents(claimId) {
+    const res = await fetch(`/claims/${claimId}/events`);
     if (!res.ok) return [];
     const data = await res.json();
     return data.events || [];
   }
 
-  async function fetchDocuments(leadId) {
-    const res = await fetch(`/leads/${leadId}/agreements/documents`);
+  async function fetchDocuments(claimId) {
+    const res = await fetch(`/claims/${claimId}/documents`);
     if (!res.ok) return [];
     const data = await res.json();
     return data.documents || [];
@@ -58,7 +58,7 @@
 
     async function fetchClaim() {
       try {
-        const res = await fetch(`/leads/${leadId}/claims/latest`);
+        const res = await fetch(`/leads/${leadId}/claim`);
         if (res.status === 404) return null;
         if (!res.ok) throw new Error('Failed to load claim');
         return await res.json();
@@ -110,10 +110,10 @@
       createButtons.forEach((b) => (b.disabled = true));
 
       try {
-        const res = await fetch(`/leads/${leadId}/claims`, {
+        const res = await fetch('/claims', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ lead_id: leadId }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -145,5 +145,4 @@
     })();
   });
 })();
-
 
