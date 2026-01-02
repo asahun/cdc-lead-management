@@ -450,6 +450,7 @@ def generate_agreements_for_claim(
             "addendum_yes": bool(addendum_yes),
             "cdr_control_no": client.control_no or "",
             "cdr_fee_amount": str(fee_value),
+            "business_name": claim.entitled_business_name or "",
         }
     else:
         meta = {
@@ -458,6 +459,7 @@ def generate_agreements_for_claim(
             "addendum_yes": bool(addendum_yes),
             "cdr_control_no": client.control_no or "",
             "cdr_fee_amount": str(fee_value),
+            "business_name": claim.entitled_business_name or "",
         }
 
     recovery_field_mapping = build_recovery_mapping(properties, primary_contact_payload, meta, cdr_profile)

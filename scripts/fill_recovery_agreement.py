@@ -91,6 +91,9 @@ def build_field_mapping(properties, primary_contact, meta, cdr_profile):
             "cdr_fee_amount_2": f"{fee_amount:,.2f}",
             "claimant_net_pay_2": f"{net_pay:,.2f}",
             "claimant_recovered_percentage_2": f"{recovered_pct:.0f}",
+            # Business name
+            "business_name": meta.get("business_name", ""),
+            "business_name_2": f"{meta.get('business_name', '')} /" if meta.get("business_name") else "",
         }
     )
 
