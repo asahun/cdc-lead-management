@@ -182,6 +182,7 @@
               <th>Property ID</th>
               <th>Amount</th>
               <th>Year</th>
+              <th>Address</th>
               <th>Holder Name</th>
               <th></th>
               {% if mode != 'view' %}
@@ -205,6 +206,13 @@
               <td>
                 {% if prop_details and prop_details.get('reportyear') %}
                   {{ prop_details.reportyear }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if prop_details and prop_details.get('formatted_address') %}
+                  {{ prop_details.formatted_address }}
                 {% else %}
                   <span class="text-muted">—</span>
                 {% endif %}

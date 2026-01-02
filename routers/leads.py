@@ -45,6 +45,7 @@ from services.property_service import (
     mark_property_assigned,
     unmark_property_if_unused,
     build_gpt_payload,
+    format_property_address,
     DEFAULT_YEAR,
     PROPERTY_MIN_AMOUNT,
 )
@@ -711,11 +712,15 @@ def view_lead(
     
     # Fetch property details for each property to get holder names
     from services.property_service import get_property_by_raw_hash
+    
     properties_with_details = []
     for prop in all_properties:
         prop_details = None
         if prop.property_raw_hash:
             prop_details = get_property_by_raw_hash(db, prop.property_raw_hash)
+            # Format address for display
+            if prop_details:
+                prop_details['formatted_address'] = format_property_address(prop_details)
         properties_with_details.append((prop, prop_details))
     
     property_details = get_property_details_for_lead(db, lead)
@@ -865,11 +870,15 @@ def edit_lead(
     
     # Fetch property details for each property to get holder names
     from services.property_service import get_property_by_raw_hash
+    
     properties_with_details = []
     for prop in all_properties:
         prop_details = None
         if prop.property_raw_hash:
             prop_details = get_property_by_raw_hash(db, prop.property_raw_hash)
+            # Format address for display
+            if prop_details:
+                prop_details['formatted_address'] = format_property_address(prop_details)
         properties_with_details.append((prop, prop_details))
     
     property_details = get_property_details_for_lead(db, lead)
@@ -1205,6 +1214,9 @@ def get_related_properties_for_lead(
         else:
             property_amount = None
         
+        # Format address using property service function
+        formatted_address = format_property_address(prop)
+        
         result.append({
             "property_id": str(prop.get("propertyid") or ""),
             "property_raw_hash": str(prop.get("raw_hash") or ""),
@@ -1212,6 +1224,7 @@ def get_related_properties_for_lead(
             "holder_name": str(prop.get("holdername") or ""),
             "owner_name": str(prop.get("ownername") or ""),
             "reportyear": str(prop.get("reportyear") or "") if prop.get("reportyear") else None,
+            "address": formatted_address if formatted_address else None,
         })
     
     return JSONResponse(content={"properties": result})

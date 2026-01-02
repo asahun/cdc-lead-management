@@ -736,7 +736,7 @@ body {
     box-shadow:
       0 20px 50px rgba(30, 41, 59, 0.18),
       0 4px 12px rgba(30, 41, 59, 0.12);
-    width: min(900px, 95vw);
+    width: min(1200px, 95vw);
     max-height: 90vh;
     display: flex;
     flex-direction: column;

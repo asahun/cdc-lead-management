@@ -149,6 +149,7 @@
                 <th style="text-align: left; padding: 8px; width: 40px;"></th>
                 <th style="text-align: left; padding: 8px;">Property ID</th>
                 <th style="text-align: left; padding: 8px;">Owner Name</th>
+                <th style="text-align: left; padding: 8px;">Address</th>
                 <th style="text-align: left; padding: 8px;">Amount</th>
                 <th style="text-align: left; padding: 8px;">Year</th>
                 <th style="text-align: left; padding: 8px;">Holder Name</th>
@@ -172,6 +173,9 @@
                 </td>
                 <td style="padding: 10px 8px;">
                     ${prop.owner_name ? '<span class="owner-name">' + escapeHtml(prop.owner_name) + '</span>' : '<span class="text-muted">—</span>'}
+                </td>
+                <td style="padding: 10px 8px;">
+                    ${prop.address ? escapeHtml(prop.address) : '<span class="text-muted">—</span>'}
                 </td>
                 <td style="padding: 10px 8px;">
                     ${prop.property_amount ? '$' + formatCurrency(prop.property_amount) : '<span class="text-muted">—</span>'}

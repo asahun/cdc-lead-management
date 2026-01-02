@@ -571,6 +571,89 @@ def find_related_properties_by_owner_name(
     return related_props
 
 
+def _is_placeholder_value(value: str) -> bool:
+    """
+    Check if an address field value is a placeholder/invalid value.
+    
+    Returns True for values like 'UNKNOWN', '00000', 'N/A', etc.
+    """
+    if not value:
+        return True
+    
+    normalized = value.strip().upper()
+    
+    # Common placeholder patterns
+    placeholders = {
+        'UNKNOWN',
+        'N/A',
+        'NA',
+        'NULL',
+        'NONE',
+        '',
+    }
+    
+    if normalized in placeholders:
+        return True
+    
+    # All zeros (for zipcodes: 00000, 00000-0000, etc.)
+    if normalized.replace('-', '').replace(' ', '').isdigit():
+        if all(c == '0' for c in normalized.replace('-', '').replace(' ', '')):
+            return True
+    
+    return False
+
+
+def format_property_address(prop: dict) -> str | None:
+    """
+    Format property address fields into a single combined string.
+    
+    Combines owneraddress1, owneraddress2, owneraddress3, ownercity, ownerstate, ownerzipcode
+    into a formatted address string. Filters out placeholder values like 'UNKNOWN', '00000', etc.
+    
+    Format: "address1, address2, address3, city, state zipcode"
+    
+    Args:
+        prop: Property dictionary with address fields
+        
+    Returns:
+        Formatted address string, or None if no valid address fields are present
+    """
+    address_parts = []
+    for field in ["owneraddress1", "owneraddress2", "owneraddress3"]:
+        value = prop.get(field)
+        if value and not _is_placeholder_value(str(value)):
+            address_parts.append(str(value).strip())
+    
+    city_state_zip = []
+    city = prop.get("ownercity")
+    state = prop.get("ownerstate")
+    zipcode = prop.get("ownerzipcode")
+    
+    if city and not _is_placeholder_value(str(city)):
+        city_state_zip.append(str(city).strip())
+    if state and not _is_placeholder_value(str(state)):
+        city_state_zip.append(str(state).strip())
+    if zipcode and not _is_placeholder_value(str(zipcode)):
+        city_state_zip.append(str(zipcode).strip())
+    
+    # Combine: address parts with commas, then city/state/zip with commas, space before zip if state exists
+    formatted_address = ""
+    if address_parts:
+        formatted_address = ", ".join(address_parts)
+    if city_state_zip:
+        if formatted_address:
+            formatted_address += ", "
+        # Format city, state zipcode (space between state and zip)
+        if len(city_state_zip) == 3:
+            formatted_address += f"{city_state_zip[0]}, {city_state_zip[1]} {city_state_zip[2]}"
+        elif len(city_state_zip) == 2:
+            formatted_address += f"{city_state_zip[0]}, {city_state_zip[1]}"
+        else:
+            formatted_address += city_state_zip[0]
+    
+    return formatted_address if formatted_address else None
+
+
 def build_gpt_payload(lead: Lead, prop: dict) -> dict:
     """Build GPT payload from lead and property dict."""
     report_year_value = None
