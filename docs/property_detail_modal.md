@@ -27,8 +27,8 @@ immediately create a lead from the detail pane.
 - Frontend pieces:
 - `templates/properties.html` keeps the table layout compact while embedding the `<dialog>` container and script hook.
 - `templates/property_detail.html` renders the detail card.
-- `static/js/property_detail.js` wires up modal interactions, paging, and fetch (calling `/api/properties/{property_id}` for Next/Prev).
-- `static/js/properties_state.js` persists the last visited page/search via `localStorage` so returning users land where they left off.
+- `static/js/properties/property_detail/` wires up modal interactions, paging, and fetch (calling `/api/properties/{property_id}` for Next/Prev).
+- `static/js/properties/properties_state.js` persists the last visited page/search via `localStorage` so returning users land where they left off.
 - `static/css/styles.css` adds modern table hover states, pill buttons, and a gradient modal shell with card-style fields.
 - Table rows expose both their property ID and `raw_hash` in `data-*` attributes; the modal prioritizes `raw_hash` for navigation so duplicate IDs/amounts don't break sequencing.
 - The same modal is reused inside the lead workspace; `/properties/by_hash/{raw_hash}` serves the fragment without navigation/add-to-lead actions when requested with `context=lead`.
@@ -38,4 +38,3 @@ immediately create a lead from the detail pane.
 - Remember the last viewed property across sessions for quicker modal re-open.
 - Support keyboard shortcuts for closing or paging (Esc, ←, →).
 - Show richer formatting (currency, address formatting, links) once data set is finalized.
-

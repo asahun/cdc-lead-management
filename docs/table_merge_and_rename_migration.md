@@ -485,7 +485,7 @@ prop_table = get_property_table_for_year("2025")  # Returns property table
 - `templates/lead_form.html` - Added year column to property displays
 
 **JavaScript:**
-- `static/js/property_management.js` - Added year column to modal
+- `static/js/leads/property_management/` - Added year column to modal
 
 **CSS:**
 - `static/css/styles.css` - Widened modal for additional column
@@ -774,4 +774,3 @@ FROM property;
 - Index creation is the slowest part (1-2 hours for 11GB)
 - Table renames are instant (metadata-only)
 - The unified table approach simplifies future data ingestion
-

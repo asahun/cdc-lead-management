@@ -49,7 +49,7 @@ to the combined workspace, so old bookmarks continue to work.
 - The lead header now includes an **Entity Intelligence** card (above the comment log).
   Clicking **Run Analysis** calls `/leads/{id}/entity-intel`, which wraps
   `fetch_entity_intelligence` in `gpt_api.py` to ask OpenAI for original/successor/claimant
-  data and renders the response in place using `static/js/entity_intel.js`. Holder name and
+  data and renders the response in place using `static/js/leads/entity_intel/`. Holder name and
   last activity date already appear in the property record, so the card focuses exclusively
   on successor details and the recommended claimant.
 - OpenAI access is configured via environment variables: set `OPENAI_API_KEY` (required) and,
@@ -138,4 +138,3 @@ to the combined workspace, so old bookmarks continue to work.
 - Use htmx or fetch API to submit contact/attempt forms asynchronously.
 - Add quick filters or sorting within the attempts list.
 - Surface attempt counts or last-touch timestamps in the lead list view.
-

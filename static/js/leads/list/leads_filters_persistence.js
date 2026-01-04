@@ -10,6 +10,7 @@
   
   // All filter parameter names
   const FILTER_PARAMS = [
+    'year',
     'q',
     'attempt_type',
     'attempt_operator',
@@ -152,29 +153,6 @@
     }
   }
 
-  // Preserve filters when clicking "Leads" nav link from other pages
-  // This runs on all pages, not just /leads
-  document.addEventListener('DOMContentLoaded', () => {
-    const navLinks = document.querySelectorAll('a.nav-link[href="/leads"]');
-    navLinks.forEach(link => {
-      link.addEventListener('click', (e) => {
-        const storedFilters = loadFilters();
-        if (storedFilters && Object.keys(storedFilters).length > 0) {
-          const params = new URLSearchParams();
-          Object.entries(storedFilters).forEach(([key, value]) => {
-            if (value !== null && value !== '') {
-              params.set(key, value);
-            }
-          });
-          const queryString = params.toString();
-          if (queryString) {
-            link.href = `/leads?${queryString}`;
-          }
-        }
-      });
-    });
-  });
-
   // Save filters when they change (only on /leads page)
   document.addEventListener('DOMContentLoaded', () => {
     // Only run on /leads page
@@ -240,4 +218,3 @@
     }
   });
 })();
-

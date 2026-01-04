@@ -24,7 +24,7 @@
       <div class="filter-group">
         <label class="filter-label">Year</label>
         <div class="filter-controls">
-          <select name="year" id="year" class="filter-select" disabled title="Year is controlled from Properties page">
+          <select name="year" id="year" class="filter-select">
             {% for y in available_years %}
             <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
@@ -110,6 +110,7 @@
             <option value="ready" {% if status == 'ready' %}selected{% endif %}>Ready</option>
             <option value="contact_in_progress" {% if status == 'contact_in_progress' %}selected{% endif %}>Contact In Progress</option>
             <option value="response_received" {% if status == 'response_received' %}selected{% endif %}>Response Received</option>
+            <option value="claim_created" {% if status == 'claim_created' %}selected{% endif %}>Claim Created</option>
             <option value="no_response" {% if status == 'no_response' %}selected{% endif %}>No Response</option>
             <option value="competitor_claimed" {% if status == 'competitor_claimed' %}selected{% endif %}>Competitor Claimed</option>
           </select>
@@ -156,6 +157,7 @@
           <option value="ready">Ready</option>
           <option value="contact_in_progress">Contact In Progress</option>
           <option value="response_received">Response Received</option>
+          <option value="claim_created">Claim Created</option>
           <option value="no_response">No Response</option>
           <option value="competitor_claimed">Competitor Claimed</option>
         </select>
@@ -212,8 +214,9 @@
             </td>
             <td class="cell-actions">
               {% set filter_qs = "" %}
-              {% if q or (attempt_type and attempt_type != 'all') or attempt_operator or attempt_count is not none or print_log_operator or print_log_count is not none or (print_log_mailed and print_log_mailed != 'all') or scheduled_email_operator or scheduled_email_count is not none or failed_email_operator or failed_email_count is not none or status %}
+              {% if year or q or (attempt_type and attempt_type != 'all') or attempt_operator or attempt_count is not none or print_log_operator or print_log_count is not none or (print_log_mailed and print_log_mailed != 'all') or scheduled_email_operator or scheduled_email_count is not none or failed_email_operator or failed_email_count is not none or status %}
                 {% set param_parts = [] %}
+                {% if year %}{{ param_parts.append('year=' + year|string) or '' }}{% endif %}
                 {% if q %}{{ param_parts.append('q=' + q|urlencode) or '' }}{% endif %}
                 {% if attempt_type and attempt_type != 'all' %}{{ param_parts.append('attempt_type=' + attempt_type|urlencode) or '' }}{% endif %}
                 {% if attempt_operator %}{{ param_parts.append('attempt_operator=' + attempt_operator|urlencode) or '' }}{% endif %}
@@ -244,10 +247,10 @@
         </div>
         <div class="pager-buttons">
   {% if page > 1 %}
-            <a class="ghost-link" href="?page={{ page-1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Prev</a>
+            <a class="ghost-link" href="?page={{ page-1 }}{% if year %}&year={{ year }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Prev</a>
   {% endif %}
   {% if page < total_pages %}
-            <a class="ghost-link" href="?page={{ page+1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Next</a>
+            <a class="ghost-link" href="?page={{ page+1 }}{% if year %}&year={{ year }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if attempt_type and attempt_type != 'all' %}&attempt_type={{ attempt_type }}{% endif %}{% if attempt_operator %}&attempt_operator={{ attempt_operator }}{% endif %}{% if attempt_count is not none %}&attempt_count={{ attempt_count }}{% endif %}{% if print_log_operator %}&print_log_operator={{ print_log_operator }}{% endif %}{% if print_log_count is not none %}&print_log_count={{ print_log_count }}{% endif %}{% if print_log_mailed and print_log_mailed != 'all' %}&print_log_mailed={{ print_log_mailed }}{% endif %}{% if scheduled_email_operator %}&scheduled_email_operator={{ scheduled_email_operator }}{% endif %}{% if scheduled_email_count is not none %}&scheduled_email_count={{ scheduled_email_count }}{% endif %}{% if failed_email_operator %}&failed_email_operator={{ failed_email_operator }}{% endif %}{% if failed_email_count is not none %}&failed_email_count={{ failed_email_count }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Next</a>
   {% endif %}
         </div>
       </div>
@@ -297,11 +300,16 @@
   </div>
 </div>
 
-<script src="/static/js/leads_filters.js?v=20241203"></script>
-<script src="/static/js/leads_filters_persistence.js?v=20241203"></script>
-<script src="/static/js/filter_toggle.js?v=20241203" defer></script>
+<script src="/static/js/leads/list/leads_filters.js?v=20241203"></script>
+<script src="/static/js/leads/list/leads_filters_persistence.js?v=20241203"></script>
+<script src="/static/js/shared/filter_toggle.js?v=20241203" defer></script>
 <link rel="stylesheet" href="/static/css/task_indicator.css">
-<script src="/static/js/task_indicator.js?v=20241203" defer></script>
-<script src="/static/js/leads_state.js?v=20241128"></script>
-<script src="/static/js/leads_bulk_actions.js?v=20241203"></script>
+<script src="/static/js/leads/list/task_indicator/api.js?v=20241203" defer></script>
+<script src="/static/js/leads/list/task_indicator/helpers.js?v=20241203" defer></script>
+<script src="/static/js/leads/list/task_indicator/render.js?v=20241203" defer></script>
+<script src="/static/js/leads/list/task_indicator/index.js?v=20241203" defer></script>
+<script src="/static/js/leads/list/leads_state.js?v=20241128"></script>
+<script src="/static/js/leads/list/leads_bulk/api.js?v=20241203"></script>
+<script src="/static/js/leads/list/leads_bulk/render.js?v=20241203"></script>
+<script src="/static/js/leads/list/leads_bulk/index.js?v=20241203"></script>
 {% endblock %}

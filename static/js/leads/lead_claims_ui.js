@@ -5,20 +5,6 @@
     return document.getElementById(id);
   }
 
-  async function fetchEvents(claimId) {
-    const res = await fetch(`/claims/${claimId}/events`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.events || [];
-  }
-
-  async function fetchDocuments(claimId) {
-    const res = await fetch(`/claims/${claimId}/documents`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.documents || [];
-  }
-
   function renderEvents(listEl, events) {
     if (!listEl) return;
     listEl.innerHTML = '';
@@ -145,4 +131,3 @@
     })();
   });
 })();
-

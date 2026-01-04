@@ -10,10 +10,10 @@
   <script>
     window.profileRegistry = JSON.parse(document.getElementById('profile-registry-data').textContent);
   </script>
-  <script src="/static/js/profile_selector.js?v=20241128" defer></script>
-  <script src="/static/js/notifications.js?v=20241203" defer></script>
-  <script src="/static/js/leads_filters_persistence.js?v=20241203" defer></script>
-  <script src="/static/js/year_persistence.js?v=20241203" defer></script>
+  <script src="/static/js/shared/profile_selector.js?v=20241128" defer></script>
+  <script src="/static/js/shared/notifications.js?v=20241203" defer></script>
+  <script src="/static/js/shared/nav_filters_persistence.js?v=20241203" defer></script>
+  <script src="/static/js/shared/year_persistence.js?v=20241203" defer></script>
 </head>
 <body>
   <header class="app-header">
@@ -43,6 +43,6 @@
 
   {% block content %}{% endblock %}
 
-  <script src="/static/js/local_time.js?v=20241128" defer></script>
+  <script src="/static/js/shared/local_time.js?v=20241128" defer></script>
 </body>
 </html>

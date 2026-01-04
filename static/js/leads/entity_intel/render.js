@@ -6,21 +6,6 @@
 (function() {
   'use strict';
 
-  const button = document.getElementById('run-entity-intel');
-  const resultContainer = document.getElementById('entity-intel-result');
-  const progressText = document.getElementById('entity-intel-progress');
-  let sosState = {
-    records: [],
-    searchNameUsed: "",
-    flipAllowed: false,
-    flipApplied: false,
-    selectedIndex: 0,
-  };
-
-  if (!button || !resultContainer) {
-    return; // Component not present on this page
-  }
-
   // Helper functions for formatting
   function formatEntityStatus(status) {
     if (!status) return "—";
@@ -150,10 +135,10 @@
     }
   }
 
-  function renderResult(data, selectedSosData) {
+  function renderResult(container, data, selectedSosData) {
     if (!data || !data.analysis) {
-      resultContainer.classList.add("error-state");
-      resultContainer.innerHTML = "No insights returned. Try again later.";
+      container.classList.add("error-state");
+      container.innerHTML = "No insights returned. Try again later.";
       return;
     }
 
@@ -177,7 +162,7 @@
     const changeProfile = analysis.change_profile || {};
     const communicationProfile = analysis.communication_profile || {};
 
-    resultContainer.classList.remove("empty-state", "error-state");
+    container.classList.remove("empty-state", "error-state");
 
     // Determine if we're using new schema (v12) or legacy schema
     const isNewSchema = !!analysis.hypotheses && !!analysis.selected_entitled_entity;
@@ -672,7 +657,7 @@
       </div>
     `;
 
-    resultContainer.innerHTML = `
+    container.innerHTML = `
       ${sosEntityHtml}
       ${selectedBusinessHtml}
       ${contactsHtml}
@@ -680,13 +665,13 @@
     `;
   }
 
-  function renderSosSelector() {
-    const optionsHtml = sosState.records.length > 0
+  function renderSosSelector(container, state, handlers) {
+    const optionsHtml = state.records.length > 0
       ? `
         <label for="sos-select">Select SOS business</label>
         <select id="sos-select" class="sos-select">
-          ${sosState.records.map((rec, idx) => `
-            <option value="${idx}" ${idx === sosState.selectedIndex ? "selected" : ""}>
+          ${state.records.map((rec, idx) => `
+            <option value="${idx}" ${idx === state.selectedIndex ? "selected" : ""}>
               ${rec.business_name || "Unnamed"} — ${rec.entity_status || "Unknown"} (${rec.entity_status_date || "n/a"})
             </option>
           `).join("")}
@@ -694,117 +679,43 @@
       `
       : `<p class="muted">No SOS matches found.</p>`;
 
-    const flipBtn = sosState.flipAllowed
-      ? `<button class="btn btn-ghost" id="sos-flip-btn" ${sosState.flipApplied ? "disabled" : ""}>Try flipped search</button>`
+    const flipBtn = state.flipAllowed
+      ? `<button class="btn btn-ghost" id="sos-flip-btn" ${state.flipApplied ? "disabled" : ""}>Try flipped search</button>`
       : "";
 
-    resultContainer.classList.remove("error-state");
-    resultContainer.innerHTML = `
+    container.classList.remove("error-state");
+    container.innerHTML = `
       <div class="sos-selector">
         <h3>SOS Search Results</h3>
-        <div class="sos-meta">Search name used: <strong>${sosState.searchNameUsed || "—"}</strong> ${sosState.flipApplied ? "(flipped)" : ""}</div>
+        <div class="sos-meta">Search name used: <strong>${state.searchNameUsed || "—"}</strong> ${state.flipApplied ? "(flipped)" : ""}</div>
         ${optionsHtml}
         <div class="sos-actions">
           ${flipBtn}
-          <button class="btn btn-primary" id="run-analysis-btn" ${sosState.records.length === 0 ? "disabled" : ""}>Run AI with selected SOS</button>
-          ${sosState.records.length === 0 ? "" : `<button class="btn btn-link" id="run-analysis-nosos-btn">Run without SOS</button>`}
-          ${sosState.records.length === 0 ? `<button class="btn btn-secondary" id="run-analysis-nosos-btn-empty">Run without SOS</button>` : ""}
+          <button class="btn btn-primary" id="run-analysis-btn" ${state.records.length === 0 ? "disabled" : ""}>Run AI with selected SOS</button>
+          ${state.records.length === 0 ? "" : `<button class="btn btn-link" id="run-analysis-nosos-btn">Run without SOS</button>`}
+          ${state.records.length === 0 ? `<button class="btn btn-secondary" id="run-analysis-nosos-btn-empty">Run without SOS</button>` : ""}
         </div>
       </div>
     `;
 
     const flipButton = document.getElementById("sos-flip-btn");
     if (flipButton) {
-      flipButton.addEventListener("click", () => fetchSosOptions(true));
+      flipButton.addEventListener("click", () => handlers.onFlip());
     }
 
     const runBtn = document.getElementById("run-analysis-btn");
-    if (runBtn) runBtn.addEventListener("click", () => runAnalysis(false));
+    if (runBtn) runBtn.addEventListener("click", () => handlers.onRun());
 
     const runNoSosBtn = document.getElementById("run-analysis-nosos-btn");
-    if (runNoSosBtn) runNoSosBtn.addEventListener("click", () => runAnalysis(true));
+    if (runNoSosBtn) runNoSosBtn.addEventListener("click", () => handlers.onRunWithoutSos());
 
     const runNoSosBtnEmpty = document.getElementById("run-analysis-nosos-btn-empty");
-    if (runNoSosBtnEmpty) runNoSosBtnEmpty.addEventListener("click", () => runAnalysis(true));
+    if (runNoSosBtnEmpty) runNoSosBtnEmpty.addEventListener("click", () => handlers.onRunWithoutSos());
   }
 
-  async function fetchSosOptions(flip = false) {
-    const baseEndpoint = button.dataset.endpoint;
-    if (!baseEndpoint) return;
-    const url = `${baseEndpoint}/sos-options${flip ? "?flip=true" : ""}`;
-    progressText.hidden = false;
-    try {
-      const resp = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!resp.ok) throw new Error(`SOS options failed (${resp.status})`);
-      const data = await resp.json();
-      sosState = {
-        records: data.sos_records || [],
-        searchNameUsed: data.search_name_used || "",
-        flipAllowed: Boolean(data.flip_allowed),
-        flipApplied: Boolean(data.flip_applied),
-        selectedIndex: 0,
-      };
-      renderSosSelector();
-    } catch (err) {
-      console.error("SOS options fetch failed", err);
-      resultContainer.classList.add("error-state");
-      resultContainer.innerHTML = "Unable to load SOS options.";
-    } finally {
-      progressText.hidden = true;
-    }
-  }
-
-  async function runAnalysis(ignoreSos) {
-    const baseEndpoint = button.dataset.endpoint;
-    if (!baseEndpoint) return;
-    const runEndpoint = `${baseEndpoint}/run`;
-
-    let selectedRecord = null;
-    if (!ignoreSos && sosState.records.length > 0) {
-      const selectEl = document.getElementById("sos-select");
-      const idx = selectEl ? parseInt(selectEl.value, 10) : sosState.selectedIndex || 0;
-      sosState.selectedIndex = isNaN(idx) ? 0 : idx;
-      selectedRecord = sosState.records[sosState.selectedIndex] || null;
-    }
-
-    const body = {
-      selected_sos_record: ignoreSos ? null : selectedRecord,
-      sos_search_name_used: ignoreSos ? null : sosState.searchNameUsed,
-      flip_applied: sosState.flipApplied,
-    };
-
-    button.disabled = true;
-    button.setAttribute("aria-busy", "true");
-    progressText.hidden = false;
-    resultContainer.classList.remove("error-state");
-
-    try {
-      const resp = await fetch(runEndpoint, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      if (!resp.ok) throw new Error(`Request failed (${resp.status})`);
-      const data = await resp.json();
-      renderResult(data, data.selected_sos_data);
-    } catch (error) {
-      console.error("Entity intel fetch failed", error);
-      resultContainer.classList.add("error-state");
-      resultContainer.innerHTML = "Unable to load GPT insights. Please try again.";
-    } finally {
-      progressText.hidden = true;
-      button.disabled = false;
-      button.removeAttribute("aria-busy");
-    }
-  }
-
-  async function handleClick() {
-    sosState = { records: [], searchNameUsed: "", flipAllowed: false, flipApplied: false };
-    fetchSosOptions(false);
-  }
-
-  button.addEventListener("click", handleClick);
+  window.EntityIntel = window.EntityIntel || {};
+  window.EntityIntel.render = {
+    renderResult,
+    renderSosSelector,
+  };
 })();

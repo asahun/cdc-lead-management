@@ -953,12 +953,19 @@
   </div>
 </dialog>
 
-<script src="/static/js/property_detail.js?v=20241128"></script>
-<script src="/static/js/entity_intel.js?v=20241129"></script>
-<script src="/static/js/lead_agreements.js?v=20250105" defer></script>
-<script src="/static/js/lead_actions.js?v=20241202" defer></script>
-<script src="/static/js/phone_scripts.js?v=20241128" defer></script>
-<script src="/static/js/letter_print.js?v=20241203" defer></script>
+<script src="/static/js/properties/property_detail/api.js?v=20241128"></script>
+<script src="/static/js/properties/property_detail/helpers.js?v=20241128"></script>
+<script src="/static/js/properties/property_detail/index.js?v=20241128"></script>
+<script src="/static/js/leads/entity_intel/api.js?v=20241129"></script>
+<script src="/static/js/leads/entity_intel/render.js?v=20241129"></script>
+<script src="/static/js/leads/entity_intel/index.js?v=20241129"></script>
+<script src="/static/js/leads/lead_claims_ui.js?v=20250105" defer></script>
+<script src="/static/js/leads/lead_actions.js?v=20241202" defer></script>
+<script src="/static/js/leads/phone_scripts.js?v=20241128" defer></script>
+<script src="/static/js/leads/letter_print/api.js?v=20241203" defer></script>
+<script src="/static/js/leads/letter_print/helpers.js?v=20241203" defer></script>
+<script src="/static/js/leads/letter_print/render.js?v=20241203" defer></script>
+<script src="/static/js/leads/letter_print/index.js?v=20241203" defer></script>
 
 <script>
   (function () {
@@ -1146,13 +1153,23 @@
   </div>
 </div>
 
-<script src="/static/js/email_compose.js?v=20241128" defer></script>
-<script src="/static/js/scheduled_emails.js?v=20241128" defer></script>
-<script src="/static/js/linkedin_templates.js?v=20241128" defer></script>
-<script src="/static/js/attempt_form.js?v=20241203" defer></script>
+<script src="/static/js/leads/email_compose/api.js?v=20241128" defer></script>
+<script src="/static/js/leads/email_compose/helpers.js?v=20241128" defer></script>
+<script src="/static/js/leads/email_compose/index.js?v=20241128" defer></script>
+<script src="/static/js/leads/scheduled_emails.js?v=20241128" defer></script>
+<script src="/static/js/leads/linkedin_templates/api.js?v=20241128" defer></script>
+<script src="/static/js/leads/linkedin_templates/helpers.js?v=20241128" defer></script>
+<script src="/static/js/leads/linkedin_templates/index.js?v=20241128" defer></script>
+<script src="/static/js/leads/attempt_form.js?v=20241203" defer></script>
 {% if mode != 'create' and lead.status.value not in ['new', 'researching', 'competitor_claimed'] %}
 <link rel="stylesheet" href="/static/css/journey.css">
-<script src="/static/js/journey_display.js?v=20241203" defer></script>
+<script src="/static/js/leads/journey_display/api.js?v=20241203" defer></script>
+<script src="/static/js/leads/journey_display/helpers.js?v=20241203" defer></script>
+<script src="/static/js/leads/journey_display/render.js?v=20241203" defer></script>
+<script src="/static/js/leads/journey_display/index.js?v=20241203" defer></script>
 {% endif %}
-<script src="/static/js/property_management.js?v=20241211" defer></script>
+<script src="/static/js/leads/property_management/api.js?v=20241211" defer></script>
+<script src="/static/js/leads/property_management/helpers.js?v=20241211" defer></script>
+<script src="/static/js/leads/property_management/render.js?v=20241211" defer></script>
+<script src="/static/js/leads/property_management/index.js?v=20241211" defer></script>
 {% endblock %}
