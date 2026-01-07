@@ -316,6 +316,9 @@ def start_scheduler():
     if scheduler.running:
         return
     
+    # Suppress APScheduler executor logs - we only want logs when emails are actually processed
+    logging.getLogger('apscheduler.executors.default').setLevel(logging.WARNING)
+    
     # Check for missed emails on startup
     _check_missed_emails()
     
