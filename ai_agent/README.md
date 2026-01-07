@@ -94,3 +94,30 @@ docker exec -it lead_app-db-1 psql -U ucp_app -d ucp -f /tmp/ucp_dump.sql
 docker stop old_db_dump
 docker rm old_db_dump
 ```
+
+## Restore From Host Backup (nightly dumps)
+If you already have a `pg_dump` backup stored on the host (outside Docker volumes), restore it directly into the new DB container without touching the old one:
+
+1) Start the DB container:
+
+```
+docker compose up -d db
+```
+
+2) Copy the backup into the container:
+
+```
+docker cp /path/to/backup.sql lead_app-db-1:/tmp/backup.sql
+```
+
+3) Restore into the database:
+
+```
+docker exec -it lead_app-db-1 psql -U ucp_app -d ucp -f /tmp/backup.sql
+```
+
+Note: If your backup is a custom-format dump (`.dump`), use:
+
+```
+docker exec -it lead_app-db-1 pg_restore -U ucp_app -d ucp /tmp/backup.dump
+```
