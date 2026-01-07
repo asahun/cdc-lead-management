@@ -23,6 +23,7 @@ from models import (
     PrintLog,
     LeadJourney,
     JourneyMilestone,
+    LeadAgentIntel,
 )
 
 from services.email_service import PROFILE_REGISTRY
@@ -35,6 +36,7 @@ from routers import properties as properties_router
 from routers import leads as leads_router
 from routers import lead_properties as lead_properties_router
 from routers import lead_entity_intel as lead_entity_intel_router
+from routers import lead_agent_intel as lead_agent_intel_router
 from routers import lead_bulk as lead_bulk_router
 from routers import claims as claims_router
 from routers import contacts as contacts_router
@@ -66,6 +68,7 @@ Base.metadata.create_all(
         PrintLog.__table__,
         LeadJourney.__table__,
         JourneyMilestone.__table__,
+        LeadAgentIntel.__table__,
     ],
 )
 
@@ -110,6 +113,7 @@ app.include_router(properties_router.router)
 app.include_router(leads_router.router)
 app.include_router(lead_properties_router.router)
 app.include_router(lead_entity_intel_router.router)
+app.include_router(lead_agent_intel_router.router)
 app.include_router(lead_bulk_router.router)
 app.include_router(claims_router.router)
 app.include_router(contacts_router.router)

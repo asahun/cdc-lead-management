@@ -449,6 +449,29 @@
       </div>
     </section>
 
+    <section id="agent-intel" class="card insight-card">
+      <header>
+        <h2>Agent Research (v1)</h2>
+        <div class="header-actions">
+          <button
+            id="run-agent-intel"
+            class="btn btn-secondary"
+            type="button"
+            data-endpoint="/leads/{{ lead.id }}/agent-intel"
+          >
+            Run Agent Research
+          </button>
+          <span id="agent-intel-progress" class="inline-progress" hidden>Running research…</span>
+        </div>
+      </header>
+
+      <div class="section-content">
+        <div id="agent-intel-result" class="intel-result empty-state">
+          No agent research yet. Click "Run Agent Research" to generate a snapshot.
+        </div>
+      </div>
+    </section>
+
     <section id="comments" class="card comment-card">
       <header>
         <h2>Comment Log</h2>
@@ -959,6 +982,9 @@
 <script src="/static/js/leads/entity_intel/api.js?v=20241129"></script>
 <script src="/static/js/leads/entity_intel/render.js?v=20241129"></script>
 <script src="/static/js/leads/entity_intel/index.js?v=20241129"></script>
+<script src="/static/js/leads/agent_intel/api.js?v=20250210"></script>
+<script src="/static/js/leads/agent_intel/render.js?v=20250210"></script>
+<script src="/static/js/leads/agent_intel/index.js?v=20250210"></script>
 <script src="/static/js/leads/lead_claims_ui.js?v=20250105" defer></script>
 <script src="/static/js/leads/lead_actions.js?v=20241202" defer></script>
 <script src="/static/js/leads/phone_scripts.js?v=20241128" defer></script>

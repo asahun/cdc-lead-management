@@ -183,6 +183,11 @@ body {
   margin: 0 auto 20px;
 }
 
+#agent-intel-result {
+  max-width: 1100px;
+  margin: 0 auto 20px;
+}
+
 /* Entity intel SOS cards */
 .sos-entity-card {
   background: linear-gradient(145deg, #ffffff, #f5f7fb) !important;
@@ -2215,6 +2220,44 @@ body {
     border-radius: 14px;
     border: 1px solid rgba(148, 163, 184, 0.35);
     background: rgba(248, 250, 252, 0.8);
+  }
+
+  .intel-section {
+    margin-bottom: 16px;
+  }
+
+  .intel-list {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    color: #1e293b;
+  }
+
+  .intel-item {
+    margin-bottom: 10px;
+  }
+
+  .intel-item-header {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 14px;
+  }
+
+  .intel-tag {
+    background: #e2e8f0;
+    color: #1f2937;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+
+  .intel-muted {
+    color: #64748b;
+    font-size: 12px;
   }
 
   .intel-result.empty-state {

@@ -24,6 +24,35 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - shared_net
+
+  ai_agent:
+    build: ./ai_agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-ucp}
+      DB_USER: ${DB_USER:-ucp_app}
+      DB_PASSWORD: ${DB_PASSWORD:-EJe5&fWgxt6gow}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.1}
+      GOOGLE_CSE_API_KEY: ${GOOGLE_CSE_API_KEY:-}
+      GOOGLE_CSE_CX: ${GOOGLE_CSE_CX:-}
+      GOOGLE_CUSTOM_SEARCH_API_KEY: ${GOOGLE_CUSTOM_SEARCH_API_KEY:-}
+      GOOGLE_CUSTOM_SEARCH_ENGINE_ID: ${GOOGLE_CUSTOM_SEARCH_ENGINE_ID:-}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      WEB_SCRAPE_ENABLED: ${WEB_SCRAPE_ENABLED:-true}
+    ports:
+      - "8088:8088"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - shared_net
 
   # metabase:
   #   image: metabase/metabase:latest
@@ -46,3 +75,7 @@ volumes:
   postgres_data: 
   # odoo_data:
   # metabase_data:  
+
+networks:
+  shared_net:
+    external: true

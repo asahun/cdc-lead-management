@@ -144,6 +144,23 @@ class LeadProperty(Base):
     )
 
 
+class LeadAgentIntel(Base):
+    __tablename__ = "lead_agent_intel"
+
+    id = Column(BigInteger, primary_key=True)
+    lead_id = Column(BigInteger, ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
+    property_id = Column(Text, nullable=True)
+    property_raw_hash = Column(Text, nullable=True)
+    request_payload = Column(Text, nullable=False)
+    response_payload = Column(Text, nullable=False)
+    status = Column(Text, nullable=False, default="completed")
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    lead = relationship("Lead", back_populates="agent_intel_results")
+
+
 class Lead(Base):
     __tablename__ = "lead"
 
@@ -162,6 +179,7 @@ class Lead(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     properties = relationship("LeadProperty", back_populates="lead", cascade="all, delete-orphan", order_by="LeadProperty.is_primary.desc(), LeadProperty.added_at")
+    agent_intel_results = relationship("LeadAgentIntel", back_populates="lead", cascade="all, delete-orphan")
     contacts = relationship("LeadContact", back_populates="lead", cascade="all, delete-orphan")
     attempts = relationship("LeadAttempt", back_populates="lead", cascade="all, delete-orphan")
     comments = relationship("LeadComment", back_populates="lead", cascade="all, delete-orphan")
