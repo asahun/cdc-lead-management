@@ -96,7 +96,7 @@ docker rm old_db_dump
 ```
 
 ## Restore From Host Backup (nightly dumps)
-If you already have a `pg_dump` backup stored on the host (outside Docker volumes), restore it directly into the new DB container without touching the old one:
+If you already have a backup stored on the host (outside Docker volumes), restore it into the DB container, then start the agent service.
 
 1) Start the DB container:
 
@@ -107,17 +107,24 @@ docker compose up -d db
 2) Copy the backup into the container:
 
 ```
-docker cp /path/to/backup.sql lead_app-db-1:/tmp/backup.sql
+docker cp /path/to/backup.dump lead_app-db-1:/tmp/backup.dump
 ```
 
-3) Restore into the database:
-
-```
-docker exec -it lead_app-db-1 psql -U ucp_app -d ucp -f /tmp/backup.sql
-```
-
-Note: If your backup is a custom-format dump (`.dump`), use:
+3) Restore into the database (custom-format `.dump`):
 
 ```
 docker exec -it lead_app-db-1 pg_restore -U ucp_app -d ucp /tmp/backup.dump
+```
+
+4) Start the agent service:
+
+```
+docker compose up -d ai_agent
+```
+
+Note: If your backup is a plain SQL file (`.sql`), use:
+
+```
+docker cp /path/to/backup.sql lead_app-db-1:/tmp/backup.sql
+docker exec -it lead_app-db-1 psql -U ucp_app -d ucp -f /tmp/backup.sql
 ```
