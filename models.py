@@ -52,7 +52,6 @@ class LeadStatus(str, enum.Enum):
     response_received = "response_received"
     claim_created = "claim_created"
     no_response = "no_response"
-    competitor_claimed = "competitor_claimed"
     ready = "ready"
 
 
@@ -135,6 +134,10 @@ class LeadProperty(Base):
     property_amount = Column(Numeric(18, 2))
     is_primary = Column(Boolean, nullable=False, default=False)
     added_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    # Tracks if property was removed from weekly data source (likely claimed by competitor)
+    deleted_from_source = Column(Boolean, nullable=False, default=False)
+    deleted_from_source_at = Column(DateTime(timezone=True), nullable=True)
 
     lead = relationship("Lead", back_populates="properties")
     

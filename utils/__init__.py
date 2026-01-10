@@ -9,6 +9,9 @@ from utils.validators import (
     get_contact_or_404,
     normalize_contact_id,
     is_lead_editable,
+    is_competitor_claimed,
+    is_partially_claimed,
+    get_effective_status,
 )
 from utils.normalizers import normalize_owner_fields
 from utils.html_processing import (
@@ -27,6 +30,9 @@ __all__ = [
     "get_contact_or_404",
     "normalize_contact_id",
     "is_lead_editable",
+    "is_competitor_claimed",
+    "is_partially_claimed",
+    "get_effective_status",
     "normalize_owner_fields",
     "plain_text_to_html",
     "looks_like_html",

@@ -31,10 +31,69 @@ def normalize_contact_id(contact_id: str | None) -> int | None:
     return int(contact_id)
 
 
+def is_competitor_claimed(lead: Lead) -> bool:
+    """
+    Check if a lead should be considered competitor_claimed.
+    This is computed from properties: all properties must be deleted_from_source.
+    
+    Args:
+        lead: The Lead instance (must have properties loaded)
+        
+    Returns:
+        True if all properties are deleted_from_source, False otherwise
+    """
+    if not lead.properties:
+        return False  # No properties means not claimed
+    
+    # All properties must be deleted for the lead to be considered claimed
+    return all(prop.deleted_from_source for prop in lead.properties)
+
+
+def is_partially_claimed(lead: Lead) -> bool:
+    """
+    Check if a lead has some (but not all) properties deleted.
+    
+    Args:
+        lead: The Lead instance (must have properties loaded)
+        
+    Returns:
+        True if some properties are deleted but not all, False otherwise
+    """
+    if not lead.properties:
+        return False  # No properties means not partially claimed
+    
+    deleted_count = sum(1 for prop in lead.properties if prop.deleted_from_source)
+    total_count = len(lead.properties)
+    
+    # Partially claimed if some are deleted but not all
+    return 0 < deleted_count < total_count
+
+
+def get_effective_status(lead: Lead) -> LeadStatus | str:
+    """
+    Get the effective status of a lead, including computed competitor_claimed and partially_claimed statuses.
+    
+    - If all properties are deleted_from_source, returns "competitor_claimed"
+    - If some (but not all) properties are deleted, returns "partially_claimed"
+    - Otherwise, returns the stored LeadStatus enum value
+    
+    Args:
+        lead: The Lead instance (must have properties loaded)
+        
+    Returns:
+        LeadStatus | str - the effective status (may be computed string status)
+    """
+    if is_competitor_claimed(lead):
+        return "competitor_claimed"
+    if is_partially_claimed(lead):
+        return "partially_claimed"
+    return lead.status
+
+
 def is_lead_editable(lead: Lead) -> bool:
     """
-    Determine if a lead can be edited. Returns False for terminal/archived statuses.
+    Determine if a lead can be edited. Returns False if all properties are deleted.
     """
-    read_only_statuses = {LeadStatus.competitor_claimed}
-    return lead.status not in read_only_statuses
+    # Lead is read-only if all properties are deleted (competitor_claimed)
+    return not is_competitor_claimed(lead)
 

@@ -20,7 +20,7 @@ from models import (
 )
 from services.property_service import get_property_by_id, get_property_details_for_lead
 from services.journey_service import initialize_lead_journey
-from utils import get_lead_or_404, get_contact_or_404
+from utils import get_lead_or_404, get_contact_or_404, is_competitor_claimed
 from services.letter_service import LetterGenerationError, get_property_for_lead, render_letter_pdf
 from fastapi.templating import Jinja2Templates
 
@@ -141,10 +141,12 @@ def mark_contact_as_primary(
     lead = get_lead_or_404(db, lead_id)
     contact = get_contact_or_404(db, contact_id, lead_id)
     
-    if lead.status in {LeadStatus.new, LeadStatus.researching, LeadStatus.competitor_claimed}:
+    # Cannot mark contact as primary for new, researching, or competitor_claimed (all properties deleted) leads
+    if lead.status in {LeadStatus.new, LeadStatus.researching} or is_competitor_claimed(lead):
+        status_display = "competitor_claimed (all properties deleted)" if is_competitor_claimed(lead) else lead.status.value
         raise HTTPException(
             status_code=400, 
-            detail=f"Cannot mark contact as primary. Lead must be in 'ready' status or later. Current status: {lead.status.value}"
+            detail=f"Cannot mark contact as primary. Lead must be in 'ready' status or later. Current status: {status_display}"
         )
     
     db.query(LeadContact).filter(

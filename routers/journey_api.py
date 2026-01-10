@@ -24,7 +24,7 @@ from services.journey_service import (
     check_prerequisite_milestones,
     cleanup_invalid_milestones,
 )
-from utils import get_lead_or_404
+from utils import get_lead_or_404, is_competitor_claimed
 
 router = APIRouter()
 
@@ -38,13 +38,8 @@ def get_lead_journey(
     """Get journey data for a lead."""
     lead = get_lead_or_404(db, lead_id)
     
-    journey_hidden_statuses = {
-        LeadStatus.new,
-        LeadStatus.researching,
-        LeadStatus.competitor_claimed
-    }
-    
-    if lead.status in journey_hidden_statuses:
+    # Journey is hidden for new, researching, or competitor_claimed (all properties deleted) leads
+    if lead.status in {LeadStatus.new, LeadStatus.researching} or is_competitor_claimed(lead):
         return JSONResponse(
             content={"error": f"Journey is not available for leads with status '{lead.status.value}'"},
             status_code=400
@@ -189,15 +184,11 @@ async def get_batch_journey_status(
         return JSONResponse(content={})
     
     status_map = {}
-    journey_hidden_statuses = {
-        LeadStatus.new,
-        LeadStatus.researching,
-        LeadStatus.competitor_claimed
-    }
     
     for lead_id in lead_ids:
         lead = db.get(Lead, lead_id)
-        if not lead or lead.status in journey_hidden_statuses:
+        # Skip leads that are new, researching, or competitor_claimed (all properties deleted)
+        if not lead or lead.status in {LeadStatus.new, LeadStatus.researching} or is_competitor_claimed(lead):
             continue
         
         summary = get_journey_status_summary(db, lead_id)

@@ -13,7 +13,7 @@
           Create Lead
 {% else %}
           Lead #{{ lead.id }}
-          <span class="status-pill">{{ lead.status.value }}</span>
+          <span class="status-pill">{% if lead | is_competitor_claimed %}competitor_claimed{% elif lead | is_partially_claimed %}partially_claimed{% else %}{{ lead.status.value }}{% endif %}</span>
           {% if mode == 'view' %}<span class="readonly-badge">(Read Only)</span>{% endif %}
         {% endif %}
       </h1>
@@ -184,6 +184,7 @@
               <th>Year</th>
               <th>Address</th>
               <th>Holder Name</th>
+              <th>Status</th>
               <th></th>
               {% if mode != 'view' %}
               <th>Actions</th>
@@ -222,6 +223,13 @@
                   {{ prop_details.holdername }}
                 {% else %}
                   <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if prop.deleted_from_source %}
+                  <span class="status-pill status-pill-deleted" title="Property was removed from data source (likely claimed by competitor)">Deleted</span>
+                {% else %}
+                  <span class="status-pill status-pill-available">Active</span>
                 {% endif %}
               </td>
               <td class="table-cell-center">
@@ -388,7 +396,7 @@
   </section>
 {% endif %}
 
-{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'competitor_claimed'] %}
+{% if mode != 'create' and lead.status.value not in ['new', 'researching'] and not (lead | is_competitor_claimed) %}
     {% if journey_data and journey_data != 'null' %}
     <section id="journey-tracking" class="card journey-card" data-lead-status="{{ lead.status.value }}">
       <header class="journey-header-section">
@@ -698,7 +706,7 @@
                             type="submit" 
                             class="btn btn-secondary btn-sm mark-primary-btn" 
                             data-lead-status="{{ lead.status.value }}"
-                            {% if lead.status.value in ['new', 'researching', 'competitor_claimed'] %}
+                            {% if lead.status.value in ['new', 'researching'] or (lead | is_competitor_claimed) %}
                             disabled
                             title="Lead must be in 'ready' status or later to mark a contact as primary. Current status: {{ lead.status.value }}"
                             {% else %}
@@ -1187,7 +1195,7 @@
 <script src="/static/js/leads/linkedin_templates/helpers.js?v=20241128" defer></script>
 <script src="/static/js/leads/linkedin_templates/index.js?v=20241128" defer></script>
 <script src="/static/js/leads/attempt_form.js?v=20241203" defer></script>
-{% if mode != 'create' and lead.status.value not in ['new', 'researching', 'competitor_claimed'] %}
+{% if mode != 'create' and lead.status.value not in ['new', 'researching'] and not (lead | is_competitor_claimed) %}
 <link rel="stylesheet" href="/static/css/journey.css">
 <script src="/static/js/leads/journey_display/api.js?v=20241203" defer></script>
 <script src="/static/js/leads/journey_display/helpers.js?v=20241203" defer></script>

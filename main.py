@@ -52,7 +52,7 @@ import routers.properties
 import routers.claims
 
 # Import utilities
-from utils import format_currency
+from utils import format_currency, is_competitor_claimed, is_partially_claimed
 from helpers.phone_scripts import load_phone_scripts, get_phone_scripts_json
 
 # Create database tables
@@ -98,8 +98,10 @@ def shutdown_scheduler():
     stop_scheduler()
 
 
-# Register template filter
+# Register template filters
 templates.env.filters["currency"] = format_currency
+templates.env.filters["is_competitor_claimed"] = is_competitor_claimed
+templates.env.filters["is_partially_claimed"] = is_partially_claimed
 
 # Share templates instance with routers (so they have access to filters)
 # This must be done after templates is created and filter is registered

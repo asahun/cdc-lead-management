@@ -3985,6 +3985,11 @@ body {
     color: #047857;
   }
 
+  .status-pill-deleted {
+    background: rgba(239, 68, 68, 0.18);
+    color: #dc2626;
+  }
+
   .properties-table .detail-trigger {
     background: #eef2ff;
     border: none;

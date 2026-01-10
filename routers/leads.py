@@ -46,7 +46,7 @@ from services.property_service import (
     mark_property_assigned,
     unmark_property_if_unused,
 )
-from utils import get_lead_or_404, is_lead_editable, normalize_owner_fields
+from utils import get_lead_or_404, is_lead_editable, is_competitor_claimed, normalize_owner_fields
 
 logger = logging.getLogger(__name__)
 
@@ -681,14 +681,10 @@ def edit_lead(
         default=str,
     )
 
-    journey_hidden_statuses = {
-        LeadStatus.new,
-        LeadStatus.researching,
-        LeadStatus.competitor_claimed,
-    }
-
     journey_data = None
-    if lead.status not in journey_hidden_statuses:
+    # Hide journey for new, researching, or competitor_claimed (all properties deleted) leads
+    if (lead.status in {LeadStatus.new, LeadStatus.researching} or 
+        is_competitor_claimed(lead)):
         journey = db.query(LeadJourney).filter(LeadJourney.lead_id == lead_id).first()
         journey_data = get_journey_data(db, lead_id) if journey else None
 
@@ -807,11 +803,11 @@ def update_lead(
         db.add(primary_property)
         mark_property_assigned(db, property_raw_hash, property_id)
 
-    if old_status in {LeadStatus.new, LeadStatus.researching} and lead.status not in {
-        LeadStatus.new,
-        LeadStatus.researching,
-        LeadStatus.competitor_claimed,
-    }:
+    # Initialize journey when moving from new/researching to active status
+    # (but not if all properties are deleted - competitor_claimed)
+    if (old_status in {LeadStatus.new, LeadStatus.researching} and 
+        lead.status not in {LeadStatus.new, LeadStatus.researching} and
+        not is_competitor_claimed(lead)):
         primary_contact = (
             db.query(LeadContact)
             .filter(LeadContact.lead_id == lead_id, LeadContact.is_primary == True)

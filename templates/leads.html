@@ -112,7 +112,6 @@
             <option value="response_received" {% if status == 'response_received' %}selected{% endif %}>Response Received</option>
             <option value="claim_created" {% if status == 'claim_created' %}selected{% endif %}>Claim Created</option>
             <option value="no_response" {% if status == 'no_response' %}selected{% endif %}>No Response</option>
-            <option value="competitor_claimed" {% if status == 'competitor_claimed' %}selected{% endif %}>Competitor Claimed</option>
           </select>
         </div>
       </div>
@@ -159,7 +158,6 @@
           <option value="response_received">Response Received</option>
           <option value="claim_created">Claim Created</option>
           <option value="no_response">No Response</option>
-          <option value="competitor_claimed">Competitor Claimed</option>
         </select>
         <button type="button" id="bulk-mark-mail-sent" class="btn btn-secondary btn-sm">Mark Mail Sent</button>
         <button type="button" id="bulk-clear-selection" class="btn btn-ghost btn-sm">Clear Selection</button>
@@ -188,12 +186,12 @@
           <tr><td colspan="9" class="table-empty-state">No leads found matching the filters.</td></tr>
         {% endif %}
         {% for l, is_editable, primary_prop, has_claim in leads_with_data %}
-          <tr {% if l.status.value == 'competitor_claimed' %}class="lead-readonly"{% endif %}>
+          <tr {% if l | is_competitor_claimed %}class="lead-readonly"{% endif %}>
       <td class="checkbox-column">
         <input type="checkbox" class="lead-checkbox" data-lead-id="{{ l.id }}" {% if not is_editable %}disabled title="This lead cannot be edited"{% endif %}>
       </td>
       <td class="tasks-column">
-        {% if l.status.value not in ['new', 'researching', 'invalid', 'competitor_claimed'] %}
+        {% if l.status.value not in ['new', 'researching', 'invalid'] and not (l | is_competitor_claimed) %}
           <button type="button" class="task-bell" data-lead-id="{{ l.id }}" title="View tasks">
             <span class="bell-icon">🔔</span>
           </button>
@@ -204,7 +202,7 @@
       <td><span class="owner-name">{{ l.owner_name }}</span></td>
             <td>{{ primary_prop.property_amount|currency if primary_prop and primary_prop.property_amount else '—' }}</td>
             <td>
-              <span class="status-pill">{{ l.status.value }}</span>
+              <span class="status-pill">{% if l | is_competitor_claimed %}competitor_claimed{% elif l | is_partially_claimed %}partially_claimed{% else %}{{ l.status.value }}{% endif %}</span>
               {% if has_claim %}
                 <span class="status-pill status-pill-assigned status-pill-margin">Has Claim</span>
               {% endif %}

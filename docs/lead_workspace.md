@@ -118,20 +118,9 @@ to the combined workspace, so old bookmarks continue to work.
   rendering across viewers. Authorization letter maps `entity_name` (new
   template field) and `business_name` to the lead’s `owner_name`.
 
-  To bulk update older leads during a refresh:
-
-  ```sql
-  WITH cutoff AS (
-    SELECT date_trunc('week', now()) - interval '7 days' + interval '18 hours' AS ts
-  )
-  UPDATE business_lead bl
-  SET status = 'competitor_claimed',
-      updated_at = now()
-  FROM properties p, cutoff c
-  WHERE bl.property_id = p.property_id
-    AND p.last_seen < c.ts
-    AND bl.status <> 'competitor_claimed';
-  ```
+  **Note:** The weekly refresh job has been updated. See `scripts/sql/007_weekly_refresh_mark_deleted_properties.sql`
+  for the current implementation. The refresh now marks properties as `deleted_from_source` instead of
+  updating lead status. Lead status is computed on-the-fly from property deletion status.
 
 ## Follow-up Ideas
 
